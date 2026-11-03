@@ -1,0 +1,114 @@
+// The words of the page, in English and German. Both have exactly the same keys (i18n.test.ts); the language
+// follows the browser.
+
+import { fill, pickLang } from 'appkit-ui/i18n';
+
+const en = {
+  'app.title': 'Testing',
+  'phase.starting': 'Connecting to the hub…',
+  'phase.needs_pairing': 'This tab is not paired with the hub. Run `testing-hub open` and open the link it prints.',
+  'phase.pair_refused': 'The pairing link was used already or is too old. Run `testing-hub open` for a new one.',
+  'phase.offline': 'The hub does not answer. Is it running? (`testing-hub start`)',
+  'phase.unavailable': 'The hub runs, but testing.nvim is not ready ({problem}).',
+  'phase.failed': 'The hub could not read the fleet: {message}',
+  'fleet.heading': 'Repositories',
+  'fleet.count': '{shown} of {total}',
+  'fleet.only_red': 'Only red',
+  'fleet.search': 'Find a repository',
+  'fleet.empty': 'No repository to show.',
+  'fleet.empty_red': 'Nothing is red.',
+  'fleet.classes_problem': 'No repository is released on this device: {problem}',
+  'fleet.excluded': '{n} repositories are not released by the data classes of this device and are not shown.',
+  'fleet.remote_error': 'The CI state could not be read: {error}',
+  'fleet.local_not_read': 'Local results are not read on this device.',
+  'col.repo': 'Repository',
+  'col.local': 'Local run',
+  'col.ci': 'CI',
+  'tone.green': 'green',
+  'tone.red': 'red',
+  'tone.running': 'running',
+  'tone.waiting': 'waiting for a runner',
+  'tone.skipped': 'not run',
+  'tone.unknown': 'unknown',
+  'local.none': 'no local run',
+  'local.failed': '{n} failed',
+  'ci.not_asked': 'not asked',
+  'ci.run': 'CI run',
+  'detail.back': 'All repositories',
+  'detail.loading': 'Reading {name}…',
+  'detail.failed': 'The repository could not be read: {message}',
+  'detail.red_cases': 'Red cases',
+  'detail.no_red': 'No red case in the last local run.',
+  'detail.omitted': '{n} more red cases are not listed.',
+  'detail.notes': 'Notes of the engine',
+  'detail.expected': 'Expected',
+  'detail.actual': 'Actual',
+  'detail.message': 'Message',
+  'detail.line': 'line {n}',
+  'detail.flaky': 'flaky',
+  'about.engine': 'testing.nvim {version} ({git}), Neovim {nvim}',
+  'about.no_engine': 'no engine',
+} as const;
+
+export type Key = keyof typeof en;
+
+const de: Record<Key, string> = {
+  'app.title': 'Testing',
+  'phase.starting': 'Verbinde mit dem Hub…',
+  'phase.needs_pairing': 'Dieser Tab ist nicht mit dem Hub gekoppelt. `testing-hub open` ausführen und den Link öffnen.',
+  'phase.pair_refused': 'Der Kopplungslink ist verbraucht oder zu alt. `testing-hub open` gibt einen neuen.',
+  'phase.offline': 'Der Hub antwortet nicht. Läuft er? (`testing-hub start`)',
+  'phase.unavailable': 'Der Hub läuft, aber testing.nvim ist nicht bereit ({problem}).',
+  'phase.failed': 'Der Hub konnte die Flotte nicht lesen: {message}',
+  'fleet.heading': 'Repositories',
+  'fleet.count': '{shown} von {total}',
+  'fleet.only_red': 'Nur rote',
+  'fleet.search': 'Repository suchen',
+  'fleet.empty': 'Kein Repository zu zeigen.',
+  'fleet.empty_red': 'Nichts ist rot.',
+  'fleet.classes_problem': 'Auf diesem Gerät ist kein Repository freigegeben: {problem}',
+  'fleet.excluded': '{n} Repositories geben die Datenklassen dieses Geräts nicht frei; sie werden nicht gezeigt.',
+  'fleet.remote_error': 'Der CI-Stand konnte nicht gelesen werden: {error}',
+  'fleet.local_not_read': 'Lokale Ergebnisse werden auf diesem Gerät nicht gelesen.',
+  'col.repo': 'Repository',
+  'col.local': 'Lokaler Lauf',
+  'col.ci': 'CI',
+  'tone.green': 'grün',
+  'tone.red': 'rot',
+  'tone.running': 'läuft',
+  'tone.waiting': 'wartet auf Runner',
+  'tone.skipped': 'nicht gelaufen',
+  'tone.unknown': 'unbekannt',
+  'local.none': 'kein lokaler Lauf',
+  'local.failed': '{n} fehlgeschlagen',
+  'ci.not_asked': 'nicht gefragt',
+  'ci.run': 'CI-Lauf',
+  'detail.back': 'Alle Repositories',
+  'detail.loading': 'Lese {name}…',
+  'detail.failed': 'Das Repository konnte nicht gelesen werden: {message}',
+  'detail.red_cases': 'Rote Fälle',
+  'detail.no_red': 'Kein roter Fall im letzten lokalen Lauf.',
+  'detail.omitted': '{n} weitere rote Fälle sind nicht aufgeführt.',
+  'detail.notes': 'Hinweise der Engine',
+  'detail.expected': 'Erwartet',
+  'detail.actual': 'Tatsächlich',
+  'detail.message': 'Meldung',
+  'detail.line': 'Zeile {n}',
+  'detail.flaky': 'wackelig',
+  'about.engine': 'testing.nvim {version} ({git}), Neovim {nvim}',
+  'about.no_engine': 'keine Engine',
+};
+
+export const DICTIONARIES = { en, de } as const;
+export type Lang = keyof typeof DICTIONARIES;
+
+/** The language of the page for the languages the browser prefers. */
+export function langOf(preferred: readonly string[]): Lang {
+  return pickLang(preferred, ['en', 'de'], 'en');
+}
+
+/** The words of one language. */
+export function textsOf(lang: Lang): (key: Key, params?: Record<string, string | number>) => string {
+  const dict: Record<Key, string> = DICTIONARIES[lang];
+  return (key, params = {}) => fill(dict[key], params);
+}

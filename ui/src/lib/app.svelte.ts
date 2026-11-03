@@ -1,0 +1,177 @@
+// The state of the page: the session with the hub, the fleet, the repository that is open. Everything the page
+// reaches outside (the hub, the storage of the tab, the clock) comes in through `Env`, so the unit tests run it
+// without a browser. Reads are single-flight: a read that is under way is not asked again, an older answer never
+// replaces a newer one.
+
+import type { Fleet, RepoDoc } from './contract';
+import { ApiError, type HubSource } from './source';
+
+/** Where the session token of the tab is kept: the tab only (`sessionStorage`), never longer. */
+export const TOKEN_KEY = 'testing-desktop.session';
+
+/** How long the page waits before it asks a hub that did not answer, or an engine that was not ready, again. */
+export const RETRY_MS = 3000;
+
+export type Phase = 'starting' | 'needs_pairing' | 'offline' | 'unavailable' | 'ready' | 'failed';
+
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface Env {
+  hub: HubSource;
+  session: StorageLike;
+  sleep: (ms: number) => Promise<void>;
+}
+
+/** A storage that throws (a browser that forbids it) is a storage that holds nothing. */
+function safe<T>(fn: () => T): T | null {
+  try {
+    return fn();
+  } catch {
+    return null;
+  }
+}
+
+/** The short word of a failure, never more of its text than its message. */
+function messageOf(error: unknown): string {
+  if (error instanceof ApiError) return `${error.code}: ${error.message}`;
+  return error instanceof Error ? error.message : String(error);
+}
+
+export class App {
+  phase = $state<Phase>('starting');
+  /** Why the engine is not ready, as the hub says it (a short code). */
+  problem = $state<string | null>(null);
+  /** The pairing code of the address was refused (used or too old). */
+  pairRefused = $state(false);
+  failure = $state<string | null>(null);
+
+  fleet = $state<Fleet | null>(null);
+  private etag: string | null = null;
+  onlyRed = $state(false);
+  query = $state('');
+
+  /** The repository that is open, by its key; its document once it is read. */
+  openKey = $state<string | null>(null);
+  repo = $state<RepoDoc | null>(null);
+  repoFailure = $state<string | null>(null);
+
+  private stopped = false;
+  private reading: Promise<void> | null = null;
+  private repoAbort: AbortController | null = null;
+
+  constructor(private readonly env: Env) {}
+
+  /** Bring the page up. `code` is a pairing code taken from the address. */
+  async start(code: string | null): Promise<void> {
+    this.stopped = false;
+    this.phase = 'starting';
+    this.pairRefused = false;
+    let token = safe(() => this.env.session.getItem(TOKEN_KEY));
+    if (code) {
+      try {
+        const traded = await this.env.hub.exchange(code);
+        token = traded;
+        safe(() => this.env.session.setItem(TOKEN_KEY, traded));
+      } catch (error) {
+        // A code that is spent or too old: a session the tab has is still good.
+        if (error instanceof ApiError && error.status === 401) {
+          this.pairRefused = token === null;
+        } else if (token === null) {
+          this.phase = 'offline';
+          return;
+        }
+      }
+    }
+    if (token === null) {
+      this.phase = 'needs_pairing';
+      return;
+    }
+    this.env.hub.setToken(token);
+    this.env.hub.onUnauthorized = () => this.lostSession();
+
+    for (;;) {
+      try {
+        const hello = await this.env.hub.hello();
+        if (hello.engine.ready) break;
+        this.problem = hello.engine.problem ?? 'unknown';
+        this.phase = 'unavailable';
+      } catch {
+        this.phase = 'offline';
+      }
+      await this.env.sleep(RETRY_MS);
+      if (this.stopped) return;
+    }
+    this.problem = null;
+    await this.refresh();
+  }
+
+  stop(): void {
+    this.stopped = true;
+    this.repoAbort?.abort();
+  }
+
+  /** Read the fleet again; a read under way is joined, not doubled. */
+  refresh(): Promise<void> {
+    this.reading ??= this.readFleet().finally(() => {
+      this.reading = null;
+    });
+    return this.reading;
+  }
+
+  private async readFleet(): Promise<void> {
+    try {
+      const result = await this.env.hub.fleet(this.etag);
+      if (this.stopped || !this.env.hub.hasToken) return;
+      if (result.kind === 'fresh') {
+        this.fleet = result.doc;
+        this.etag = result.etag;
+      }
+      this.failure = null;
+      this.phase = 'ready';
+    } catch (error) {
+      if (this.stopped || !this.env.hub.hasToken) return;
+      this.failure = messageOf(error);
+      // A fleet that was read stays on the page; without one the page says why there is none.
+      if (this.fleet === null) this.phase = 'failed';
+    }
+  }
+
+  /** Open a repository by its key of the fleet; an older read of another one is dropped. */
+  async open(key: string): Promise<void> {
+    this.repoAbort?.abort();
+    const abort = new AbortController();
+    this.repoAbort = abort;
+    this.openKey = key;
+    this.repo = null;
+    this.repoFailure = null;
+    try {
+      const doc = await this.env.hub.repo(key, abort.signal);
+      if (abort.signal.aborted || this.openKey !== key) return;
+      this.repo = doc;
+    } catch (error) {
+      if (abort.signal.aborted || this.openKey !== key) return;
+      this.repoFailure = messageOf(error);
+    }
+  }
+
+  close(): void {
+    this.repoAbort?.abort();
+    this.openKey = null;
+    this.repo = null;
+    this.repoFailure = null;
+  }
+
+  private lostSession(): void {
+    safe(() => this.env.session.removeItem(TOKEN_KEY));
+    this.env.hub.setToken(null);
+    this.repoAbort?.abort();
+    this.phase = 'needs_pairing';
+    this.fleet = null;
+    this.etag = null;
+    this.close();
+  }
+}

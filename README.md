@@ -10,9 +10,11 @@ them. Its web variant, one HTML file opened from disk, is published to
 
 **Status: early development. No release yet.** The hub starts, pairs a browser, passes the security matrix of
 [appkit](https://github.com/WKDSteve/appkit) and reads the fleet and one repository from testing.nvim
-(`/api/testing/fleet`, `/api/testing/repo?key=...`, with the digest of the document as the ETag). It has no page of
-its own yet (`/` is the placeholder page of the kit) and does not ask GitHub for the CI state. The phases below fill
-it.
+(`/api/testing/fleet`, `/api/testing/repo?key=...`, with the digest of the document as the ETag). The page shows the
+fleet (the last local run and the CI on each system, red first, a filter for the red ones and a search) and one
+repository with its red cases and their output. It reads, and reads again when the window gets the focus back; it is
+not told of a new result by itself yet, and the hub does not ask GitHub for the CI state (the CI columns say "not
+asked"). The phases below fill it.
 
 ## Principles
 
@@ -42,6 +44,8 @@ The planning notes live outside this repository, in the maintainer's task vault.
 ```
 crates/testing-hub/   the hub: names, settings, the engine seam to testing.nvim, routes, on appkit
 engine.lock           the testing.nvim and lib.nvim commits this is built and tested against
+ui/                   the page (Svelte 5, Vite, TypeScript, appkit-ui), read through a source of its own (`TestingSource`)
+ui/e2e/               browser tests (Playwright, axe) against the real binary, the real engine and repositories made for them
 tools/                checks of the repository (appkit pin, lock age, control characters, colours, temp leftovers)
 ```
 
@@ -80,16 +84,22 @@ A `config.json` that cannot be read, or a path in it or in one of these variable
 
 ## Building and checking
 
-Rust (the version in `Cargo.toml`) and Python 3:
+Rust (the version in `Cargo.toml`), Node with pnpm, and Python 3. The page is built first: the hub embeds `ui/dist`
+when it is built (without it, the placeholder page of the kit).
 
 ```
+cd ui && pnpm install --frozen-lockfile && pnpm check && pnpm test && pnpm build && cd ..
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 python -m unittest discover -s tools -p "test_*.py"
 python tools/check-control-chars.py
 python tools/check-lock-age.py --min-days 7
+cd ui && pnpm e2e        # after `cargo build`: the binary must hold the page that was built
 ```
+
+The tests that use the real engine find testing.nvim in `TESTING_ENGINE_DIR`, else `$REPOS_DIR/testing.nvim`; with
+`TESTING_HUB_REQUIRE_ENGINE=1` a missing engine is a failure, not a skip.
 
 ## The shared kit
 

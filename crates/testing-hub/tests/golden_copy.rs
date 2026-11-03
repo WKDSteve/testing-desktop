@@ -1,22 +1,29 @@
-//! The golden documents of `tests/fixtures/golden` are copies of testing.nvim's at the commit of
-//! `engine.lock`: a bump of the pin that changes the contract shows here. The files are read from
-//! that commit (`git show`), whatever the checkout has out. The checkout is `TESTING_ENGINE_DIR`,
-//! else `$REPOS_DIR/testing.nvim`; without one the test says so and passes, unless
+//! The golden documents of `tests/fixtures/golden` and the types of the page (`ui/src/lib/contract.d.ts`) are
+//! copies of testing.nvim's at the commit of `engine.lock`: a bump of the pin that changes the contract shows here.
+//! The files are read from that commit (`git show`), whatever the checkout has out. The checkout is
+//! `TESTING_ENGINE_DIR`, else `$REPOS_DIR/testing.nvim`; without one the test says so and passes, unless
 //! `TESTING_HUB_REQUIRE_ENGINE=1` (CI).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Each copy and the file of testing.nvim it is a copy of.
-const COPIES: [(&str, &str); 3] = [
-    ("fleet.json", "TESTS/golden/testing-export-1/fleet.json"),
+/// Each copy (relative to this repository) and the file of testing.nvim it is a copy of.
+const COPIES: [(&str, &str); 4] = [
     (
-        "repo.json",
+        "crates/testing-hub/tests/fixtures/golden/fleet.json",
+        "TESTS/golden/testing-export-1/fleet.json",
+    ),
+    (
+        "crates/testing-hub/tests/fixtures/golden/repo.json",
         "TESTS/golden/testing-export-1/repos/beta.nvim-ac6d3a4ece7f.json",
     ),
     (
-        "hello.json",
+        "crates/testing-hub/tests/fixtures/golden/hello.json",
         "TESTS/golden/testing-export-1-hello/hello.json",
+    ),
+    (
+        "ui/src/lib/contract.d.ts",
+        "schemas/testing-export/1/testing-export.d.ts",
     ),
 ];
 
@@ -70,14 +77,7 @@ fn the_golden_copies_are_the_files_of_the_pinned_engine() {
             "{original} at {commit}: {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        let ours = std::fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests")
-                .join("fixtures")
-                .join("golden")
-                .join(copy),
-        )
-        .unwrap();
+        let ours = std::fs::read(repo_root().join(copy)).unwrap();
         // git may hand a text file over with CRLF on Windows (core.autocrlf); the contract is LF.
         let theirs: Vec<u8> = out.stdout.into_iter().filter(|b| *b != b'\r').collect();
         assert_eq!(ours, theirs, "{copy} is not {original} at {commit}");

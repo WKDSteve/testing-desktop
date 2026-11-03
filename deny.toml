@@ -30,7 +30,7 @@ wildcards = "deny"
 allow-wildcard-paths = true
 highlight = "all"
 # An app is built on appkit, never on another app.
-deny = [{ crate = "tasks-hub" }, { crate = "hub-testkit" }]
+deny = [{ crate = "tasks-hub" }, { crate = "rules-hub" }, { crate = "hub-testkit" }]
 
 [sources]
 unknown-registry = "deny"

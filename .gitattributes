@@ -13,6 +13,8 @@
 *.sh text eol=lf
 *.ps1 text eol=lf
 *.py text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
 # Last, so it wins over the rules above: the fixture vault is byte exact,
 # every etag of the contract is a hash of these bytes.
 e2e/fixture/** -text

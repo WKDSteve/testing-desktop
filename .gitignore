@@ -5,8 +5,7 @@
 node_modules/
 dist/
 
-# Local, per device: never committed (data classes, tokens, rule set paths)
-/sources.json
+# Local, per device: never committed (data classes, tokens, paths)
 /hub.json
 *.local.*
 # A [patch] onto a local appkit checkout

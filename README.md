@@ -1,3 +1,5 @@
+![testing-desktop](assets/icons/testing-desktop/png/testing-desktop-128.png)
+
 # testing-desktop
 
 A local web UI for the test and CI results of the repositories that use

@@ -41,6 +41,8 @@ test('the overview shows the released repositories, red first, and leaves the pr
   await openPaired(page);
   const names = await page.getByRole('rowheader').allInnerTexts();
   expect(names).toEqual(['alpha.nvim', 'hostile.nvim', 'beta.nvim']);
+  // The icon in the bar is really drawn: the policy of the page lets it through.
+  await expect.poll(() => page.locator('.brand img').evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
   await expect(page.getByText('secret.nvim')).toHaveCount(0);
   await expect(page.getByText(/1 repositories are not released/)).toBeVisible();
   await expect(page.getByRole('row', { name: /alpha\.nvim/ })).toContainText('1 failed');

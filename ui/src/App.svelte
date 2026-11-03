@@ -1,6 +1,8 @@
 <script lang="ts">
   // The frame of the page: what the session says while there is no fleet, then the overview or the open repository.
   import { untrack } from 'svelte';
+  // The mark of the app, from assets/icons of this repository (rule APP-11).
+  import logo from '../../assets/icons/testing-desktop/testing-desktop-small.svg?url';
   import type { App } from './lib/app.svelte';
   import { langOf, textsOf } from './lib/i18n';
   import Detail from './views/Detail.svelte';
@@ -24,7 +26,7 @@
 <svelte:window onfocus={onFocus} />
 
 <header>
-  <span class="brand">{t('app.title')}</span>
+  <span class="brand"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span>
 </header>
 
 <main>
@@ -54,6 +56,9 @@
     background: var(--surface);
   }
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     font-weight: 700;
   }
   main {

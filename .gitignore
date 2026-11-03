@@ -1,0 +1,24 @@
+# Rust
+/target/
+
+# Node
+node_modules/
+dist/
+
+# Local, per device: never committed (data classes, tokens, rule set paths)
+/sources.json
+/hub.json
+*.local.*
+# A [patch] onto a local appkit checkout
+/.cargo/config.toml
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.claude/
+__pycache__/
+*.pyc
+
+ui/test-results/
+ui/playwright-report/

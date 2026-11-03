@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/testing-hub"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+authors = ["Stefan Bartl"]
+repository = "https://github.com/WKDSteve/testing-desktop"
+
+# The kit the other apps are built on too, pinned by its tag; Cargo.lock pins the commit and
+# tools/check-appkit-pin.py checks that the tag still names it. To work on appkit and this app at
+# once, point these at a local checkout in a .cargo/config.toml that is not committed
+# (`[patch."https://github.com/WKDSteve/appkit"]`, see the README of appkit).
+[workspace.dependencies]
+appkit-core = { git = "https://github.com/WKDSteve/appkit", tag = "v0.31.0" }
+appkit-hub = { git = "https://github.com/WKDSteve/appkit", tag = "v0.31.0" }
+appkit-testkit = { git = "https://github.com/WKDSteve/appkit", tag = "v0.31.0" }
+appkit-scratch = { git = "https://github.com/WKDSteve/appkit", tag = "v0.31.0" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+# The program `testing-hub install` copies: small and quick to start.
+[profile.release]
+lto = "thin"
+strip = true

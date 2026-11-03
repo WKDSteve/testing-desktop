@@ -8,9 +8,11 @@ after that. The sibling of [tasks-desktop](https://github.com/WKDSteve/tasks-des
 them. Its web variant, one HTML file opened from disk, is published to
 [testing-web](https://github.com/WKDSteve/testing-web).
 
-**Status: early development. No release, no data yet.** The hub starts, pairs a browser and passes the security matrix
-of [appkit](https://github.com/WKDSteve/appkit); it has no engine and no page of its own yet (`hello` says
-`no_engine`, `/` is the placeholder page of the kit). The phases below fill it.
+**Status: early development. No release yet.** The hub starts, pairs a browser, passes the security matrix of
+[appkit](https://github.com/WKDSteve/appkit) and reads the fleet and one repository from testing.nvim
+(`/api/testing/fleet`, `/api/testing/repo?key=...`, with the digest of the document as the ETag). It has no page of
+its own yet (`/` is the placeholder page of the kit) and does not ask GitHub for the CI state. The phases below fill
+it.
 
 ## Principles
 
@@ -38,7 +40,8 @@ The planning notes live outside this repository, in the maintainer's task vault.
 ## Layout
 
 ```
-crates/testing-hub/   the hub: names, settings, routes, on appkit
+crates/testing-hub/   the hub: names, settings, the engine seam to testing.nvim, routes, on appkit
+engine.lock           the testing.nvim and lib.nvim commits this is built and tested against
 tools/                checks of the repository (appkit pin, lock age, control characters, colours, temp leftovers)
 ```
 
@@ -57,9 +60,23 @@ testing-hub uninstall [--purge-settings]
 ```
 
 The config folder is `%APPDATA%\testing-desktop` (`~/.config/testing-desktop`; `TESTING_DESKTOP_CONFIG_DIR` moves it).
-The default port is 17618 (`TESTING_DESKTOP_PORT`, or `port` in `config.json`). `state_dir` in `config.json` names
-the state folder of testing.nvim the hub will read; a `config.json` that cannot be read, or holds a `state_dir` that
-is not a whole path, stops the start.
+The default port is 17618 (`TESTING_DESKTOP_PORT`, or `port` in `config.json`).
+
+It needs a Neovim (0.12 or newer) and a testing.nvim checkout: `TESTING_NVIM` (else the one on the `PATH`) and
+`TESTING_ENGINE_DIR` (else `$REPOS_DIR/testing.nvim`), or the keys `nvim` and `engine_dir` of `config.json`. The
+repositories it shows are those below `vault` of `config.json`, else `TESTING_REPOS_ROOT`, else `REPOS_DIR`.
+
+The engine runs as a child with only a few variables of the environment, so the hub tells it where to read:
+
+- `state_dir` (or `TESTING_DESKTOP_STATE_DIR`): the state folder of testing.nvim, `stdpath('state')` of the Neovim
+  that runs the tests; by default `%LOCALAPPDATA%\nvim-data` (`$XDG_STATE_HOME/nvim` or `~/.local/state/nvim`;
+  `NVIM_APPNAME` is followed).
+- `areas` (or `TESTING_DESKTOP_AREAS`): the `areas.json` of the data classes of this device; by default the one of
+  tasks-desktop (`%APPDATA%\tasks-desktop\areas.json`). Only the `public` and `internal` repositories it names are
+  shown; without the file none is.
+
+A `config.json` that cannot be read, or a path in it or in one of these variables that is not whole, stops the start.
+`about` says where each came from (`environment`, `setting`, `default`), never the path.
 
 ## Building and checking
 

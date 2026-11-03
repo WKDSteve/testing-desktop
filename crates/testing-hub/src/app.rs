@@ -9,13 +9,15 @@ use std::time::Duration;
 use appkit_core::authn::{Secret, SystemClock, CODE_BYTES, TOKEN_BYTES};
 use appkit_core::registry::{self, HubRecord};
 use appkit_hub::config::FileConfig;
+use appkit_hub::discovery::{discover, AppInputs};
 use appkit_hub::env::Env;
 use appkit_hub::{HubStatus, Limits};
 use serde_json::Value;
 
+use crate::engine::{cli_config, probe, Ask, CliEngine, Engine, DISCOVERY};
 use crate::settings::TestingSettings;
 use crate::ui::UiFiles;
-use crate::{client, Start, IDENTITY};
+use crate::{client, Origins, Start, IDENTITY};
 
 /// What to do when the hub is started.
 #[derive(Debug, Clone, Default)]
@@ -78,13 +80,73 @@ async fn wait_for_stop() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
-/// What `hello` says while the hub has no engine seam yet: not ready, and why, as a short code.
+/// What `hello` says when there is no engine: not ready, and why, as a short code.
 #[must_use]
 pub fn no_engine_status() -> HubStatus {
     HubStatus {
         engine_ready: false,
         problem: Some("no_engine"),
         capabilities: Vec::new(),
+    }
+}
+
+/// What the start found out about the engine.
+pub struct EngineState {
+    pub status: HubStatus,
+    /// Only when the engine answered `hello` as this app needs.
+    pub engine: Option<Arc<dyn Engine>>,
+    /// A longer text for the terminal of whoever started the hub (it may hold paths; `hello` gets
+    /// only the short code of `status`).
+    pub note: Option<String>,
+}
+
+/// The settings the search for the engine reads, with the repositories root defaulted: without
+/// `vault` in `config.json` and without `TESTING_REPOS_ROOT`, the root of all repositories
+/// (`REPOS_DIR`), where testing.nvim is too.
+#[must_use]
+pub fn with_root_default(
+    file: &FileConfig<TestingSettings>,
+    env: &Env,
+) -> FileConfig<TestingSettings> {
+    let mut file = file.effective();
+    if file.vault.is_none() && env.path(DISCOVERY.vault_var).is_none() {
+        file.vault = env.path("REPOS_DIR");
+    }
+    file
+}
+
+/// Find Neovim, testing.nvim and the repositories root, start the engine and ask it `hello`.
+pub async fn engine_state(file: &FileConfig<TestingSettings>, env: &Env) -> EngineState {
+    let failed = |code: &'static str, note: String| EngineState {
+        status: HubStatus {
+            engine_ready: false,
+            problem: Some(code),
+            capabilities: Vec::new(),
+        },
+        engine: None,
+        note: Some(note),
+    };
+    let file = with_root_default(file, env);
+    let setup = match discover(&DISCOVERY, &file, AppInputs::default(), env).await {
+        Ok(setup) => setup,
+        Err(problem) => return failed(problem.code(), problem.to_string()),
+    };
+    // One process per question: testing.nvim has no persistent host.
+    let engine = Arc::new(CliEngine::new(cli_config(&setup, env.clone())));
+    match probe(engine.as_ref()).await {
+        Ok(info) => EngineState {
+            status: HubStatus {
+                engine_ready: true,
+                problem: None,
+                capabilities: info.capabilities,
+            },
+            engine: Some(engine as Arc<dyn Engine>),
+            note: setup
+                .lib_problem
+                .as_ref()
+                .map(|p| format!("note: {p} (the engine may still find it)")),
+        },
+        Err(problem) => failed(problem.code(), problem.to_string()),
     }
 }
 
@@ -123,6 +185,36 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         None => UiFiles::embedded(),
     };
 
+    // A variable with a path that is not whole stops the start, as config.json does.
+    let places = crate::settings::places(&file, &env)?;
+    if places.areas.as_ref().is_none_or(|(p, _)| !p.is_file()) {
+        eprintln!(
+            "note: no areas.json of the data classes was found: no repository is released, the fleet is empty"
+        );
+    }
+    let ask = Ask {
+        state_dir: places.state_dir.as_ref().map(|(p, _)| p.clone()),
+        // A file that is not there is not named: the engine then says that it has no data classes.
+        areas: places
+            .areas
+            .as_ref()
+            .filter(|(p, _)| p.is_file())
+            .map(|(p, _)| p.clone()),
+    };
+    let origins = Origins {
+        state_dir: places.state_dir.as_ref().map(|(_, o)| *o),
+        areas: places
+            .areas
+            .as_ref()
+            .filter(|(p, _)| p.is_file())
+            .map(|(_, o)| *o),
+    };
+
+    let state = engine_state(&file, &env).await;
+    if let Some(note) = &state.note {
+        eprintln!("{note}");
+    }
+
     let control = Secret::generate(TOKEN_BYTES).map_err(|e| e.to_string())?;
     let instance = Secret::generate(CODE_BYTES).map_err(|e| e.to_string())?;
     let make = |port: u16| Start {
@@ -132,7 +224,10 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         pairing_ttl: Duration::from_secs(60),
         control_secret: control.clone(),
         instance: instance.clone(),
-        status: no_engine_status(),
+        status: state.status.clone(),
+        engine: state.engine.clone(),
+        ask: ask.clone(),
+        origins,
         ui: ui.clone(),
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server

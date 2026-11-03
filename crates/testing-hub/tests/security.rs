@@ -32,6 +32,9 @@ impl Subject for Testing {
             control_secret: cfg.control_secret,
             instance: cfg.instance,
             status: cfg.status,
+            engine: None,
+            ask: testing_hub::engine::Ask::default(),
+            origins: testing_hub::Origins::default(),
             ui: testing_hub::ui::UiFiles::none(),
         }))
     }

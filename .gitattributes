@@ -15,6 +15,6 @@
 *.py text eol=lf
 .gitignore text eol=lf
 .gitattributes text eol=lf
-# Last, so it wins over the rules above: the fixture vault is byte exact,
-# every etag of the contract is a hash of these bytes.
-e2e/fixture/** -text
+# Last, so it wins over the rules above: the golden documents are copies of the engine's, byte for byte
+# (tests/golden_copy.rs compares them), and their digest is the ETag.
+crates/testing-hub/tests/fixtures/** -text

@@ -1,6 +1,6 @@
-//! The hub of testing-desktop, on `appkit-hub`: its names, its settings and the routes a session
-//! reads. The data comes from testing.nvim (`testing-export/1`, read only); the engine seam and the
-//! routes of the fleet arrive with the next step, the read-only interface after it.
+//! The hub of testing-desktop, on `appkit-hub`: its names, its settings, the engine seam to
+//! testing.nvim (`testing-export/1`, read only) and the routes a session reads (`fleet`, `repo`,
+//! `about`). The page arrives with the read-only interface.
 //! The commands of the program (`serve`, `start`, `stop`, `open`, `autostart`, `install`,
 //! `uninstall`) are in `app` and `background`.
 
@@ -12,15 +12,18 @@ use appkit_core::authn::{Clock, Secret};
 use appkit_core::identity::AppIdentity;
 use appkit_hub::{serve, GuardRules, HubStatus, Limits, RunningServer, ServeParts};
 
+mod answer;
 pub mod app;
 pub mod background;
+pub mod engine;
+pub mod places;
 mod routes;
 mod runtime;
 pub mod settings;
 pub mod ui;
 
 pub use routes::{MakeRoute, Shared, ROUTES};
-pub use runtime::TestingRuntime;
+pub use runtime::{Origins, TestingRuntime};
 
 pub use appkit_hub::{client, loginitems};
 
@@ -83,6 +86,12 @@ pub struct Start {
     pub control_secret: Secret,
     pub instance: Secret,
     pub status: HubStatus,
+    /// The engine the routes ask; `None`: the hub is up and every data route says the engine is
+    /// not ready.
+    pub engine: Option<Arc<dyn engine::Engine>>,
+    /// What every question carries (the state folder, the `areas.json`), and where they came from.
+    pub ask: engine::Ask,
+    pub origins: Origins,
     /// The files of the page; [`ui::UiFiles::none`] serves the placeholder page of the core.
     pub ui: ui::UiFiles,
 }
@@ -107,7 +116,7 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
             // Nothing writes: no route has the limit of the writes.
             guard_rules: GuardRules::new(IDENTITY.route("hello"), []),
             ui: Arc::new(s.ui),
-            runtime: TestingRuntime::new(s.status),
+            runtime: TestingRuntime::new(s.status).with_engine(s.engine, s.ask, s.origins),
             // There is one repositories root and no list to choose from, so this is never called.
             build: Arc::new(|()| TestingRuntime::new(app::no_engine_status())),
             vaults: None,

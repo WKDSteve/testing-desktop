@@ -225,7 +225,7 @@ class Main(unittest.TestCase):
         self.assertIn("not the folder ui-kit", words)
 
     def test_the_web_kit_is_checked_like_the_ui_kit(self):
-        """appkit-web: a `link:` to a checkout, a branch, another tag or commit than the hub, or no entry fails."""
+        """appkit-web: a `link:` to a checkout, a branch, another tag or commit than the hub fails."""
         cases = {
             "a link": (
                 ui_lock(web_specifier="link:../../appkit/web-kit", web_version="link:../../appkit/web-kit"),
@@ -237,13 +237,19 @@ class Main(unittest.TestCase):
                 ui_lock(web_version=f"https://codeload.github.com/WKDSteve/appkit/tar.gz/{OTHER}#path:web-kit"),
                 f"appkit-web to ('v0.1.0', '{OTHER}')",
             ),
-            "no entry": (ui_lock(web=False), "does not pin appkit-web"),
         }
         for label, (text, said) in cases.items():
             with self.subTest(label):
                 code, words = self.run_main(lock(tagged(), tagged(), tagged()), RuntimeError("must not be asked"), text)
                 self.assertEqual(code, 1, words)
                 self.assertIn(said, words)
+
+    def test_a_page_without_the_web_kit_passes_and_names_only_what_it_checked(self):
+        # testing-desktop until its web phase: appkit-ui is all the page takes.
+        code, words = self.run_main(lock(tagged(), tagged(), tagged()), [SHA], ui_lock(web=False))
+        self.assertEqual(code, 0, words)
+        self.assertIn("appkit-ui and", words)
+        self.assertNotIn("appkit-web", words)
 
 
 class RemoteCommit(unittest.TestCase):

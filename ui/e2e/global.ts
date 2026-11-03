@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { failAfterCleanup, removeTree, tempFile } from './cleanup';
 import { sessionToken, startHub, type Running } from './hub';
+import { ensureE2ePort } from './port';
 
 // One file for one run: the workers inherit the variable from here.
 process.env['TESTING_DESKTOP_E2E_STATE'] ??= tempFile(`e2e-state-${process.pid}.json`);
@@ -26,6 +27,8 @@ export async function teardown(hub: Running | null, state: string): Promise<void
 
 export default async function setup(): Promise<() => Promise<void>> {
   try {
+    // A free port for this run, before the hub starts: the workers are started after the setup and inherit it.
+    await ensureE2ePort(process.env);
     running = await startHub();
     const token = await sessionToken(running.config);
     writeFileSync(STATE, JSON.stringify({ config: running.config, token }));

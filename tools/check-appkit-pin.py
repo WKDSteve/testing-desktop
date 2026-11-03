@@ -10,7 +10,7 @@ points now.
     python tools/check-appkit-pin.py [--lock Cargo.lock]
 
 Exit 0: every appkit package is pinned by a tag, all by the same tag and commit, the page pins the
-kit's folders (`appkit-ui` and `appkit-web` in ui/pnpm-lock.yaml) to that same tag and commit, every action of the
+kit's folders (`appkit-ui`, and `appkit-web` once it has that, in ui/pnpm-lock.yaml) to that same tag and commit, every action of the
 kit a workflow takes (`uses: WKDSteve/appkit/release-kit/...@<sha>`) is pinned by that same
 commit, and the tag names that commit. Exit 1: what is wrong is listed. Exit 2: the check itself could not run (git, network); that
 is not a pass.
@@ -80,7 +80,15 @@ def version_pattern(folder):
 
 
 # The packages the page takes from appkit, each from its folder: all by the tag the hub takes the crates by.
-KITS = (("appkit-ui", "ui-kit"), ("appkit-web", "web-kit"))
+# appkit-web comes with the web phase: without an entry there is nothing to pin, one that is there is checked alike.
+UI_KIT = ("appkit-ui", "ui-kit")
+WEB_KIT = ("appkit-web", "web-kit")
+
+
+def kits_of(lock_text):
+    """The packages of the kit this page has to pin, given its pnpm-lock.yaml."""
+    has_web = re.search(rf"^\s+{re.escape(WEB_KIT[0])}:\n", lock_text, re.M)
+    return (UI_KIT, WEB_KIT) if has_web else (UI_KIT,)
 
 
 def kit_pin(lock_text, name, folder):
@@ -184,7 +192,8 @@ def main():
     with open(args.ui_lock, encoding="utf-8") as f:
         ui_lock = f.read()
     # The page and the hub take one version of the kit: the same tag, and the commit it named, for every package.
-    for name, folder in KITS:
+    kits = kits_of(ui_lock)
+    for name, folder in kits:
         kit, kit_problems = kit_pin(ui_lock, name, folder)
         problems.extend(kit_problems)
         if kit is not None and pins and kit not in pins:
@@ -212,7 +221,7 @@ def main():
         return 1
     names = ", ".join(sorted(name for name, _ in packages))
     # Says how many steps of the workflows it found: none would be a pin that was not looked at.
-    print(f"ok: {names}, {', '.join(name for name, _ in KITS)} and {steps} step(s) of the workflows at {tag} = {sha[:12]}")
+    print(f"ok: {names}, {', '.join(name for name, _ in kits)} and {steps} step(s) of the workflows at {tag} = {sha[:12]}")
     return 0
 
 

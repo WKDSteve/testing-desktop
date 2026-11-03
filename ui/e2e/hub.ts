@@ -8,11 +8,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { failAfterCleanup, removeTree, stopChild, tempRoot } from './cleanup';
+import { e2ePort } from './port';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..');
-export const PORT = 17698;
-export const ORIGIN = `http://127.0.0.1:${PORT}`;
+/** Read when asked, not when this file is loaded: the global setup chooses the port after that. */
+export const port = (): number => e2ePort(process.env);
+export const origin = (): string => `http://127.0.0.1:${port()}`;
 
 const exe = join(repo, 'target', 'debug', process.platform === 'win32' ? 'testing-hub.exe' : 'testing-hub');
 
@@ -120,7 +122,7 @@ function fill(root: string): { root: string; config: string } {
 }
 
 export function env(config: string): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = { ...process.env, TESTING_DESKTOP_CONFIG_DIR: config, TESTING_DESKTOP_PORT: String(PORT) };
+  const out: NodeJS.ProcessEnv = { ...process.env, TESTING_DESKTOP_CONFIG_DIR: config, TESTING_DESKTOP_PORT: String(port()) };
   // The places of the settings file, not those of whoever runs the tests.
   delete out['TESTING_DESKTOP_STATE_DIR'];
   delete out['TESTING_DESKTOP_AREAS'];
@@ -130,11 +132,11 @@ export function env(config: string): NodeJS.ProcessEnv {
 
 export async function startHub(): Promise<Running & { root: string }> {
   // Something already answers on the port: those tests would run against another hub.
-  const taken = await fetch(`${ORIGIN}/api/testing/hello`).then(
+  const taken = await fetch(`${origin()}/api/testing/hello`).then(
     () => true,
     () => false,
   );
-  if (taken) throw new Error(`port ${PORT} is in use: stop the hub that runs there`);
+  if (taken) throw new Error(`port ${port()} is in use: stop the hub that runs there`);
   const { root, config } = prepare();
   const child = spawn(exe, ['serve'], { env: env(config), stdio: 'ignore' });
   const stop = async (): Promise<void> => {
@@ -153,7 +155,7 @@ export async function startHub(): Promise<Running & { root: string }> {
 export async function assertFreshBinary(): Promise<void> {
   const dist = join(repo, 'ui', 'dist', 'index.html');
   if (!existsSync(dist)) throw new Error('ui/dist is not built: run `pnpm build` and `cargo build`');
-  const served = await (await fetch(`${ORIGIN}/`)).text();
+  const served = await (await fetch(`${origin()}/`)).text();
   if (served.trim() !== readFileSync(dist, 'utf8').trim()) {
     throw new Error('the hub binary holds an older interface: run `cargo build` after `pnpm build`');
   }
@@ -164,7 +166,7 @@ async function waitUntilReady(config: string): Promise<void> {
   const deadline = Date.now() + 30_000;
   for (;;) {
     try {
-      const r = await fetch(`${ORIGIN}/api/testing/hello`);
+      const r = await fetch(`${origin()}/api/testing/hello`);
       if (r.ok) {
         const doc = (await r.json()) as { engine: { ready: boolean; problem: string | null } };
         if (doc.engine.ready) break;
@@ -186,16 +188,16 @@ async function waitUntilReady(config: string): Promise<void> {
 export function pairingLink(config: string): string {
   const out = execFileSync(exe, ['open'], { env: env(config), encoding: 'utf8' });
   const link = out.trim().split(/\r?\n/)[0] ?? '';
-  if (!link.startsWith(`${ORIGIN}/#pair=`)) throw new Error(`unexpected link: ${link}`);
+  if (!link.startsWith(`${origin()}/#pair=`)) throw new Error(`unexpected link: ${link}`);
   return link;
 }
 
 /** A session token, got the way the page gets one. The hub allows few exchanges a minute: the tests share one. */
 export async function sessionToken(config: string): Promise<string> {
   const code = pairingLink(config).split('#pair=')[1] ?? '';
-  const response = await fetch(`${ORIGIN}/auth/exchange`, {
+  const response = await fetch(`${origin()}/auth/exchange`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
+    headers: { 'Content-Type': 'application/json', Origin: origin() },
     body: JSON.stringify({ code }),
   });
   if (!response.ok) throw new Error(`exchange refused: ${response.status}`);

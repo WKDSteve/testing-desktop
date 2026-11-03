@@ -1,6 +1,9 @@
 # Rust
 /target/
 
+# The checkouts of engine.lock that CI makes
+/engine/
+
 # Node
 node_modules/
 dist/

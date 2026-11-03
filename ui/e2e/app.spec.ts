@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { expectAccessible, violations, watchViolations } from './a11y';
 import { STATE } from './global';
-import { pairingLink } from './hub';
+import { origin, pairingLink } from './hub';
 
 // The page against the real hub and the real engine (e2e/hub.ts): the fleet of the tests' repositories, red ones first,
 // a repository with its red cases, hostile output as text, the pairing, and nothing the page must not do (a request
@@ -23,7 +23,7 @@ async function watch(page: Page): Promise<{ errors: string[]; foreign: string[];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('request', (r) => {
     const url = new URL(r.url());
-    if (url.origin !== 'http://127.0.0.1:17698') foreign.push(r.url());
+    if (url.origin !== origin()) foreign.push(r.url());
     if (url.pathname === '/api/testing/fleet') reads += 1;
   });
   await watchViolations(page);
@@ -138,9 +138,9 @@ test('a used pairing link is refused and says so', async ({ page }) => {
   const link = pairingLink(state().config);
   const code = link.split('#pair=')[1] ?? '';
   // Spent before the page sees it.
-  await fetch('http://127.0.0.1:17698/auth/exchange', {
+  await fetch(`${origin()}/auth/exchange`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:17698' },
+    headers: { 'Content-Type': 'application/json', Origin: origin() },
     body: JSON.stringify({ code }),
   });
   await page.goto(link);

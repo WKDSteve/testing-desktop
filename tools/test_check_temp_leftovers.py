@@ -83,10 +83,6 @@ class Leftovers(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("2 testing-desktop-test-install* left", err)
 
-    @unittest.skipUnless(
-        (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml").is_file(),
-        "the workflows and install scripts come with the release step",
-    )
     def test_the_workflows_run_the_check_after_the_install_scripts(self):
         root = Path(__file__).resolve().parent.parent / ".github" / "workflows"
         check = 'python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --prefix testing-desktop-test-install\n'
@@ -96,7 +92,8 @@ class Leftovers(unittest.TestCase):
             installs = text.index("sh scripts/test-install.sh")
             self.assertGreater(text.find(check, installs), installs, name)
         ci = (root / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn('python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --strict\n', ci)
+        # `nvim` and `nvim.0` are what the real Neovim of the engine tests may make itself.
+        self.assertIn('python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --strict --allow nvim --allow nvim.0\n', ci)
 
     def test_a_missing_dir_is_no_pass(self):
         code, _, err = run(["--dir", os.path.join(self.dir, "no-such")])

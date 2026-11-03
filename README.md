@@ -16,7 +16,8 @@ them. Its web variant, one HTML file opened from disk, is published to
 fleet (the last local run and the CI on each system, red first, a filter for the red ones and a search) and one
 repository with its red cases and their output. It reads, and reads again when the window gets the focus back; it is
 not told of a new result by itself yet, and the hub does not ask GitHub for the CI state (the CI columns say "not
-asked"). The phases below fill it.
+asked"). The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
+there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 
 ## Principles
 
@@ -32,7 +33,7 @@ asked"). The phases below fill it.
 
 | Phase | What |
 | --- | --- |
-| scaffold | the hub on appkit: names, settings, guard and security tests, no data route (this state) |
+| scaffold | the hub on appkit: names, settings, guard and security tests, no data route |
 | engine | the engine seam to testing.nvim and the routes of the fleet, a repository and its findings |
 | ui-read | the read-only interface: overview, filter "red", detail with the red cases, link to the CI run |
 | release | CI, the rolling build, releases and the install scripts |
@@ -49,6 +50,9 @@ engine.lock           the testing.nvim and lib.nvim commits this is built and te
 ui/                   the page (Svelte 5, Vite, TypeScript, appkit-ui), read through a source of its own (`TestingSource`)
 ui/e2e/               browser tests (Playwright, axe) against the real binary, the real engine and repositories made for them
 tools/                checks of the repository (appkit pin, lock age, control characters, colours, temp leftovers)
+scripts/              build and install from a checkout, uninstall, the tests of both
+docs/                 usage, security of the server, releasing
+.github/workflows/    ci, rolling (`latest` after a green CI), release (a tag makes a draft), on a self-hosted Windows runner
 ```
 
 ## Running the hub
@@ -101,7 +105,8 @@ cd ui && pnpm e2e        # after `cargo build`: the binary must hold the page th
 ```
 
 The tests that use the real engine find testing.nvim in `TESTING_ENGINE_DIR`, else `$REPOS_DIR/testing.nvim`; with
-`TESTING_HUB_REQUIRE_ENGINE=1` a missing engine is a failure, not a skip.
+`TESTING_HUB_REQUIRE_ENGINE=1` a missing engine is a failure, not a skip. The browser tests take a free port for each
+run (`TESTING_E2E_PORT` names one).
 
 ## The shared kit
 

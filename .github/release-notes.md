@@ -1,0 +1,41 @@
+The hub as a program for Windows, with the interface inside it. The program shows the test and CI results of your repositories that use testing.nvim, and only reads them: it starts no test run and writes into no repository.
+
+## Install
+
+Without administrator rights, for one user. The `install.ps1` of this release installs exactly this release: it
+downloads the archive, checks it against `SHA256SUMS` and hands over to `testing-hub install`. No GitHub login
+or token is needed: download it with the command below and run it in your own terminal (PowerShell not elevated).
+If you save it from this page with the browser instead, run `Unblock-File .\install.ps1` first: the browser marks the
+file as downloaded, and PowerShell refuses such an unsigned script ("is not digitally signed").
+
+```
+irm https://github.com/WKDSteve/testing-desktop/releases/download/{tag}/install.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
+To register the hub with your login and add a link, pass the arguments: `.\install.ps1 -InstallArgs '--autostart','--shortcut'`.
+The program downloaded by the script is not stopped by SmartScreen; what is checked instead is that it is the file
+`SHA256SUMS` of this release lists.
+
+Run the same script again to repair this release (to update, take the script of a newer release); remove the program
+with `uninstall.ps1` (your settings stay unless you add `-PurgeSettings`; your repositories and the results of
+testing.nvim are never touched). The install script comes from the release-kit of appkit, the uninstall script from
+`scripts/` at this tag; both are listed in `SHA256SUMS`.
+
+## Files
+
+| System | Archive |
+| ------ | ------- |
+| Windows (x86-64) | `testing-hub-<version>-x86_64-pc-windows-msvc.zip` |
+
+There is no Linux or macOS build: the release is made on the author's Windows machine.
+
+`SHA256SUMS` lists the checksum of every file (archive and scripts):
+
+```
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+The program is not signed yet: Windows may show SmartScreen. The script does not need that.
+
+The engine (`testing.nvim` and `lib.nvim`, Neovim 0.12 or newer) is not part of the archive.

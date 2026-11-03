@@ -51,7 +51,8 @@
       <p class="muted">{t('detail.no_red')}</p>
     {:else}
       <ol class="cases">
-        {#each cases as c (c.id)}
+        <!-- By position: two cases of one name in one file have the same id, and a key twice stops the page. -->
+        {#each cases as c, i (i)}
           <li>
             <div class="case-head">
               <ToneView tone="red" label={c.status} />

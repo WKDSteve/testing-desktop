@@ -51,6 +51,13 @@ const REPOS: { name: string; class: string; spec: string }[] = [
       `  it("${RLO}reversed", function()`,
       `    error(${JSON.stringify(HOSTILE_MESSAGE + '\n' + 'x'.repeat(20000))})`,
       '  end)',
+      // Two cases of one name: the same id twice in the document.
+      '  it("twice", function()',
+      '    assert.are.equal("a", "b")',
+      '  end)',
+      '  it("twice", function()',
+      '    assert.are.equal("c", "d")',
+      '  end)',
       'end)',
     ].join('\n'),
   },

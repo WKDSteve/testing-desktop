@@ -99,6 +99,8 @@ test('hostile output of a test is shown as text: no markup runs, reordering char
   // No link is made of a text that is not a CI run.
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   await expect(page.locator('main img, main svg:not([aria-hidden])')).toHaveCount(0);
+  // Two cases of one name (one id twice) are both there, and the page did not stop over them.
+  await expect(page.locator('ol.cases > li').filter({ hasText: '› twice' })).toHaveCount(2);
   expect(seen.errors).toEqual([]);
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);

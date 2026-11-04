@@ -14,6 +14,9 @@ export const TOKEN_KEY = 'testing-desktop.session';
 /** How long the page waits before it asks a hub that did not answer, or an engine that was not ready, again. */
 export const RETRY_MS = 3000;
 
+/** How often a pairing code is tried again when the hub says that there were too many attempts. */
+export const EXCHANGE_RETRIES = 3;
+
 export type Phase = 'starting' | 'needs_pairing' | 'offline' | 'unavailable' | 'ready' | 'failed';
 
 export interface StorageLike {
@@ -49,6 +52,8 @@ export class App {
   problem = $state<string | null>(null);
   /** The pairing code of the address was refused (used or too old). */
   pairRefused = $state(false);
+  /** The hub took no more pairing attempts for now; the code was not looked at. */
+  pairLimited = $state(false);
   failure = $state<string | null>(null);
 
   fleet = $state<Fleet | null>(null);
@@ -77,18 +82,35 @@ export class App {
     this.stream.resume();
     this.phase = 'starting';
     this.pairRefused = false;
+    this.pairLimited = false;
     let token = safe(() => this.env.session.getItem(TOKEN_KEY));
     if (code) {
-      try {
-        const traded = await this.env.hub.exchange(code);
-        token = traded;
-        safe(() => this.env.session.setItem(TOKEN_KEY, traded));
-      } catch (error) {
-        // A code that is spent or too old: a session the tab has is still good.
-        if (error instanceof ApiError && error.status === 401) {
-          this.pairRefused = token === null;
-        } else if (token === null) {
-          this.phase = 'offline';
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const traded = await this.env.hub.exchange(code);
+          token = traded;
+          safe(() => this.env.session.setItem(TOKEN_KEY, traded));
+          break;
+        } catch (error) {
+          // A code that is spent or too old: a session the tab has is still good.
+          if (error instanceof ApiError && error.status === 401) {
+            this.pairRefused = token === null;
+            break;
+          }
+          // Too many attempts: the hub did not look at the code, which is still good but no longer in the address.
+          const limited = error instanceof ApiError && error.status === 429;
+          if (limited && attempt < EXCHANGE_RETRIES) {
+            await this.env.sleep(RETRY_MS);
+            if (this.stopped) return;
+            continue;
+          }
+          if (token !== null) break;
+          if (limited) {
+            this.pairLimited = true;
+            this.phase = 'needs_pairing';
+          } else {
+            this.phase = 'offline';
+          }
           return;
         }
       }

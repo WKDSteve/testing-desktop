@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.json';
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
-import { App, TOKEN_KEY, type StorageLike } from './app.svelte';
+import { App, EXCHANGE_RETRIES, TOKEN_KEY, type StorageLike } from './app.svelte';
 import type { Fleet, RepoDoc } from './contract';
 import { ApiError, HubSource } from './source';
 
@@ -258,6 +258,49 @@ describe('the session', () => {
     await again.start('ab'.repeat(16));
     expect(again.phase).toBe('needs_pairing');
     expect(again.pairRefused).toBe(true);
+  });
+
+  describe('a hub that takes no more pairing attempts for now', () => {
+    const limited = () => json('{"error":{"code":"rate_limited","message":"x"}}', 429);
+
+    it('is asked again, and the code that was still good pairs', async () => {
+      let asked = 0;
+      const { hub } = fakeHub((p) => {
+        if (p !== '/auth/exchange') return standard(p);
+        asked += 1;
+        return asked < 3 ? limited() : standard(p);
+      });
+      const app = new App({ hub, session: new Memory(), sleep: now });
+      await app.start('ab'.repeat(16));
+      expect(asked).toBe(3);
+      expect(app.phase).toBe('ready');
+      expect(app.pairLimited).toBe(false);
+      app.stop();
+    });
+
+    it('is said as what it is, not as a hub that does not answer, when it stays that way', async () => {
+      let asked = 0;
+      const { hub } = fakeHub((p) => {
+        if (p !== '/auth/exchange') return standard(p);
+        asked += 1;
+        return limited();
+      });
+      const app = new App({ hub, session: new Memory(), sleep: now });
+      await app.start('ab'.repeat(16));
+      expect(asked).toBe(EXCHANGE_RETRIES + 1);
+      expect(app.phase).toBe('needs_pairing');
+      expect(app.pairLimited).toBe(true);
+    });
+
+    it('leaves a session the tab has alone', async () => {
+      const { hub } = fakeHub((p) => (p === '/auth/exchange' ? limited() : standard(p)));
+      const session = new Memory();
+      session.setItem(TOKEN_KEY, 't');
+      const app = new App({ hub, session, sleep: now });
+      await app.start('ab'.repeat(16));
+      expect(app.phase).toBe('ready');
+      app.stop();
+    });
   });
 
   it('waits for an engine that is not ready, and stops when told', async () => {

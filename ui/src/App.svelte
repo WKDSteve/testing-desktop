@@ -37,7 +37,7 @@
       <Overview {app} {t} />
     {/if}
   {:else if app.phase === 'needs_pairing'}
-    <p class="state" role="status">{app.pairRefused ? t('phase.pair_refused') : t('phase.needs_pairing')}</p>
+    <p class="state" role="status">{app.pairLimited ? t('phase.pair_limited') : app.pairRefused ? t('phase.pair_refused') : t('phase.needs_pairing')}</p>
   {:else if app.phase === 'offline'}
     <p class="state" role="status">{t('phase.offline')}</p>
   {:else if app.phase === 'unavailable'}

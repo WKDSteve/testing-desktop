@@ -69,6 +69,8 @@ test('a run in a terminal shows on the page without anyone asking, also in the r
   const row = page.getByRole('row', { name: /beta\.nvim/ });
   await expect(row).toContainText('green');
   await page.getByRole('button', { name: 'beta.nvim' }).click();
+  // Read before the run is written: the read of the opening would show it too, and the event would have proven nothing.
+  await expect(page.locator('.summary')).toBeVisible();
   const reads = seen.fleetReads();
   try {
     writeRun(root, 'beta.nvim', ['describe("beta", function()', '  it("broke", function()', '    assert.is_true(false)', '  end)', 'end)'].join('\n'));

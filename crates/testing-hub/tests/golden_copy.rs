@@ -8,7 +8,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Each copy (relative to this repository) and the file of testing.nvim it is a copy of.
-const COPIES: [(&str, &str); 4] = [
+const COPIES: [(&str, &str); 5] = [
+    (
+        "crates/testing-hub/tests/fixtures/golden/findings.json",
+        "TESTS/golden/testing-export-1-findings/findings.json",
+    ),
     (
         "crates/testing-hub/tests/fixtures/golden/fleet.json",
         "TESTS/golden/testing-export-1/fleet.json",

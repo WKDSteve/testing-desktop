@@ -1,10 +1,10 @@
 # The engine this app is built and tested against.
 # The engine stays a pure Lua plugin; the contract is `testing-export/1`
-# (read only: `testing call hello|fleet|repo --params=-`, see
+# (read only: `testing call hello|fleet|repo|finding --params=-`, see
 # schemas/testing-export/1/ and docs/OUTPUT-FORMATS.md in testing.nvim).
 # Both checkouts are pinned by commit; the golden documents of
 # crates/testing-hub/tests/fixtures/golden are copies of that commit's.
 repo       = https://github.com/WKDSteve/testing.nvim
-commit     = bed7ec45df6373b84f06c156f51468636c8a9fd9
+commit     = 84caf868dc6a686f38583ee24cd2dfb86cf69da8
 lib_repo   = https://github.com/WKDSteve/lib.nvim
 lib_commit = 187f37572421eb29b443bf0ae409bb33f8f3d28c

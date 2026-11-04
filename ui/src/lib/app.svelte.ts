@@ -71,7 +71,6 @@ export class App {
 
   private stopped = false;
   private reading: Promise<void> | null = null;
-  private following: Promise<void> | null = null;
   private repoAbort: AbortController | null = null;
 
   constructor(private readonly env: Env) {}
@@ -138,11 +137,8 @@ export class App {
     await this.refresh();
     if (this.stopped || !this.env.hub.hasToken) return;
     // It runs for as long as the page: `start` does not wait for it. A start after a stop (a pairing link pasted into
-    // the tab) finds the one that ran still going: never a second one, and it is cut to read on with the new token.
-    if (this.following) this.stream.cut();
-    this.following ??= this.followStream().finally(() => {
-      this.following = null;
-    });
+    // the tab) finds the one that ran still going: the kit keeps it and it reads on with the new token.
+    void this.followStream();
   }
 
   stop(): void {

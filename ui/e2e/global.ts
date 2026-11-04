@@ -31,7 +31,7 @@ export default async function setup(): Promise<() => Promise<void>> {
     await ensureE2ePort(process.env);
     running = await startHub();
     const token = await sessionToken(running.config);
-    writeFileSync(STATE, JSON.stringify({ config: running.config, token }));
+    writeFileSync(STATE, JSON.stringify({ config: running.config, token, root: running.root }));
   } catch (error) {
     // Playwright runs no teardown when the setup fails: what was made so far goes here (or the error says it stayed).
     const made = running;

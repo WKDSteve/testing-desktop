@@ -55,7 +55,9 @@ the tile **Testing**: one click starts it and opens it.
 ## The page
 
 The first page is the fleet: every repository with its last local run and the CI on each system, the red ones first, a
-filter for the red ones and a search. A click opens one repository with its red cases and their output. The page reads
+filter for the red ones and a search. A click opens one repository with its red cases and their output. A run in a
+terminal shows by itself a moment after it ends: the hub watches the state folder and tells the page (a change of the CI
+record too; a new commit or a changed `areas.json` shows within the regular scan of 45 seconds). The page also reads
 again when the window gets the focus back. The CI columns say "not asked" for now: the hub does not ask GitHub yet.
 
 More on the security of the server: [SECURITY.md](SECURITY.md). On releases: [RELEASING.md](RELEASING.md).

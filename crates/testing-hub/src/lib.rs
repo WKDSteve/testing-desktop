@@ -1,6 +1,6 @@
 //! The hub of testing-desktop, on `appkit-hub`: its names, its settings, the engine seam to
 //! testing.nvim (`testing-export/1`, read only) and the routes a session reads (`fleet`, `repo`,
-//! `about`). The page arrives with the read-only interface.
+//! `finding`, `events`, `about`). The fleet is a snapshot that a watcher of the state folder renews.
 //! The commands of the program (`serve`, `start`, `stop`, `open`, `autostart`, `install`,
 //! `uninstall`) are in `app` and `background`.
 
@@ -16,14 +16,17 @@ mod answer;
 pub mod app;
 pub mod background;
 pub mod engine;
+mod live;
 pub mod places;
 mod routes;
 mod runtime;
 pub mod settings;
+pub mod store;
 pub mod ui;
+pub mod watch;
 
 pub use routes::{MakeRoute, Shared, ROUTES};
-pub use runtime::{Origins, TestingRuntime};
+pub use runtime::{Origins, Reading, TestingRuntime, Watch};
 
 pub use appkit_hub::{client, loginitems};
 
@@ -92,6 +95,9 @@ pub struct Start {
     /// What every question carries (the state folder, the `areas.json`), and where they came from.
     pub ask: engine::Ask,
     pub origins: Origins,
+    /// The state folder to watch for new results, with the timings of the scan. `None`: nothing is
+    /// watched, the snapshot of the fleet changes when it is too old (`limits.snapshot_max_age`).
+    pub watch: Option<Watch>,
     /// The files of the page; [`ui::UiFiles::none`] serves the placeholder page of the core.
     pub ui: ui::UiFiles,
 }
@@ -102,6 +108,7 @@ pub struct Start {
 ///
 /// When the address is not loopback or cannot be bound.
 pub async fn start(s: Start) -> std::io::Result<RunningServer> {
+    let max_age = s.limits.snapshot_max_age;
     serve(
         ServeParts {
             addr: s.addr,
@@ -116,7 +123,16 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
             // Nothing writes: no route has the limit of the writes.
             guard_rules: GuardRules::new(IDENTITY.route("hello"), []),
             ui: Arc::new(s.ui),
-            runtime: TestingRuntime::new(s.status).with_engine(s.engine, s.ask, s.origins),
+            runtime: TestingRuntime::reading(
+                s.status,
+                Reading {
+                    engine: s.engine,
+                    ask: s.ask,
+                    origins: s.origins,
+                    max_age,
+                    watch: s.watch,
+                },
+            ),
             // There is one repositories root and no list to choose from, so this is never called.
             build: Arc::new(|()| TestingRuntime::new(app::no_engine_status())),
             vaults: None,

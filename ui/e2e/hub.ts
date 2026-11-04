@@ -33,6 +33,9 @@ const RLO = String.fromCodePoint(0x202e);
 const PDF = String.fromCodePoint(0x202c);
 export const HOSTILE_MESSAGE = `<img src=x onerror=window.__xss=1> javascript:window.__xss=2 ${RLO}txt.exe${PDF}`;
 
+/** The spec of beta.nvim, green as the tests start with it. */
+export const BETA_SPEC = ['describe("beta", function()', '  it("holds", function()', '    assert.is_true(true)', '  end)', 'end)'].join('\n');
+
 /** The repositories of the root: a spec file each, and the class each has on the "device" of the tests. */
 const REPOS: { name: string; class: string; spec: string }[] = [
   {
@@ -43,7 +46,7 @@ const REPOS: { name: string; class: string; spec: string }[] = [
   {
     name: 'beta.nvim',
     class: 'internal',
-    spec: ['describe("beta", function()', '  it("holds", function()', '    assert.is_true(true)', '  end)', 'end)'].join('\n'),
+    spec: BETA_SPEC,
   },
   {
     name: 'hostile.nvim',
@@ -70,6 +73,26 @@ const REPOS: { name: string; class: string; spec: string }[] = [
   },
 ];
 
+/**
+ * Give a repository below `root` this spec and run it for real into the state of the tests, as a person does in a
+ * terminal; red runs end with exit 1. `CI` trusts the root of the temp dir.
+ */
+export function writeRun(root: string, name: string, spec: string): void {
+  const dir = join(root, 'repos', name);
+  writeFileSync(join(dir, 'tests', `${name.split('.')[0]}_spec.lua`), `${spec}\n`);
+  const script = join(engineDir(), 'scripts', 'testing.lua');
+  const state = join(root, 'state');
+  try {
+    execFileSync('nvim', ['-n', '-i', 'NONE', '--headless', '-u', 'NONE', '-l', script, 'run', '.', '--state-dir', state], {
+      cwd: dir,
+      env: { ...process.env, CI: 'true' },
+      stdio: 'ignore',
+    });
+  } catch (error) {
+    if ((error as { status?: number }).status !== 1) throw error;
+  }
+}
+
 export interface Running {
   child: ChildProcess;
   config: string;
@@ -92,22 +115,11 @@ function fill(root: string): { root: string; config: string } {
   const repos = join(root, 'repos');
   const state = join(root, 'state');
   mkdirSync(state, { recursive: true });
-  const script = join(engineDir(), 'scripts', 'testing.lua');
   for (const r of REPOS) {
     const dir = join(repos, r.name);
     mkdirSync(join(dir, 'tests'), { recursive: true });
     writeFileSync(join(dir, '.testing.lua'), 'return {}\n');
-    writeFileSync(join(dir, 'tests', `${r.name.split('.')[0]}_spec.lua`), `${r.spec}\n`);
-    // A real run into the tests' state; red runs end with exit 1. `CI` trusts the root of the temp dir.
-    try {
-      execFileSync('nvim', ['-n', '-i', 'NONE', '--headless', '-u', 'NONE', '-l', script, 'run', '.', '--state-dir', state], {
-        cwd: dir,
-        env: { ...process.env, CI: 'true' },
-        stdio: 'ignore',
-      });
-    } catch (error) {
-      if ((error as { status?: number }).status !== 1) throw error;
-    }
+    writeRun(root, r.name, r.spec);
   }
   const areas: Record<string, { class: string; repo: string }> = {};
   for (const r of REPOS) areas[r.name] = { class: r.class, repo: r.name };

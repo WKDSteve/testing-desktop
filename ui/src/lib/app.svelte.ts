@@ -1,8 +1,10 @@
 // The state of the page: the session with the hub, the fleet, the repository that is open. Everything the page
 // reaches outside (the hub, the storage of the tab, the clock) comes in through `Env`, so the unit tests run it
 // without a browser. Reads are single-flight: a read that is under way is not asked again, an older answer never
-// replaces a newer one.
+// replaces a newer one. What is new comes by the event stream of the hub: nothing asks on a timer.
 
+import { StreamSession } from 'appkit-ui/session';
+import type { SseMessage } from 'appkit-ui/sse';
 import type { Fleet, RepoDoc } from './contract';
 import { ApiError, type HubSource } from './source';
 
@@ -59,6 +61,9 @@ export class App {
   repo = $state<RepoDoc | null>(null);
   repoFailure = $state<string | null>(null);
 
+  /** The event stream of the hub (the kit's `StreamSession`). */
+  readonly stream = new StreamSession();
+
   private stopped = false;
   private reading: Promise<void> | null = null;
   private repoAbort: AbortController | null = null;
@@ -68,6 +73,7 @@ export class App {
   /** Bring the page up. `code` is a pairing code taken from the address. */
   async start(code: string | null): Promise<void> {
     this.stopped = false;
+    this.stream.resume();
     this.phase = 'starting';
     this.pairRefused = false;
     let token = safe(() => this.env.session.getItem(TOKEN_KEY));
@@ -107,11 +113,68 @@ export class App {
     }
     this.problem = null;
     await this.refresh();
+    if (this.stopped || !this.env.hub.hasToken) return;
+    // It runs for as long as the page: `start` does not wait for it.
+    void this.followStream();
   }
 
   stop(): void {
     this.stopped = true;
+    this.stream.stop();
     this.repoAbort?.abort();
+  }
+
+  private followStream(): Promise<void> {
+    return this.stream.follow({
+      fetchFn: this.env.hub.fetcher,
+      url: () => this.env.hub.eventsUrl,
+      bearer: () => this.env.hub.bearer,
+      hasToken: () => this.env.hub.hasToken,
+      sleep: (ms) => this.env.sleep(ms),
+      // What happened while the stream was down shows in the `hello` that follows: nothing to read yet.
+      onOpen: () => {},
+      onMessage: (m) => void this.onMessage(m),
+      onLost: () => this.lostSession(),
+    });
+  }
+
+  /** One event of the stream. Returns when what it asked for is read (the tests wait for it). */
+  async onMessage(message: SseMessage): Promise<void> {
+    if (message.event === 'fleet' || message.event === 'resync') {
+      // An event of this hub names no repository: it says that the fleet changed.
+      await this.readAgain();
+      return;
+    }
+    if (message.event === 'hello') {
+      // Where the stream stands: another revision than ours came between our read and the stream.
+      try {
+        const doc = JSON.parse(message.data) as { rev?: unknown };
+        if (typeof doc.rev !== 'string' || doc.rev === this.fleet?.rev) return;
+      } catch {
+        // Not readable: read to be sure.
+      }
+      await this.readAgain();
+    }
+  }
+
+  /** The fleet, and the repository that is open, which stays on the page while it is read. */
+  private async readAgain(): Promise<void> {
+    await this.refresh();
+    const key = this.openKey;
+    if (key === null || this.stopped) return;
+    const abort = new AbortController();
+    this.repoAbort?.abort();
+    this.repoAbort = abort;
+    try {
+      const doc = await this.env.hub.repo(key, abort.signal);
+      if (abort.signal.aborted || this.openKey !== key) return;
+      this.repo = doc;
+      this.repoFailure = null;
+    } catch (error) {
+      if (abort.signal.aborted || this.openKey !== key) return;
+      // What was read stays: a failure of this read only replaces a repository the page does not hold yet.
+      if (this.repo === null) this.repoFailure = messageOf(error);
+    }
   }
 
   /** Read the fleet again; a read under way is joined, not doubled. */
@@ -168,6 +231,7 @@ export class App {
   private lostSession(): void {
     safe(() => this.env.session.removeItem(TOKEN_KEY));
     this.env.hub.setToken(null);
+    this.stream.cut();
     this.repoAbort?.abort();
     this.phase = 'needs_pairing';
     this.fleet = null;

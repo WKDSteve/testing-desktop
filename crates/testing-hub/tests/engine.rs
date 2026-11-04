@@ -5,6 +5,7 @@
 //! `TESTING_HUB_REQUIRE_ENGINE=1` (CI), where a missing engine is a failure.
 
 use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,11 +20,12 @@ use testing_hub::engine::{
     cli_config, probe, Ask, Calls, CliEngine, Engine, EngineError, DISCOVERY,
 };
 use testing_hub::settings::TestingSettings;
-use testing_hub::Origins;
+use testing_hub::store::RefreshOptions;
+use testing_hub::{Origins, Watch};
 
 mod common;
 
-use common::{get, session};
+use common::{get, session, Stream};
 
 /// The repositories of the root, with the class each has in the data classes of the test.
 const REPOS: [(&str, &str); 3] = [
@@ -214,6 +216,7 @@ async fn the_hub_serves_the_fleet_of_the_real_engine() {
         engine: Some(Arc::new(engine) as Arc<dyn Engine>),
         ask: fx.ask(),
         origins: Origins::default(),
+        watch: None,
         ui: testing_hub::ui::UiFiles::none(),
     })
     .await
@@ -228,4 +231,136 @@ async fn the_hub_serves_the_fleet_of_the_real_engine() {
     );
     let about = get(&server, &testing_hub::IDENTITY.route("about"), Some(&token)).await;
     assert!(about.json()["engine"]["version"].is_string(), "{about:?}");
+}
+
+/// A real run of testing.nvim in a repository of the fixture, into the fixture's state folder: what
+/// a person does in the terminal while the page is open. Its one case fails.
+fn a_red_run(fx: &Fixture, repo: &str, nvim: &Path, script: &Path) {
+    let dir = fx.root().join(repo);
+    std::fs::create_dir_all(dir.join("tests")).unwrap();
+    std::fs::write(
+        dir.join("tests").join("red_spec.lua"),
+        "describe('red', function()\n  it('fails', function()\n    assert.is_true(false)\n  end)\nend)\n",
+    )
+    .unwrap();
+    let status = Command::new(nvim)
+        .args(["-n", "-i", "NONE", "--headless", "-u", "NONE", "-l"])
+        .arg(script)
+        .args(["run", ".", "--state-dir"])
+        .arg(fx.dir.join("state"))
+        .current_dir(&dir)
+        // `CI` trusts the root in the temp dir.
+        .env("CI", "true")
+        .status()
+        .expect("nvim runs");
+    assert_eq!(status.code(), Some(1), "a red run ends with exit 1");
+}
+
+#[tokio::test]
+async fn a_real_run_is_seen_by_the_watcher_and_its_findings_are_one_document() {
+    let fx = Fixture::new();
+    let env = Env::from_process();
+    let file = FileConfig::<TestingSettings> {
+        vault: Some(fx.root()),
+        ..FileConfig::default()
+    };
+    if engine_or_skip(&fx.root()).await.is_none() {
+        return;
+    }
+    let setup = discover(&DISCOVERY, &file, AppInputs::default(), &env)
+        .await
+        .expect("the engine was found a moment ago");
+    let config = cli_config(&setup, env);
+    let (nvim, script) = (config.nvim.clone(), config.script.clone());
+    let engine = CliEngine::new(config);
+    let info = probe(&engine).await.expect("hello");
+    let control = Secret::generate(TOKEN_BYTES).unwrap();
+    let server = testing_hub::start(testing_hub::Start {
+        addr: "127.0.0.1:0".parse().unwrap(),
+        limits: Limits {
+            snapshot_max_age: None,
+            ..Limits::default()
+        },
+        clock: Arc::new(ManualClock::new()),
+        pairing_ttl: Duration::from_secs(60),
+        control_secret: control.clone(),
+        instance: Secret::generate(CODE_BYTES).unwrap(),
+        status: appkit_hub::HubStatus {
+            engine_ready: true,
+            problem: None,
+            capabilities: info.capabilities,
+        },
+        engine: Some(Arc::new(engine) as Arc<dyn Engine>),
+        ask: fx.ask(),
+        origins: Origins::default(),
+        watch: Some(Watch {
+            state_dir: fx.dir.join("state"),
+            refresh: RefreshOptions::default(),
+        }),
+        ui: testing_hub::ui::UiFiles::none(),
+    })
+    .await
+    .expect("the hub starts");
+    let token = session(&server, &control).await;
+    let fleet = || async { get(&server, &route_of("fleet"), Some(&token)).await };
+
+    let before = fleet().await.json();
+    let row = |doc: &Value| {
+        doc["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["name"] == "alpha.nvim")
+            .cloned()
+            .unwrap()
+    };
+    let key = row(&before)["key"].as_str().unwrap().to_owned();
+    assert!(row(&before)["local"].is_null(), "no run yet: {before}");
+
+    // With no run, no finding is an empty list in one document.
+    let none = get(
+        &server,
+        &format!("{}?key={key}", route_of("finding")),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(none.status, 200, "{none:?}");
+    assert_eq!(none.json()["kind"], "findings");
+    assert_eq!(none.json()["findings"], serde_json::json!([]));
+
+    let mut stream = Stream::open(&server, &route_of("events"), &token).await;
+    stream.until("event: hello").await;
+    // Kept by the task and given back: the hub reads below this folder until the end of the test.
+    let fx = tokio::task::spawn_blocking(move || {
+        a_red_run(&fx, "alpha.nvim", &nvim, &script);
+        fx
+    })
+    .await
+    .unwrap();
+
+    // Nothing asks: the stream says the fleet changed, and the next read shows the red run.
+    stream
+        .until_within("event: fleet", Duration::from_secs(30))
+        .await;
+    let after = fleet().await.json();
+    assert_ne!(after["digest"], before["digest"]);
+    assert_eq!(row(&after)["local"]["verdict"], "red", "{after}");
+
+    let found = get(
+        &server,
+        &format!("{}?key={key}", route_of("finding")),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(found.status, 200, "{found:?}");
+    let list = found.json();
+    let list = list["findings"].as_array().unwrap();
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!(list[0]["schema"], "testing-finding/1");
+    assert_eq!(list[0]["kind"], "case");
+    drop(fx);
+}
+
+fn route_of(name: &str) -> String {
+    testing_hub::IDENTITY.route(name)
 }

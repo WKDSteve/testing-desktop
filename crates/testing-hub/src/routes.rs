@@ -1,6 +1,7 @@
 //! The routes of the app, under `/api/testing/`. Each is under `/api/`, so the guard asked for a
 //! session before a handler runs. The documents of the engine are passed on as the engine wrote
-//! them; their `digest` is the ETag.
+//! them; their `digest` is the ETag. The fleet is the snapshot the hub holds; a repository and its
+//! findings are asked for when they are wanted.
 //!
 //! [`ROUTES`] is the one list of them: the router is built from it and the security matrix reads
 //! its names, so a route cannot be served without the matrix trying it without a session.
@@ -16,8 +17,9 @@ use axum::routing::{get, MethodRouter};
 use axum::Router;
 use serde_json::{json, Value};
 
-use crate::answer::{ask, engine_unavailable};
-use crate::engine::{is_repo_key, Calls, EngineError, Reply};
+use crate::answer::{engine_failure, engine_unavailable};
+use crate::engine::{is_repo_key, Ask, Calls, EngineError, Method, Reply};
+use crate::live;
 use crate::runtime::TestingRuntime;
 use crate::IDENTITY;
 
@@ -31,6 +33,8 @@ pub type MakeRoute = fn() -> MethodRouter<Arc<Shared>>;
 pub const ROUTES: &[(&str, MakeRoute)] = &[
     ("fleet", || get(fleet)),
     ("repo", || get(repo)),
+    ("finding", || get(finding)),
+    ("events", || get(live::events)),
     ("about", || get(about)),
 ];
 
@@ -67,7 +71,8 @@ fn document(headers: &HeaderMap, reply: Reply) -> Response {
 }
 
 /// `GET /api/testing/fleet`: one row per repository the data classes of this device release
-/// (the export form of `testing-export/1`).
+/// (the export form of `testing-export/1`), from the snapshot the hub holds: asking does not start
+/// the engine while the snapshot is good.
 async fn fleet(
     State(st): State<Arc<Shared>>,
     RawQuery(query): RawQuery,
@@ -77,14 +82,23 @@ async fn fleet(
         return response;
     }
     let rt = st.rt();
-    match ask(&rt, Calls::Fleet, Some(&rt.ask.fleet())).await {
-        Ok(reply) => document(&headers, reply),
-        Err(response) => response,
+    if !rt.store.has_engine() {
+        return engine_unavailable(&rt);
     }
+    let cached = match rt.store.current().await {
+        Ok(cached) => cached,
+        Err(error) => return engine_failure(error),
+    };
+    if let (Some(etag), Ok(Some(held))) = (&cached.etag, single(&headers, &header::IF_NONE_MATCH))
+        && etag_matches(&held, etag)
+    {
+        return not_modified(etag);
+    }
+    json_response(StatusCode::OK, cached.text.clone(), cached.etag.as_deref())
 }
 
-/// The key of `?key=<key>`, the only query `repo` takes. A key is plain (`engine::is_repo_key`), so
-/// nothing is decoded: an escaped character is no key.
+/// The key of `?key=<key>`, the only query `repo` and `finding` take. A key is plain
+/// (`engine::is_repo_key`), so nothing is decoded: an escaped character is no key.
 pub(crate) fn repo_key(query: Option<&str>) -> Result<&str, &'static str> {
     let query = query.filter(|q| !q.is_empty()).ok_or("key is missing")?;
     let mut key = None;
@@ -104,15 +118,17 @@ pub(crate) fn repo_key(query: Option<&str>) -> Result<&str, &'static str> {
     Ok(key)
 }
 
-/// `GET /api/testing/repo?key=<key>`: one repository with its red cases. A key the engine finds no
-/// repository for is `404`; a repository the data classes do not release is refused the same way,
-/// since the engine says both with the same exit code.
-async fn repo(
-    State(st): State<Arc<Shared>>,
-    RawQuery(query): RawQuery,
-    headers: HeaderMap,
+/// A document of one repository by its key. A key the engine finds no repository for is `404`; a
+/// repository the data classes do not release is refused the same way, since the engine says both
+/// with the same exit code.
+async fn by_key(
+    st: &Shared,
+    query: Option<&str>,
+    headers: &HeaderMap,
+    method: Method,
+    request: fn(&Ask, &str) -> Value,
 ) -> Response {
-    let key = match repo_key(query.as_deref()) {
+    let key = match repo_key(query) {
         Ok(key) => key,
         Err(why) => return error_body(StatusCode::BAD_REQUEST, "bad_query", why),
     };
@@ -120,16 +136,42 @@ async fn repo(
     let Some(engine) = &rt.engine else {
         return engine_unavailable(&rt);
     };
-    match engine.call(Calls::Repo, Some(&rt.ask.repo(key))).await {
-        Ok(reply) => document(&headers, reply),
+    match engine.call(method, Some(&request(&rt.ask, key))).await {
+        Ok(reply) => document(headers, reply),
         // testing.nvim says "no such repository" and "not released" with exit 2 and no document
         Err(EngineError::Failed { code: Some(2), .. }) => error_body(
             StatusCode::NOT_FOUND,
             "not_found",
             "no released repository with this key",
         ),
-        Err(error) => crate::answer::engine_failure(error),
+        Err(error) => engine_failure(error),
     }
+}
+
+/// `GET /api/testing/repo?key=<key>`: one repository with its red cases.
+async fn repo(
+    State(st): State<Arc<Shared>>,
+    RawQuery(query): RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    by_key(&st, query.as_deref(), &headers, Calls::Repo, Ask::repo).await
+}
+
+/// `GET /api/testing/finding?key=<key>`: the findings of the last run of one repository, in one
+/// document (no finding is an empty list).
+async fn finding(
+    State(st): State<Arc<Shared>>,
+    RawQuery(query): RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    by_key(
+        &st,
+        query.as_deref(),
+        &headers,
+        Calls::Finding,
+        Ask::finding,
+    )
+    .await
 }
 
 /// `GET /api/testing/about`: what this build is, which engine it runs, and where the hub reads
@@ -216,7 +258,7 @@ mod tests {
             assert!(IDENTITY.route(name).starts_with("/api/testing/"), "{name}");
             assert_eq!(names.iter().filter(|n| *n == name).count(), 1, "{name}");
         }
-        assert_eq!(names, ["fleet", "repo", "about"]);
+        assert_eq!(names, ["fleet", "repo", "finding", "events", "about"]);
     }
 
     #[test]

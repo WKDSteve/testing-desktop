@@ -46,6 +46,11 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
     super(fetchFn, API, base);
   }
 
+  /** The `fetch` the event stream is read with (the kit's `StreamSession`). */
+  get fetcher(): typeof fetch {
+    return this.fetchFn;
+  }
+
   async fleet(etag: string | null): Promise<FleetResult> {
     const headers: Record<string, string> = {};
     if (etag) headers['If-None-Match'] = `"${etag}"`;

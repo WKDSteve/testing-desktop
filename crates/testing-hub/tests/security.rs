@@ -35,6 +35,7 @@ impl Subject for Testing {
             engine: None,
             ask: testing_hub::engine::Ask::default(),
             origins: testing_hub::Origins::default(),
+            watch: None,
             ui: testing_hub::ui::UiFiles::none(),
         }))
     }

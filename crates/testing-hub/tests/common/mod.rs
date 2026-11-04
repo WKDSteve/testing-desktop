@@ -2,9 +2,57 @@
 
 #![allow(dead_code)]
 
+use std::time::{Duration, Instant};
+
 use appkit_core::authn::Secret;
 use appkit_hub::RunningServer;
 use appkit_testkit::wire::{request, send, Reply};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+/// An open event stream, read as it comes.
+pub struct Stream {
+    socket: tokio::net::TcpStream,
+    pub seen: String,
+}
+
+impl Stream {
+    pub async fn open(server: &RunningServer, path: &str, token: &str) -> Stream {
+        let mut socket = tokio::net::TcpStream::connect(server.addr()).await.unwrap();
+        let host = format!("127.0.0.1:{}", server.addr().port());
+        let bearer = format!("Bearer {token}");
+        let bytes = request(
+            "GET",
+            path,
+            &[("Host", host.as_str()), ("Authorization", bearer.as_str())],
+            b"",
+        );
+        socket.write_all(&bytes).await.unwrap();
+        Stream {
+            socket,
+            seen: String::new(),
+        }
+    }
+
+    /// Read until the text holds `needle`, for as long as `patience`; the whole text read so far.
+    pub async fn until_within(&mut self, needle: &str, patience: Duration) -> String {
+        let end = Instant::now() + patience;
+        while !self.seen.contains(needle) {
+            let left = end.saturating_duration_since(Instant::now());
+            let mut buf = [0u8; 4096];
+            let n = tokio::time::timeout(left, self.socket.read(&mut buf))
+                .await
+                .unwrap_or_else(|_| panic!("no {needle:?} in {:?}", self.seen))
+                .unwrap();
+            assert!(n > 0, "the stream ended before {needle:?}: {:?}", self.seen);
+            self.seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+        self.seen.clone()
+    }
+
+    pub async fn until(&mut self, needle: &str) -> String {
+        self.until_within(needle, Duration::from_secs(15)).await
+    }
+}
 
 pub async fn get_with(
     server: &RunningServer,

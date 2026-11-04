@@ -25,7 +25,14 @@ pub const SCHEMA: u64 = 1;
 pub const SCHEMA_TAG: &str = "testing-export/1";
 
 /// What the read side of the app needs from the engine (`testing call hello`).
-pub const REQUIRED_CAPABILITIES: &[&str] = &["hello", "fleet", "repo", "params", "data_classes"];
+pub const REQUIRED_CAPABILITIES: &[&str] = &[
+    "hello",
+    "fleet",
+    "repo",
+    "finding",
+    "params",
+    "data_classes",
+];
 
 /// What the seam must know about testing.nvim.
 ///
@@ -83,11 +90,13 @@ pub fn cli_config(setup: &Setup, env: Env) -> CliEngineConfig {
 }
 
 /// The calls of `testing-export/1` this hub makes. The seam reads the flags of each entry; it knows
-/// no call by name. The kinds have no prefix: testing.nvim's documents are `fleet`, `repo`, `hello`.
-static SPECS: [MethodSpec; 3] = [
+/// no call by name. The kinds have no prefix: testing.nvim's documents are `fleet`, `repo`, `hello`
+/// and, for `finding`, `findings` (all findings of a repository in one document).
+static SPECS: [MethodSpec; 4] = [
     MethodSpec::bare("hello", "hello"),
     MethodSpec::read("fleet", "fleet"),
     MethodSpec::read("repo", "repo"),
+    MethodSpec::read("finding", "findings"),
 ];
 
 /// The calls of the testing engine, by name.
@@ -98,9 +107,10 @@ impl Calls {
     pub const Hello: Method = Method::new(&SPECS[0]);
     pub const Fleet: Method = Method::new(&SPECS[1]);
     pub const Repo: Method = Method::new(&SPECS[2]);
+    pub const Finding: Method = Method::new(&SPECS[3]);
 
     /// Every call of the table.
-    pub const ALL: [Method; 3] = [Self::Hello, Self::Fleet, Self::Repo];
+    pub const ALL: [Method; 4] = [Self::Hello, Self::Fleet, Self::Repo, Self::Finding];
 
     /// Parse the name of a route or a request. Nothing else is accepted.
     #[must_use]
@@ -129,6 +139,16 @@ impl Ask {
     #[must_use]
     pub fn repo(&self, key: &str) -> Value {
         let mut map = self.base();
+        map.insert("repo".to_owned(), json!(key));
+        Value::Object(map)
+    }
+
+    /// The request of `finding` for the repository with this key of `fleet`. Findings have one form
+    /// and always ask the data classes, so the engine takes no `export` for them.
+    #[must_use]
+    pub fn finding(&self, key: &str) -> Value {
+        let mut map = self.base();
+        map.remove("export");
         map.insert("repo".to_owned(), json!(key));
         Value::Object(map)
     }
@@ -190,9 +210,12 @@ mod tests {
     fn every_name_round_trips_and_every_kind_is_testing_nvims() {
         for m in Calls::ALL {
             assert_eq!(Calls::parse(m.as_str()), Some(m));
-            assert_eq!(m.reply_kind(), m.as_str());
         }
-        for bad in ["", "Fleet", "testing.fleet", "finding", "export", "ops"] {
+        assert_eq!(Calls::Hello.reply_kind(), "hello");
+        assert_eq!(Calls::Fleet.reply_kind(), "fleet");
+        assert_eq!(Calls::Repo.reply_kind(), "repo");
+        assert_eq!(Calls::Finding.reply_kind(), "findings");
+        for bad in ["", "Fleet", "testing.fleet", "findings", "export", "ops"] {
             assert_eq!(Calls::parse(bad), None, "{bad:?}");
         }
     }
@@ -276,6 +299,15 @@ mod tests {
             "alpha.nvim-0123456789ab"
         );
         assert_eq!(ask.repo("alpha.nvim-0123456789ab")["export"], true);
+        // The engine refuses `export` for findings: they have one form.
+        assert_eq!(
+            ask.finding("alpha.nvim-0123456789ab"),
+            json!({
+                "repo": "alpha.nvim-0123456789ab",
+                "state_dir": "/state/nvim",
+                "areas": "/config/tasks-desktop/areas.json",
+            })
+        );
     }
 
     #[test]

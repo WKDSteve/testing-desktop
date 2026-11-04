@@ -28,16 +28,38 @@ interface Seen {
 }
 
 /** A hub in the test: answers by path, keeps what it was asked. */
-function fakeHub(answer: (path: string, seen: Seen[]) => Response | Promise<Response>) {
+function fakeHub(answer: (path: string, seen: Seen[]) => Response | Promise<Response>, stream?: () => Response) {
   const seen: Seen[] = [];
+  const streamAuth: (string | null)[] = [];
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
     const path = String(input);
+    // The event stream stays open and says nothing, until a test gives it something to say.
+    if (path === '/api/testing/events') {
+      streamAuth.push(headers.get('Authorization'));
+      return new Promise<Response>((resolve, reject) => {
+        if (stream) resolve(stream());
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    }
     const s = { path, auth: headers.get('Authorization'), ifNoneMatch: headers.get('If-None-Match') };
     seen.push(s);
     return answer(path, seen);
   }) as typeof fetch;
-  return { hub: new HubSource(fetchFn), seen };
+  return { hub: new HubSource(fetchFn), seen, streamAuth };
+}
+
+/** A stream that says these messages and then stays open. */
+function saying(text: string): () => Response {
+  return () =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(text));
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream; charset=utf-8' } },
+    );
 }
 
 const json = (body: string, status = 200, headers: Record<string, string> = {}) =>
@@ -54,6 +76,124 @@ function standard(path: string): Response {
 }
 
 const now = () => Promise.resolve();
+
+describe('the stream', () => {
+  const started = async (answer: (path: string, seen: Seen[]) => Response = standard, stream?: () => Response) => {
+    const fake = fakeHub(answer, stream);
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    const app = new App({ hub: fake.hub, session, sleep: now });
+    await app.start(null);
+    return { ...fake, app };
+  };
+  const fleetReads = (seen: Seen[]) => seen.filter((s) => s.path === '/api/testing/fleet');
+  const repoReads = (seen: Seen[]) => seen.filter((s) => s.path.startsWith('/api/testing/repo?key='));
+  const event = (name: string, data: unknown = {}) => ({ event: name, data: JSON.stringify(data) });
+  const REV = (fleetJson as unknown as Fleet).rev;
+
+  it('is read with the token of the session, after the fleet, and asks nothing by itself', async () => {
+    const { app, seen, streamAuth } = await started();
+    await Promise.resolve();
+    expect(streamAuth).toEqual(['Bearer t']);
+    expect(fleetReads(seen).length).toBe(1);
+    app.stop();
+  });
+
+  it('an event of the fleet reads it again, with the tag of the one held', async () => {
+    const { app, seen } = await started();
+    await app.onMessage(event('fleet', { seq: 1 }));
+    const reads = fleetReads(seen);
+    expect(reads.length).toBe(2);
+    expect(reads[1]?.ifNoneMatch).toBe('"sha256:e4259770b57246bc"');
+    expect(repoReads(seen).length).toBe(0);
+    app.stop();
+  });
+
+  it('the repository that is open is read again and stays on the page meanwhile', async () => {
+    let release: (r: Response) => void = () => {};
+    let held = false;
+    const { app, seen } = await started((p) => {
+      if (held && p.startsWith('/api/testing/repo?key=')) {
+        return new Promise<Response>((resolve) => (release = resolve)) as unknown as Response;
+      }
+      return standard(p);
+    });
+    await app.open('beta.nvim-ac6d3a4ece7f');
+    const before = app.repo;
+    expect(before).not.toBeNull();
+    held = true;
+    const reading = app.onMessage(event('fleet'));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(app.repo).toBe(before);
+    release(json(JSON.stringify({ ...(repoJson as object), cases_red: 7 })));
+    await reading;
+    expect((app.repo as RepoDoc).cases_red).toBe(7);
+    expect(repoReads(seen).length).toBe(2);
+    app.stop();
+  });
+
+  it('a read of an open repository that fails keeps what the page shows', async () => {
+    let fail = false;
+    const { app } = await started((p) => (fail && p.startsWith('/api/testing/repo?key=') ? json('{"error":{"code":"x","message":"x"}}', 500) : standard(p)));
+    await app.open('beta.nvim-ac6d3a4ece7f');
+    fail = true;
+    await app.onMessage(event('fleet'));
+    expect(app.repo).not.toBeNull();
+    expect(app.repoFailure).toBeNull();
+    app.stop();
+  });
+
+  it('a repository that was closed meanwhile is not opened again by an event', async () => {
+    const { app, seen } = await started();
+    await app.open('beta.nvim-ac6d3a4ece7f');
+    app.close();
+    await app.onMessage(event('fleet'));
+    expect(app.repo).toBeNull();
+    expect(repoReads(seen).length).toBe(1);
+    app.stop();
+  });
+
+  it('resync reads everything again', async () => {
+    const { app, seen } = await started();
+    await app.onMessage(event('resync'));
+    expect(fleetReads(seen).length).toBe(2);
+    app.stop();
+  });
+
+  it('hello reads again only when the stream stands at another revision', async () => {
+    const { app, seen } = await started();
+    await app.onMessage(event('hello', { rev: REV, seq: 0 }));
+    expect(fleetReads(seen).length).toBe(1);
+    await app.onMessage(event('hello', { seq: 0 }));
+    expect(fleetReads(seen).length).toBe(1);
+    await app.onMessage(event('hello', { rev: 'rev:other', seq: 0 }));
+    expect(fleetReads(seen).length).toBe(2);
+    await app.onMessage({ event: 'hello', data: 'not json' });
+    expect(fleetReads(seen).length).toBe(3);
+    app.stop();
+  });
+
+  it('what the hub says over the wire arrives', async () => {
+    const { app, seen } = await started(standard, saying('event: fleet\ndata: {"seq":1}\n\n'));
+    await expect.poll(() => fleetReads(seen).length).toBe(2);
+    app.stop();
+  });
+
+  it('a stream the hub refuses with 401 takes the session', async () => {
+    const refused = () => json('{"error":{"code":"unauthorized","message":"x"}}', 401);
+    const { app } = await started(standard, refused);
+    await expect.poll(() => app.phase).toBe('needs_pairing');
+  });
+
+  it('stops when the page stops', async () => {
+    const { app, streamAuth } = await started();
+    await Promise.resolve();
+    app.stop();
+    expect(app.stream.stopped).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(streamAuth.length).toBe(1);
+  });
+});
 
 describe('the session', () => {
   it('trades the code for a token kept in the tab, then reads the fleet with it', async () => {

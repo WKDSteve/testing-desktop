@@ -16,8 +16,9 @@ use serde_json::Value;
 
 use crate::engine::{cli_config, probe, Ask, CliEngine, Engine, DISCOVERY};
 use crate::settings::TestingSettings;
+use crate::store::RefreshOptions;
 use crate::ui::UiFiles;
-use crate::{client, Origins, Start, IDENTITY};
+use crate::{client, Origins, Start, Watch, IDENTITY};
 
 /// What to do when the hub is started.
 #[derive(Debug, Clone, Default)]
@@ -150,6 +151,25 @@ pub async fn engine_state(file: &FileConfig<TestingSettings>, env: &Env) -> Engi
     }
 }
 
+/// How long a snapshot is good for while the state folder is watched: a change renews it at once, so
+/// this is only the net under a lost event for a page that keeps no stream open. A read of a fleet
+/// starts a Neovim process and asks git about every repository. Without a watcher the default of the
+/// kit holds (a page must not see old results for long).
+const WATCHED_SNAPSHOT_MAX_AGE: Duration = Duration::from_secs(45);
+
+/// The limits of the hub, with the age of the snapshot that fits how it learns of a change.
+fn limits_for(watching: bool) -> Limits {
+    let limits = Limits::default();
+    if watching {
+        Limits {
+            snapshot_max_age: Some(WATCHED_SNAPSHOT_MAX_AGE),
+            ..limits
+        }
+    } else {
+        limits
+    }
+}
+
 /// Run the server until Ctrl-C.
 ///
 /// # Errors
@@ -215,11 +235,20 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         eprintln!("{note}");
     }
 
+    let watch = places
+        .state_dir
+        .as_ref()
+        .filter(|_| state.engine.is_some())
+        .map(|(state_dir, _)| Watch {
+            state_dir: state_dir.clone(),
+            refresh: RefreshOptions::default(),
+        });
+
     let control = Secret::generate(TOKEN_BYTES).map_err(|e| e.to_string())?;
     let instance = Secret::generate(CODE_BYTES).map_err(|e| e.to_string())?;
     let make = |port: u16| Start {
         addr: std::net::SocketAddr::from(([127, 0, 0, 1], port)),
-        limits: Limits::default(),
+        limits: limits_for(watch.is_some()),
         clock: Arc::new(SystemClock::new()),
         pairing_ttl: Duration::from_secs(60),
         control_secret: control.clone(),
@@ -228,6 +257,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         engine: state.engine.clone(),
         ask: ask.clone(),
         origins,
+        watch: watch.clone(),
         ui: ui.clone(),
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server
@@ -448,6 +478,18 @@ mod tests {
                 "{bad:?}"
             );
         }
+    }
+
+    #[test]
+    fn only_a_hub_that_watches_holds_a_snapshot_for_long() {
+        assert_eq!(
+            limits_for(true).snapshot_max_age,
+            Some(WATCHED_SNAPSHOT_MAX_AGE)
+        );
+        assert_eq!(
+            limits_for(false).snapshot_max_age,
+            Limits::default().snapshot_max_age
+        );
     }
 
     #[test]

@@ -12,9 +12,11 @@ a session. This page says what is the testing hub's own.
 | Thing | What holds | Where it is tested |
 | --- | --- | --- |
 | Names | App, program, variables, port, routes and login entry are the hub's own and share none with `tasks-hub`, `rules-hub` or the demo app. | `tests/security.rs` |
-| Data routes | `fleet`, `repo` and `about` need a session; a route added to `ROUTES` is a data route by construction. | matrix; `tests/routes.rs` |
-| The engine only reads | The hub asks `hello`, `fleet` and `repo`; it starts no test run and writes into no repository. The page cannot name a call. | `src/engine.rs` tests; `tests/routes.rs` |
-| No string from outside reaches the engine | `repo` takes the key of a repository; the parameters go to the engine as JSON on stdin, never in its arguments. | `tests/routes.rs`; `tests/engine.rs` (real engine) |
+| Data routes | `fleet`, `repo`, `finding`, `events` and `about` need a session; a route added to `ROUTES` is a data route by construction. | matrix; `tests/routes.rs` |
+| The engine only reads | The hub asks `hello`, `fleet`, `repo` and `finding`; it starts no test run and writes into no repository. The page cannot name a call. | `src/engine.rs` tests; `tests/routes.rs` |
+| No string from outside reaches the engine | `repo` and `finding` take the key of a repository; the parameters go to the engine as JSON on stdin, never in its arguments. | `tests/routes.rs`; `tests/engine.rs` (real engine) |
+| The event stream tells no content | An event says that the fleet changed and names no repository; a session opens at most four streams, and a session that was closed takes its stream with it. | `tests/routes.rs` |
+| A change costs one question, a request none | Only the three result files of a project in the state folder wake the scan, so what else writes there (and a page that reads often) does not start processes. | `src/watch.rs` tests; `tests/routes.rs` |
 | Data classes fail closed | The hub reads the export form: no absolute path, and only the `public` and `internal` repositories that the `areas.json` of the device names. Without the file none is shown; a private one never. | `tests/engine.rs`; `e2e/app.spec.ts` |
 | Output of a test is text | Names and output of red cases are written by whatever ran: they are shown as text, never as markup or a link, and hidden and reordering characters are made visible (`⟦U+202E⟧`). | `e2e/app.spec.ts` (a repository with markup, a script link, reordering characters and very long output) |
 | The page's policy | The policy of appkit for every page; nothing of this page breaks it. | the matrix; `e2e/app.spec.ts` (no violation in any test) |

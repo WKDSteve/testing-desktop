@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { expectAccessible, violations, watchViolations } from './a11y';
 import { STATE } from './global';
-import { origin, pairingLink } from './hub';
+import { BETA_SPEC, origin, pairingLink, writeRun } from './hub';
 
 // The page against the real hub and the real engine (e2e/hub.ts): the fleet of the tests' repositories, red ones first,
 // a repository with its red cases, hostile output as text, the pairing, and nothing the page must not do (a request
@@ -10,7 +10,8 @@ import { origin, pairingLink } from './hub';
 
 test.use({ locale: 'en-US' });
 
-const state = (): { config: string; token: string } => JSON.parse(readFileSync(STATE, 'utf8')) as { config: string; token: string };
+const state = (): { config: string; token: string; root: string } =>
+  JSON.parse(readFileSync(STATE, 'utf8')) as { config: string; token: string; root: string };
 
 /** Everything the page writes to the console as an error, and every request that leaves for elsewhere. */
 async function watch(page: Page): Promise<{ errors: string[]; foreign: string[]; fleetReads: () => number }> {
@@ -59,6 +60,26 @@ test('the overview shows the released repositories, red first, and leaves the pr
   expect(seen.errors).toEqual([]);
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);
+});
+
+test('a run in a terminal shows on the page without anyone asking, also in the repository that is open', async ({ page }) => {
+  const seen = await watch(page);
+  const { root } = state();
+  await openPaired(page);
+  const row = page.getByRole('row', { name: /beta\.nvim/ });
+  await expect(row).toContainText('green');
+  await page.getByRole('button', { name: 'beta.nvim' }).click();
+  const reads = seen.fleetReads();
+  try {
+    writeRun(root, 'beta.nvim', ['describe("beta", function()', '  it("broke", function()', '    assert.is_true(false)', '  end)', 'end)'].join('\n'));
+    await expect(page.getByText('broke').first()).toBeVisible({ timeout: 30_000 });
+    expect(seen.fleetReads()).toBeGreaterThan(reads);
+  } finally {
+    writeRun(root, 'beta.nvim', BETA_SPEC);
+  }
+  await expect(page.getByText('broke')).toHaveCount(0, { timeout: 30_000 });
+  expect(seen.errors).toEqual([]);
+  expect(seen.foreign).toEqual([]);
 });
 
 test('the filter shows the red ones, the search a part of the name', async ({ page }) => {

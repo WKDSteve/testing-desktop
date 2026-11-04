@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
-use crate::engine::{EngineError, Method, Reply};
+use crate::engine::EngineError;
 use crate::runtime::TestingRuntime;
 
 /// What a request without an engine gets: the hub is up, the engine is not.
@@ -83,20 +83,6 @@ pub(crate) fn engine_failure(error: EngineError) -> Response {
             )
         }
     }
-}
-
-/// Ask the engine of the runtime one question.
-// The error is the answer to send: a response is large, and rare.
-#[allow(clippy::result_large_err)]
-pub(crate) async fn ask(
-    rt: &TestingRuntime,
-    method: Method,
-    params: Option<&serde_json::Value>,
-) -> Result<Reply, Response> {
-    let Some(engine) = &rt.engine else {
-        return Err(engine_unavailable(rt));
-    };
-    engine.call(method, params).await.map_err(engine_failure)
 }
 
 #[cfg(test)]

@@ -16,9 +16,9 @@ a session. This page says what is the testing hub's own.
 | The engine only reads | The hub asks `hello`, `fleet` and `repo`; it starts no test run and writes into no repository. The page cannot name a call. | `src/engine.rs` tests; `tests/routes.rs` |
 | No string from outside reaches the engine | `repo` takes the key of a repository; the parameters go to the engine as JSON on stdin, never in its arguments. | `tests/routes.rs`; `tests/engine.rs` (real engine) |
 | Data classes fail closed | The hub reads the export form: no absolute path, and only the `public` and `internal` repositories that the `areas.json` of the device names. Without the file none is shown; a private one never. | `tests/engine.rs`; `e2e/app.spec.ts` |
-| Output of a test is text | Names and output of red cases are written by whatever ran: they are shown as text, cut to a length, and reordering characters are no way to hide. | `e2e/app.spec.ts` (a repository with markup, a script link, reordering characters and very long output) |
-| The page's policy | `default-src 'none'`; scripts and styles from `self`; no inline script, no `unsafe-*`, Trusted Types. | `tests/routes.rs`; `e2e/app.spec.ts` |
-| Nothing of a result in the browser | The session is in `sessionStorage` of the tab. No cookie is ever set. | `e2e/app.spec.ts` |
+| Output of a test is text | Names and output of red cases are written by whatever ran: they are shown as text, never as markup or a link, and hidden and reordering characters are made visible (`⟦U+202E⟧`). | `e2e/app.spec.ts` (a repository with markup, a script link, reordering characters and very long output) |
+| The page's policy | The policy of appkit for every page; nothing of this page breaks it. | the matrix; `e2e/app.spec.ts` (no violation in any test) |
+| Nothing of a result in the browser | The session is in `sessionStorage` of the tab, and `localStorage` stays empty. | `e2e/app.spec.ts` |
 | Accessibility | axe reports nothing on the views in the light and the dark scheme. | `e2e/app.spec.ts` |
 
 ## What it does not do

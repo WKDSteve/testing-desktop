@@ -47,7 +47,7 @@ disagree, so a raised appkit tag raises them too.
    script cannot fetch them by itself yet: download the archive, `SHA256SUMS` and
    `install.ps1` into one folder and run `install.ps1 -File <the archive>` there
    (the sums are found beside it). Start the hub, run it again (repair), run `uninstall.ps1` with and
-   without `--purge-settings`. The download path of the script (no `-File`) is tried after
+   without `-PurgeSettings`. The download path of the script (no `-File`) is tried after
    publishing, once, with the line of the notes. A green build is not a program that was tried
    (`NREL-07`). Do this in a normal terminal of the user, not from an agent session (`WIN-03`). A
    build machine that runs elevated needs `-AllowElevated` (PowerShell) for the scripts; a user

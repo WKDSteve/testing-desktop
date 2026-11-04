@@ -66,6 +66,7 @@ export class App {
 
   private stopped = false;
   private reading: Promise<void> | null = null;
+  private following: Promise<void> | null = null;
   private repoAbort: AbortController | null = null;
 
   constructor(private readonly env: Env) {}
@@ -114,8 +115,12 @@ export class App {
     this.problem = null;
     await this.refresh();
     if (this.stopped || !this.env.hub.hasToken) return;
-    // It runs for as long as the page: `start` does not wait for it.
-    void this.followStream();
+    // It runs for as long as the page: `start` does not wait for it. A start after a stop (a pairing link pasted into
+    // the tab) finds the one that ran still going: never a second one, and it is cut to read on with the new token.
+    if (this.following) this.stream.cut();
+    this.following ??= this.followStream().finally(() => {
+      this.following = null;
+    });
   }
 
   stop(): void {
@@ -159,6 +164,8 @@ export class App {
 
   /** The fleet, and the repository that is open, which stays on the page while it is read. */
   private async readAgain(): Promise<void> {
+    // A read under way may have been answered before this change: it is waited for, not joined.
+    if (this.reading) await this.reading;
     await this.refresh();
     const key = this.openKey;
     if (key === null || this.stopped) return;

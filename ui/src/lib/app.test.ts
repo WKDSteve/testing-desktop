@@ -31,22 +31,27 @@ interface Seen {
 function fakeHub(answer: (path: string, seen: Seen[]) => Response | Promise<Response>, stream?: () => Response) {
   const seen: Seen[] = [];
   const streamAuth: (string | null)[] = [];
+  let open = 0;
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
     const path = String(input);
     // The event stream stays open and says nothing, until a test gives it something to say.
     if (path === '/api/testing/events') {
       streamAuth.push(headers.get('Authorization'));
+      open += 1;
       return new Promise<Response>((resolve, reject) => {
         if (stream) resolve(stream());
-        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        init?.signal?.addEventListener('abort', () => {
+          open -= 1;
+          reject(new DOMException('aborted', 'AbortError'));
+        });
       });
     }
     const s = { path, auth: headers.get('Authorization'), ifNoneMatch: headers.get('If-None-Match') };
     seen.push(s);
     return answer(path, seen);
   }) as typeof fetch;
-  return { hub: new HubSource(fetchFn), seen, streamAuth };
+  return { hub: new HubSource(fetchFn), seen, streamAuth, openStreams: () => open };
 }
 
 /** A stream that says these messages and then stays open. */
@@ -106,6 +111,41 @@ describe('the stream', () => {
     expect(reads.length).toBe(2);
     expect(reads[1]?.ifNoneMatch).toBe('"sha256:e4259770b57246bc"');
     expect(repoReads(seen).length).toBe(0);
+    app.stop();
+  });
+
+  it('an event during a read reads once more: that read may hold the state before the change', async () => {
+    let release: (r: Response) => void = () => {};
+    let hold = false;
+    const { app, seen } = await started((p) => {
+      if (hold && p === '/api/testing/fleet') {
+        hold = false;
+        return new Promise<Response>((resolve) => (release = resolve)) as unknown as Response;
+      }
+      return standard(p);
+    });
+    hold = true;
+    const under_way = app.refresh();
+    const reading = app.onMessage(event('fleet'));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(fleetReads(seen).length).toBe(2);
+    release(json(FLEET, 200, { ETag: '"sha256:e4259770b57246bc"' }));
+    await under_way;
+    await reading;
+    expect(fleetReads(seen).length).toBe(3);
+    app.stop();
+  });
+
+  it('a start after a stop keeps one stream, read with the new token', async () => {
+    const { app, hub, streamAuth, openStreams } = await started();
+    await expect.poll(() => openStreams()).toBe(1);
+    // What `main.ts` does with a pairing link pasted into the tab.
+    app.stop();
+    await app.start('ab'.repeat(16));
+    await expect.poll(() => streamAuth.at(-1)).toBe('Bearer t0ken');
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(openStreams()).toBe(1);
+    expect(hub.hasToken).toBe(true);
     app.stop();
   });
 

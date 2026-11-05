@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { GENERATED, generate } from './gen-validate.mjs';
 import { assemble, CSP, verifyShell } from './pack.mjs';
+import { DICTIONARIES } from '../src/lib/i18n';
 import validate from '../src/web/validate.generated.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +87,19 @@ describe('the check of the documents', () => {
     expect(validate(noDigest)).toBe(false);
     expect(validate(null)).toBe(false);
     expect(validate([])).toBe(false);
+  });
+});
+
+describe('the words of the way in', () => {
+  it('has a word for every reason a folder is refused', () => {
+    const entry = readFileSync(join(WEB_SRC, 'entry.ts'), 'utf8');
+    const source = readFileSync(join(WEB_SRC, 'folder-source.ts'), 'utf8');
+    const words = (text, name) => [...new RegExp(`${name}[^;]*;`).exec(text)[0].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    const codes = [...words(entry, "code: "), ...words(source, 'type ExportProblem =')];
+    expect(codes).toEqual(expect.arrayContaining(['cancelled', 'gone', 'no_manifest', 'invalid']));
+    for (const code of codes) {
+      for (const lang of ['en', 'de']) expect(DICTIONARIES[lang][`web.notice.${code}`], `${lang}: ${code}`).toBeTruthy();
+    }
   });
 });
 

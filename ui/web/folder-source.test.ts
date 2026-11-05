@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { DirHandleLike, FileHandleLike } from 'appkit-web/folder';
 import { describe, expect, it } from 'vitest';
-import { ExportError, FolderSource, readExport, signatureOf, type Snapshot } from '../src/web/folder-source';
+import { ExportError, FolderSource, MAX_DOC_BYTES, MAX_TOTAL_BYTES, readExport, signatureOf, type Snapshot } from '../src/web/folder-source';
 
 const GOLDEN = join(__dirname, '..', '..', 'crates', 'testing-hub', 'tests', 'fixtures', 'golden-export');
 const ALPHA = 'alpha.nvim-356bf237c7fc';
@@ -172,6 +172,15 @@ describe('reading an export', () => {
     const big = new Uint8Array(8 * 1024 * 1024 + 1);
     expect((await refused(new Map(golden()).set('testing-export.json', big))).code).toBe('too_large');
     expect((await refused(new Map(golden()).set('fleet.json', big))).code).toBe('too_large');
+  });
+
+  it('refuses an export too large to hold, though each file is small enough', async () => {
+    const whole = golden();
+    const sizes = [...whole.entries()].filter(([path]) => path !== 'testing-export.json').map(([, bytes]) => bytes.length);
+    const documents = sizes.reduce((a, b) => a + b, 0);
+    await expect(readExport(folder(whole), documents)).resolves.toBeDefined();
+    await expect(readExport(folder(whole), documents - 1)).rejects.toMatchObject({ code: 'too_large' });
+    expect(MAX_TOTAL_BYTES).toBeGreaterThan(MAX_DOC_BYTES);
   });
 
   it('refuses a name too long to be a key, which the contract lets through', async () => {

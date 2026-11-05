@@ -15,8 +15,10 @@ export class WebReader extends Reader {
   private readonly folder: FolderSource;
   private readonly handle: DirHandleLike;
   private readonly read: (handle: DirHandleLike) => Promise<Snapshot>;
+  // The read asked for last: an older one that ends later must not bring its export back.
+  private latest = 0;
 
-  constructor(handle: DirHandleLike, first: Snapshot, read: (handle: DirHandleLike) => Promise<Snapshot> = readExport) {
+  constructor(handle: DirHandleLike, first: Snapshot, read: (handle: DirHandleLike) => Promise<Snapshot> = (h) => readExport(h)) {
     const folder = new FolderSource(first);
     super(folder);
     this.folder = folder;
@@ -37,13 +39,16 @@ export class WebReader extends Reader {
 
   /** Read the folder again, and the page with it. */
   override async reload(): Promise<void> {
+    const asked = ++this.latest;
+    let snapshot: Snapshot;
     try {
-      this.folder.replace(await this.read(this.handle));
+      snapshot = await this.read(this.handle);
     } catch (error) {
-      if (!this.stopped) this.stale = noticeOf(error);
+      if (!this.stopped && asked === this.latest) this.stale = noticeOf(error);
       return;
     }
-    if (this.stopped) return;
+    if (this.stopped || asked !== this.latest) return;
+    this.folder.replace(snapshot);
     this.stale = null;
     this.generatedAt = this.folder.generatedAt;
     await this.readAgain();

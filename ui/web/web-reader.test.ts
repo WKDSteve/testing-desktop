@@ -75,6 +75,42 @@ describe('the page on a folder', () => {
     reader.stop();
   });
 
+  it('an older read that ends after a newer one does not bring its export back', async () => {
+    const releases: ((s: Snapshot) => void)[] = [];
+    const reader = new WebReader(handle, await good(), () => new Promise<Snapshot>((resolve) => releases.push(resolve)));
+    await reader.start();
+    const older = reader.reload();
+    const newer = reader.reload();
+    const at = async (time: string) => {
+      const next = await good();
+      next.manifest = { ...next.manifest, generated_at: time };
+      return next;
+    };
+    (releases[1] as (s: Snapshot) => void)(await at('2026-11-02T00:00:00Z'));
+    await newer;
+    expect(reader.generatedAt).toBe('2026-11-02T00:00:00Z');
+    (releases[0] as (s: Snapshot) => void)(await at('2026-11-01T00:00:00Z'));
+    await older;
+    expect(reader.generatedAt).toBe('2026-11-02T00:00:00Z');
+    reader.stop();
+  });
+
+  it('a failure of an older read does not say that the newer export is old', async () => {
+    const rejects: ((e: Error) => void)[] = [];
+    let n = 0;
+    const reader = new WebReader(handle, await good(), () => {
+      n += 1;
+      return n === 1 ? new Promise<Snapshot>((_, reject) => rejects.push(reject)) : good();
+    });
+    await reader.start();
+    const older = reader.reload();
+    await reader.reload();
+    (rejects[0] as (e: Error) => void)(new ExportError('hash', 'fleet.json'));
+    await older;
+    expect(reader.stale).toBeNull();
+    reader.stop();
+  });
+
   it('a read that ends after the page stopped changes nothing', async () => {
     let release: (s: Snapshot) => void = () => {};
     const reader = new WebReader(handle, await good(), () => new Promise<Snapshot>((resolve) => (release = resolve)));

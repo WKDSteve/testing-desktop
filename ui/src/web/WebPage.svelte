@@ -32,9 +32,13 @@
     folderName = state.name;
     reader = next;
     await next.start();
+    // Another folder was chosen meanwhile: this one is not to be watched.
+    if (reader !== next) return;
     // A folder chosen through an input is a list of files made once: there is nothing to look at again.
     if (state.readOnce) return;
-    watcher = watchFolder(await signatureOf(state.handle), {
+    // No signature yet: one taken now could already hold an export newer than what was read, which would then never
+    // show. The first look reads again, and finds the same export or the newer one.
+    watcher = watchFolder('', {
       signature: () => signatureOf(state.handle),
       onChange: () => next.reload(),
       onError: () => {
@@ -101,16 +105,18 @@
 
 {#if reader}
   <Frame app={reader} {t} {logo} {help}>
-    <p class="export" role="status">{t('web.exported', { time: timeWord(reader.generatedAt), ago: ageWord(reader.generatedAt) })}</p>
+    <p class="export" role="status">
+      {ageWord(reader.generatedAt)
+        ? t('web.exported', { time: timeWord(reader.generatedAt), ago: ageWord(reader.generatedAt) })
+        : t('web.exported_at', { time: timeWord(reader.generatedAt) })}
+    </p>
     {#if reader.stale}
       <p class="stale" role="alert">
         {t('web.stale')}
         {t(`web.notice.${reader.stale.code}` as Key, { detail: shown(reader.stale.detail) ?? '' })}
       </p>
     {/if}
-    {#if reader.phase === 'failed'}
-      <p class="stale" role="alert">{t('phase.failed', { message: shown(reader.failure) ?? '' })}</p>
-    {:else if reader.openKey}
+    {#if reader.openKey}
       <Detail app={reader} {t} />
     {:else if reader.phase === 'ready'}
       <Overview app={reader} {t} />

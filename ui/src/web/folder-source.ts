@@ -16,6 +16,8 @@ export const SCHEMA_VERSION = 1;
 export const MAX_DOC_BYTES = 8 * 1024 * 1024;
 /** A fleet is some dozens of repositories: far more than this is another kind of folder. */
 export const MAX_FILES = 2000;
+/** All documents of one export together: they are held in memory. */
+export const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
 export type ExportProblem = 'no_manifest' | 'too_new' | 'not_export' | 'hash' | 'missing' | 'too_large' | 'bad_path' | 'invalid';
 
@@ -96,7 +98,7 @@ function checked(doc: unknown, path: string): unknown {
 }
 
 /** Read one export whole, or refuse it. */
-export async function readExport(root: DirHandleLike): Promise<Snapshot> {
+export async function readExport(root: DirHandleLike, maxTotal: number = MAX_TOTAL_BYTES): Promise<Snapshot> {
   const manifestFile = await fileAt(root, MANIFEST);
   if (manifestFile === null) throw new ExportError('no_manifest', MANIFEST);
   const manifestBlob = await manifestFile.getFile();
@@ -106,6 +108,7 @@ export async function readExport(root: DirHandleLike): Promise<Snapshot> {
   if (manifest.files.length > MAX_FILES) throw new ExportError('too_large', MANIFEST);
 
   let fleet: Fleet | null = null;
+  let total = 0;
   const repos = new Map<string, RepoDoc>();
   for (const entry of manifest.files) {
     const path = entry.path;
@@ -115,7 +118,8 @@ export async function readExport(root: DirHandleLike): Promise<Snapshot> {
     const file = await fileAt(root, path);
     if (file === null) throw new ExportError('missing', path);
     const blob = await file.getFile();
-    if (blob.size > MAX_DOC_BYTES) throw new ExportError('too_large', path);
+    total += blob.size;
+    if (blob.size > MAX_DOC_BYTES || total > maxTotal) throw new ExportError('too_large', path);
     if (blob.size !== entry.bytes) throw new ExportError('hash', path);
     const bytes = await blob.arrayBuffer();
     if (hex(await crypto.subtle.digest('SHA-256', bytes)) !== entry.sha256) throw new ExportError('hash', path);

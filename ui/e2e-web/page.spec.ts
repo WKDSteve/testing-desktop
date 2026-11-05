@@ -119,7 +119,7 @@ test('hostile output of an export is shown as text, and a link is made only of a
   const seen = await watchPage(page);
   const files = changed(exportFiles(), BETA, (doc) => {
     const cases = doc['cases'] as Record<string, unknown>[];
-    (cases[0] as Record<string, unknown>)['message'] = '<img src=x onerror=window.__xss=1> ‮reversed';
+    (cases[0] as Record<string, unknown>)['message'] = `<img src=x onerror=window.__xss=1> ${String.fromCodePoint(0x202e)}reversed`;
     const repo = doc['repo'] as { ci_remote: { run: { url: string } | null } | null };
     if (repo.ci_remote?.run) repo.ci_remote.run.url = 'https://github.com/WKDSteve/testing.nvim/actions/runs/1';
   });

@@ -24,7 +24,7 @@ document.head.append(Object.assign(document.createElement('link'), { rel: 'icon'
 const entry = new Entry({
   win: window as unknown as PickerWindow,
   recent: new RecentFolders(idbKeyValue(window.indexedDB, HANDLES_DB)),
-  read: readExport,
+  read: (handle) => readExport(handle),
   now: () => Date.now(),
 });
 

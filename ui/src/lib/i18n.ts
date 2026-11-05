@@ -56,6 +56,21 @@ const en = {
   'findings.run': 'Run',
   'about.engine': 'testing.nvim {version} ({git}), Neovim {nvim}',
   'about.no_engine': 'no engine',
+  'menu.label': 'Menu',
+  'menu.view': 'View',
+  'menu.help': 'Help',
+  'menu.overview': 'All repositories',
+  'menu.reload': 'Read again',
+  'help.keys': 'Ctrl+K: command palette',
+  'about.reads': 'Reads: state {state}, repositories {areas}',
+  'palette.title': 'Commands',
+  'palette.label': 'Command or repository',
+  'palette.placeholder': 'Open a repository or run a command…',
+  'palette.empty': 'Nothing matches.',
+  'palette.action': 'Command',
+  'palette.repo': 'Repository',
+  'palette.only_red_on': 'Show only red repositories',
+  'palette.only_red_off': 'Show all repositories',
 } as const;
 
 export type Key = keyof typeof en;
@@ -113,6 +128,21 @@ const de: Record<Key, string> = {
   'findings.run': 'Lauf',
   'about.engine': 'testing.nvim {version} ({git}), Neovim {nvim}',
   'about.no_engine': 'keine Engine',
+  'menu.label': 'Menü',
+  'menu.view': 'Ansicht',
+  'menu.help': 'Hilfe',
+  'menu.overview': 'Alle Repositories',
+  'menu.reload': 'Neu lesen',
+  'help.keys': 'Strg+K: Befehlspalette',
+  'about.reads': 'Liest: State {state}, Repositories {areas}',
+  'palette.title': 'Befehle',
+  'palette.label': 'Befehl oder Repository',
+  'palette.placeholder': 'Repository öffnen oder Befehl ausführen…',
+  'palette.empty': 'Nichts passt.',
+  'palette.action': 'Befehl',
+  'palette.repo': 'Repository',
+  'palette.only_red_on': 'Nur rote Repositories zeigen',
+  'palette.only_red_off': 'Alle Repositories zeigen',
 };
 
 export const DICTIONARIES = { en, de } as const;

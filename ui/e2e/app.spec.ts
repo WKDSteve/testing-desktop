@@ -137,6 +137,30 @@ test('hostile output of a test is shown as text: no markup runs, reordering char
   expect(await violations(page)).toEqual([]);
 });
 
+test('the palette opens a repository by its name and filters the red ones', async ({ page }) => {
+  const seen = await watch(page);
+  await openPaired(page);
+  await page.keyboard.press('Control+k');
+  const box = page.getByRole('combobox');
+  await expect(box).toBeVisible();
+  await box.fill('alph');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'alpha.nvim' })).toBeVisible();
+  await expect(page.getByRole('combobox')).toHaveCount(0);
+
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox').fill('only red');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: /All repositories/ }).click();
+  await expect(page.getByLabel('Only red')).toBeChecked();
+  // The help menu says which engine answers.
+  await page.getByRole('menubar').getByRole('menuitem', { name: 'Help' }).click();
+  await expect(page.getByRole('menu')).toContainText('testing.nvim');
+  expect(seen.errors).toEqual([]);
+  expect(seen.foreign).toEqual([]);
+  expect(await violations(page)).toEqual([]);
+});
+
 for (const scheme of ['light', 'dark'] as const) {
   test(`the overview and a repository are accessible in ${scheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });

@@ -7,7 +7,8 @@ import { StreamSession } from 'appkit-ui/session';
 import type { SseMessage } from 'appkit-ui/sse';
 import type { Fleet, RepoDoc } from './contract';
 import { findingsOf, type Finding } from './model';
-import { ApiError, type HubSource } from './source';
+import type { PaletteItem } from 'appkit-ui/palette';
+import { ApiError, type About, type HubSource } from './source';
 
 /** Where the session token of the tab is kept: the tab only (`sessionStorage`), never longer. */
 export const TOKEN_KEY = 'testing-desktop.session';
@@ -69,6 +70,10 @@ export class App {
   /** The findings of the open repository (`null` until read); a failure of this read never takes the repository. */
   findings = $state<Finding[] | null>(null);
   findingsFailure = $state<string | null>(null);
+
+  /** What this build and its engine are (the help menu); `null` until read, and when the hub does not say. */
+  about = $state<About | null>(null);
+  paletteOpen = $state(false);
 
   /** The event stream of the hub (the kit's `StreamSession`). */
   readonly stream = new StreamSession();
@@ -140,9 +145,35 @@ export class App {
     this.problem = null;
     await this.refresh();
     if (this.stopped || !this.env.hub.hasToken) return;
+    void this.readAbout();
     // It runs for as long as the page: `start` does not wait for it. A start after a stop (a pairing link pasted into
     // the tab) finds the one that ran still going: the kit keeps it and it reads on with the new token.
     void this.followStream();
+  }
+
+  /** The words of the help menu. A hub that cannot say leaves the menu without them. */
+  private async readAbout(): Promise<void> {
+    try {
+      const about = await this.env.hub.about();
+      if (!this.stopped && this.env.hub.hasToken) this.about = about;
+    } catch {
+      // Nothing to show: the menu says what it knows.
+    }
+  }
+
+  openPalette(): void {
+    this.paletteOpen = true;
+  }
+
+  closePalette(): void {
+    this.paletteOpen = false;
+  }
+
+  /** The choice in the palette: an action runs, a repository opens. */
+  async choose(item: PaletteItem): Promise<void> {
+    this.paletteOpen = false;
+    if (item.kind === 'action') await item.action.run();
+    else await this.open(item.id);
   }
 
   stop(): void {
@@ -284,6 +315,8 @@ export class App {
     this.stream.cut();
     this.repoAbort?.abort();
     this.phase = 'needs_pairing';
+    this.paletteOpen = false;
+    this.about = null;
     this.fleet = null;
     this.etag = null;
     this.close();

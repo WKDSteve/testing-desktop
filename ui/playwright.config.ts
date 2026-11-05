@@ -9,7 +9,10 @@ export default defineConfig({
   globalSetup: './e2e/global.ts',
   workers: 1,
   fullyParallel: false,
-  timeout: 30_000,
+  timeout: 60_000,
+  // Every answer of the hub that is not the snapshot starts a Neovim (about 2 s, more on a loaded machine), and an event
+  // of the stream can restart a read: the 5 s of Playwright's default fail on load, not on a fault.
+  expect: { timeout: 15_000 },
   reporter: 'list',
   use: {
     channel: 'chrome',

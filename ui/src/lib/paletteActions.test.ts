@@ -79,6 +79,40 @@ describe('the palette', () => {
   });
 });
 
+describe('reading again', () => {
+  it('reads the repository that is open and its findings, not only the fleet', async () => {
+    const asked: string[] = [];
+    const fetchFn = (async (input: RequestInfo | URL) => {
+      const path = String(input);
+      asked.push(path);
+      if (path === '/api/testing/events') return new Promise<Response>(() => {});
+      if (path === '/api/testing/hello') return json({ instance: 'i', version: '0', engine: { ready: true, problem: null } });
+      if (path === '/api/testing/fleet') return json(fleetJson);
+      if (path.startsWith('/api/testing/repo?key=')) return json(repoJson);
+      if (path.startsWith('/api/testing/finding?key=')) return json(findingsJson);
+      return json({ error: { code: 'nope', message: 'nope' } }, 404);
+    }) as typeof fetch;
+    const app = new App({ hub: new HubSource(fetchFn), session: new Memory(), sleep: () => Promise.resolve() });
+    await app.start(null);
+    const key = app.fleet!.repos[0]!.key;
+    await app.open(key);
+    asked.length = 0;
+    const action = paletteActions(app, t).find((a) => a.key === 'reload');
+    await action!.run();
+    expect(asked).toEqual(expect.arrayContaining(['/api/testing/fleet', `/api/testing/repo?key=${key}`, `/api/testing/finding?key=${key}`]));
+    app.stop();
+  });
+
+  it('a start closes a palette that was open', async () => {
+    const app = await started();
+    app.openPalette();
+    app.stop();
+    await app.start(null);
+    expect(app.paletteOpen).toBe(false);
+    app.stop();
+  });
+});
+
 describe('about', () => {
   it('is read once the page is ready, and a hub that cannot say leaves it empty', async () => {
     const none = await started();

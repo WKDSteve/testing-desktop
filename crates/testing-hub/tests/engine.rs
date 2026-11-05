@@ -160,6 +160,34 @@ async fn the_real_engine_takes_a_token_in_the_request_and_writes_it_nowhere() {
     assert!(!holds(&fx.dir.join("state"), TOKEN));
 }
 
+/// The child holds the token in its memory while the CI adapter reads the `ci_remote` section of each repository's
+/// `.testing.lua`. That file is Lua: it must not run in the child of the hub, whatever a repository put there.
+#[tokio::test]
+async fn a_request_with_a_token_runs_no_code_of_a_repository() {
+    let fx = Fixture::new();
+    let Some(engine) = engine_or_skip(&fx.root()).await else {
+        return;
+    };
+    let marker = fx.dir.join("the-repository-ran");
+    let lua = marker.display().to_string().replace('\\', "/");
+    std::fs::write(
+        fx.root().join("alpha.nvim").join(".testing.lua"),
+        format!("io.open([[{lua}]], 'w'):close()\nreturn {{}}\n"),
+    )
+    .unwrap();
+    let ask = Ask {
+        github_token: testing_hub::github::GithubToken::parse(
+            "github_pat_spy0123456789abcdefABCDEF",
+        ),
+        ..fx.ask()
+    };
+    engine
+        .call(Calls::Fleet, Some(&ask.fleet()))
+        .await
+        .expect("fleet with a token");
+    assert!(!marker.exists(), "the .testing.lua of a repository ran");
+}
+
 #[tokio::test]
 async fn the_real_engine_answers_hello_and_the_fleet_of_the_root_in_the_export_form() {
     let fx = Fixture::new();

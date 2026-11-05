@@ -89,6 +89,7 @@ export class App {
     this.stopped = false;
     this.stream.resume();
     this.phase = 'starting';
+    this.paletteOpen = false;
     this.pairRefused = false;
     this.pairLimited = false;
     let token = safe(() => this.env.session.getItem(TOKEN_KEY));
@@ -250,6 +251,11 @@ export class App {
       // What was read stays, as with the repository.
       if (this.findings === null) this.findingsFailure = messageOf(error);
     }
+  }
+
+  /** What the person asks for: the fleet, and the repository that is open with its findings. */
+  reload(): Promise<void> {
+    return this.readAgain();
   }
 
   /** Read the fleet again; a read under way is joined, not doubled. */

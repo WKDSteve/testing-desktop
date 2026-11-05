@@ -40,7 +40,7 @@
         { kind: 'radio', label: t('menu.overview'), checked: app.openKey === null, onselect: () => app.close() },
         { kind: 'check', label: t('fleet.only_red'), checked: app.onlyRed, onselect: () => (app.onlyRed = !app.onlyRed) },
         { kind: 'separator' },
-        { kind: 'action', label: t('menu.reload'), onselect: () => void app.refresh() },
+        { kind: 'action', label: t('menu.reload'), onselect: () => void app.reload() },
       ],
     },
     {
@@ -48,19 +48,19 @@
       label: t('menu.help'),
       items: [
         { kind: 'info', label: t('help.keys') },
-        { kind: 'separator' },
-        {
-          kind: 'info',
-          label: app.about?.engine
-            ? t('about.engine', {
-                version: shown(app.about.engine.version) ?? '?',
-                git: shown(app.about.engine.git) ?? '?',
-                nvim: shown(app.about.engine.nvim) ?? '?',
-              })
-            : t('about.no_engine'),
-        },
         ...(app.about
           ? [
+              { kind: 'separator' as const },
+              {
+                kind: 'info' as const,
+                label: app.about.engine
+                  ? t('about.engine', {
+                      version: shown(app.about.engine.version) ?? '?',
+                      git: shown(app.about.engine.git) ?? '?',
+                      nvim: shown(app.about.engine.nvim) ?? '?',
+                    })
+                  : t('about.no_engine'),
+              },
               {
                 kind: 'info' as const,
                 label: t('about.reads', { state: shown(app.about.reads.stateDir) ?? '?', areas: shown(app.about.reads.areas) ?? '?' }),

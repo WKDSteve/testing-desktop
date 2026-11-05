@@ -18,7 +18,7 @@ export function paletteActions(app: App, t: Say): PaletteAction[] {
       app.onlyRed = !app.onlyRed;
     },
   });
-  out.push({ key: 'reload', label: t('menu.reload'), hint: '', run: () => app.refresh() });
+  out.push({ key: 'reload', label: t('menu.reload'), hint: '', run: () => app.reload() });
   return out;
 }
 

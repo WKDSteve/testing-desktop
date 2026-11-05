@@ -124,6 +124,17 @@ export function notesOf(fleet: Fleet): FleetNotes {
   };
 }
 
+/** The tone of a run of the log. A verdict the page does not know is unknown, never green. */
+export function runTone(verdict: string): Tone {
+  if (verdict === 'green-partial') return 'green';
+  return verdictTone(verdict);
+}
+
+/** The share of green among the runs with a result, in whole percent; `null`: there is none to say anything about. */
+export function greenPercent(green: number, red: number): number | null {
+  return green + red > 0 ? Math.round((green / (green + red)) * 100) : null;
+}
+
 /** How long ago a time of a document was, for a page that shows an old state; `null`: it is no time, or in the future. */
 export function ageOf(iso: string, now: number): { unit: 'now' | 'minutes' | 'hours' | 'days'; n: number } | null {
   const then = Date.parse(iso);

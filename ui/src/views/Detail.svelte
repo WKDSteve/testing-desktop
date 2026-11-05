@@ -3,6 +3,7 @@
   import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { caseTitle, redCases, shown, viewOf, type Tone } from '../lib/model';
+  import HistoryView from './History.svelte';
   import ToneView from './Tone.svelte';
 
   let { app, t }: { app: Reader; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
@@ -89,6 +90,10 @@
       {#if doc.cases_omitted > 0}
         <p class="muted">{t('detail.omitted', { n: doc.cases_omitted })}</p>
       {/if}
+    {/if}
+
+    {#if doc.history}
+      <HistoryView history={doc.history} {t} />
     {/if}
 
     {#if app.hasFindings}

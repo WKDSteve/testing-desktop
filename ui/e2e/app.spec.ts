@@ -74,12 +74,13 @@ test('a run in a terminal shows on the page without anyone asking, also in the r
   const reads = seen.fleetReads();
   try {
     writeRun(root, 'beta.nvim', ['describe("beta", function()', '  it("broke", function()', '    assert.is_true(false)', '  end)', 'end)'].join('\n'));
-    await expect(page.getByText('broke').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('ol.cases').getByText('broke').first()).toBeVisible({ timeout: 30_000 });
     expect(seen.fleetReads()).toBeGreaterThan(reads);
   } finally {
     writeRun(root, 'beta.nvim', BETA_SPEC);
   }
-  await expect(page.getByText('broke')).toHaveCount(0, { timeout: 30_000 });
+  // It is no red case any more; the log of the runs still says that it was.
+  await expect(page.locator('ol.cases').getByText('broke')).toHaveCount(0, { timeout: 30_000 });
   expect(seen.errors).toEqual([]);
   expect(seen.foreign).toEqual([]);
 });
@@ -105,6 +106,10 @@ test('a repository shows its red cases with what was expected and what came', as
   await expect(item).toContainText('3');
   await expect(item).toContainText('Actual');
   await expect(item).toContainText('2');
+  // The log of the runs: this run was made for the test, so it is there, with its result.
+  await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
+  const runs = page.getByRole('table').filter({ hasText: 'Duration' });
+  await expect(runs.getByRole('row').nth(1)).toContainText('red');
   // The findings of the same run: read by their own route, shown below the cases.
   await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
   await expect(page.locator('ul.findings > li').filter({ hasText: 'alpha' }).first()).toBeVisible();

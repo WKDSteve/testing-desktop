@@ -46,6 +46,8 @@ test('the fleet and a repository are those of the export, with how old it is and
   await page.getByRole('button', { name: 'alpha.nvim' }).click();
   await expect(page.getByRole('heading', { name: 'alpha.nvim' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Red cases' })).toBeVisible();
+  // The log of the runs comes with the document of the repository, also from a folder.
+  await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
   // An export holds no findings: the section is not there, not empty.
   await expect(page.getByRole('heading', { name: 'Findings' })).toHaveCount(0);
   await expect(page.getByText(/pair|testing-hub/i)).toHaveCount(0);
@@ -113,6 +115,30 @@ test('a folder that is no good export stays on the way in and says why', async (
     await context.close();
   }
   expect(seen.requests).toEqual([]);
+});
+
+test('the history of a repository: the numbers of the engine, a filter, and a red case as text', async ({ page }) => {
+  const seen = await watchPage(page);
+  const hostile = '<img src=x onerror=window.__xss=2>';
+  const files = changed(exportFiles(), BETA, (doc) => {
+    const history = doc['history'] as { stats: { red_top: { id: string; n: number }[] } };
+    (history.stats.red_top[0] as { id: string }).id = hostile;
+  });
+  await fakePicker(page, files);
+  await openExport(page);
+  await page.getByRole('button', { name: 'beta.nvim' }).click();
+  const section = page.getByRole('region', { name: 'History' });
+  await expect(section).toContainText('Green, last 30 days');
+  await expect(section).toContainText('50 %');
+  await expect(section).toContainText('Most often red');
+  await expect(section).toContainText(hostile);
+  expect(await page.evaluate(() => (window as unknown as { __xss?: number }).__xss)).toBeUndefined();
+  const rows = section.getByRole('row');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(1)).toContainText('a part of the suite');
+  await section.getByLabel('Only red').check();
+  await expect(rows).toHaveCount(3);
+  await clean(page, seen);
 });
 
 test('hostile output of an export is shown as text, and a link is made only of a CI run of GitHub', async ({ page }) => {

@@ -3,7 +3,7 @@ import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.j
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
 import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
 import type { Case, Fleet, RepoDoc, Row } from './contract';
-import { ageOf, caseTitle, findingsOf, notesOf, redCases, remoteTone, rowsOf, runLink, shown, verdictTone, viewOf } from './model';
+import { ageOf, caseTitle, findingsOf, greenPercent, notesOf, redCases, remoteTone, rowsOf, runLink, runTone, shown, verdictTone, viewOf } from './model';
 
 const fleet = fleetJson as unknown as Fleet;
 const repo = repoJson as unknown as RepoDoc;
@@ -150,6 +150,23 @@ describe('the findings', () => {
     });
     expect(a?.run).toEqual({ source: 'ci', os: 'ubuntu', link: good });
     expect(b?.run).toEqual({ source: 'ci', os: null, link: null });
+  });
+});
+
+describe('the log of the runs', () => {
+  it('reads a verdict of a run, and what it does not know as unknown, never green', () => {
+    expect(runTone('green')).toBe('green');
+    expect(runTone('green-partial')).toBe('green');
+    expect(runTone('red')).toBe('red');
+    expect(runTone('infra')).toBe('red');
+    expect(runTone('whatever')).toBe('unknown');
+  });
+
+  it('says a share only when there are runs with a result', () => {
+    expect(greenPercent(3, 1)).toBe(75);
+    expect(greenPercent(2, 1)).toBe(67);
+    expect(greenPercent(0, 0)).toBeNull();
+    expect(greenPercent(0, 2)).toBe(0);
   });
 });
 

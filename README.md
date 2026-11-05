@@ -37,7 +37,7 @@ there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [do
 | engine | the engine seam to testing.nvim and the routes of the fleet, a repository and its findings |
 | ui-read | the read-only interface: overview, filter "red", detail with the red cases, link to the CI run |
 | release | CI, the rolling build, releases and the install scripts |
-| web | the same interface as `testing.html` for `file://`, reading an export folder |
+| web | the same interface as `testing.html` for `file://`, reading an export folder: built (`pnpm web:build`), not published yet |
 | later | history of runs, starting a run through the engine, a panel in the central hub |
 
 The planning notes live outside this repository, in the maintainer's task vault.
@@ -48,7 +48,10 @@ The planning notes live outside this repository, in the maintainer's task vault.
 crates/testing-hub/   the hub: names, settings, the engine seam to testing.nvim, routes, on appkit
 engine.lock           the testing.nvim and lib.nvim commits this is built and tested against
 ui/                   the page (Svelte 5, Vite, TypeScript, appkit-ui), read through a source of its own (`TestingSource`)
+ui/src/web/           the web variant: the export folder as a source, its check against the contract, the way in
+ui/web/               the packing into one file and the tests of the web variant
 ui/e2e/               browser tests (Playwright, axe) against the real binary, the real engine and repositories made for them
+ui/e2e-web/           browser tests of the single file, opened from disk
 tools/                checks of the repository (appkit pin, lock age, control characters, colours, temp leftovers)
 scripts/              build and install from a checkout, uninstall, the tests of both
 docs/                 usage, security of the server, releasing

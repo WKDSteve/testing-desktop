@@ -1,11 +1,11 @@
 <script lang="ts">
   // The fleet: one row per repository, the last local run and the CI on each system; red rows first.
-  import type { App } from '../lib/app.svelte';
+  import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { notesOf, rowsOf, shown, SYSTEMS, type Tone } from '../lib/model';
   import ToneView from './Tone.svelte';
 
-  let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+  let { app, t }: { app: Reader; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
 
   const fleet = $derived(app.fleet);
   const rows = $derived(fleet ? rowsOf(fleet, { onlyRed: app.onlyRed, query: app.query }) : []);

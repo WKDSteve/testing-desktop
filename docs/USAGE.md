@@ -21,6 +21,16 @@ only builds).
 Remove it with `uninstall.ps1` (`scripts/uninstall.ps1`, or the file of the release). Your settings stay unless you add
 `-PurgeSettings`; your repositories and the results of testing.nvim are never touched.
 
+## Without an install: the web variant
+
+`testing.html` is the same page as one file you open from disk (`file://`), for a machine that may not install
+anything. There is no server and it makes no request. It reads a folder that `testing export --out <dir>` wrote:
+it shows the fleet and the red cases of that export, and how old it is. It starts no run, asks GitHub nothing and
+writes nothing; the CI columns hold what the export holds. Build it from a checkout with `pnpm web:build` in `ui/`
+(`ui/dist-web/testing.html` and its `SHA256SUMS`). Chrome and Edge keep the folder and look at it again when the
+window gets the focus back and every 30 seconds. Firefox and Safari have no folder picker: there the folder is read
+once, through a file dialog.
+
 ## What it needs
 
 - **Neovim 0.12 or newer**: `TESTING_NVIM`, else the one on the `PATH`, or the key `nvim` of `config.json`.

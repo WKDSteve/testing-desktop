@@ -8,12 +8,16 @@
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "web:gen": "node web/gen-validate.mjs",
+    "web:build": "vite build --mode web && node web/pack.mjs",
+    "web:e2e": "playwright test -c playwright.web.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.64.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "ajv": "8.20.0",
     "svelte": "^5.57.1",
     "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
@@ -21,6 +25,7 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
-    "appkit-ui": "github:WKDSteve/appkit#v0.36.0&path:ui-kit"
+    "appkit-ui": "github:WKDSteve/appkit#v0.36.0&path:ui-kit",
+    "appkit-web": "github:WKDSteve/appkit#v0.36.0&path:web-kit"
   }
 }

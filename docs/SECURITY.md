@@ -25,6 +25,21 @@ a session. This page says what is the testing hub's own.
 | Nothing of a result in the browser | The session is in `sessionStorage` of the tab, and `localStorage` stays empty. | `e2e/app.spec.ts` |
 | Accessibility | axe reports nothing on the views in the light and the dark scheme. | `e2e/app.spec.ts` |
 
+## The web variant
+
+`testing.html` has no server to guard; what holds for it:
+
+| Thing | What holds | Where it is tested |
+| --- | --- | --- |
+| No request | Its policy forbids every request (`connect-src 'none'`), with no WASM and no worker; the sources name no way to one. | `ui/web/web.test.mjs`, `ui/e2e-web/` (every test counts them) |
+| No `eval` | The check of the documents is compiled ahead of time from the schema of the contract. | `ui/web/web.test.mjs` |
+| Never half an export | Every file is checked against its size and sum in the manifest and against the contract before anything of the export is used; a read that fails leaves the page on the export it holds, and says so. A higher version of the contract is refused by name. | `ui/web/folder-source.test.ts`, `ui/e2e-web/` |
+| Only the export form | A document that is not in the export form (it could hold absolute paths) is refused. | `ui/web/folder-source.test.ts` |
+| One database | Every local file shares the origin `file://`: the page opens only its own database `testing-web`, for the handles of its folders, and never another page's. Nothing of an export is kept in the browser. | `ui/web/web.test.mjs`, `ui/e2e-web/` |
+| Foreign text | As on the hub: text, never markup; a link only to a CI run of GitHub. | `ui/e2e-web/` |
+
+That the browser keeps a folder over a restart (the fake folder of the tests does not clone) is checked by hand.
+
 ## What it does not do
 
 - It is not a defence against someone who already runs code as you: they can read `control.secret` and the state of

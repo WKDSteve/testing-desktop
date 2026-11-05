@@ -3,11 +3,11 @@
   // page, the repositories of the fleet and the words. Nothing is remembered in the browser (frecency stays empty).
   import KitPalette from 'appkit-ui/Palette.svelte';
   import { paletteItems, type PaletteItem } from 'appkit-ui/palette';
-  import type { App } from '../lib/app.svelte';
+  import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { paletteActions, paletteEntries } from '../lib/paletteActions';
 
-  let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+  let { app, t }: { app: Reader; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
 
   function items(query: string): PaletteItem[] {
     return paletteItems(query, paletteActions(app, t), paletteEntries(app), {}, Date.now());

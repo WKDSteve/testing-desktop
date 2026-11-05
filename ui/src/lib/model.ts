@@ -124,6 +124,18 @@ export function notesOf(fleet: Fleet): FleetNotes {
   };
 }
 
+/** How long ago a time of a document was, for a page that shows an old state; `null`: it is no time, or in the future. */
+export function ageOf(iso: string, now: number): { unit: 'now' | 'minutes' | 'hours' | 'days'; n: number } | null {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then) || then > now + 60_000) return null;
+  const minutes = Math.max(0, Math.floor((now - then) / 60_000));
+  if (minutes < 1) return { unit: 'now', n: 0 };
+  if (minutes < 60) return { unit: 'minutes', n: minutes };
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return { unit: 'hours', n: hours };
+  return { unit: 'days', n: Math.floor(hours / 24) };
+}
+
 /** Foreign text as it may be shown: the hidden characters made visible; `null` stays `null`. */
 export function shown(text: string | null | undefined): string | null {
   return typeof text === 'string' ? markHidden(text) : null;

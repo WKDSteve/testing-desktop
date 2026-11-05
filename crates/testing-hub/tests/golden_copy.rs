@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Each copy (relative to this repository) and the file of testing.nvim it is a copy of.
-const COPIES: [(&str, &str); 5] = [
+const COPIES: [(&str, &str); 11] = [
     (
         "crates/testing-hub/tests/fixtures/golden/findings.json",
         "TESTS/golden/testing-export-1-findings/findings.json",
@@ -28,6 +28,32 @@ const COPIES: [(&str, &str); 5] = [
     (
         "ui/src/lib/contract.d.ts",
         "schemas/testing-export/1/testing-export.d.ts",
+    ),
+    // The schema the check of the web page is compiled from (ui/web/gen-validate.mjs).
+    (
+        "ui/src/web/testing-export.schema.json",
+        "schemas/testing-export/1/testing-export.schema.json",
+    ),
+    // A whole export folder: what the web page reads, with its manifest and the sums in it.
+    (
+        "crates/testing-hub/tests/fixtures/golden-export/testing-export.json",
+        "TESTS/golden/testing-export-1/testing-export.json",
+    ),
+    (
+        "crates/testing-hub/tests/fixtures/golden-export/fleet.json",
+        "TESTS/golden/testing-export-1/fleet.json",
+    ),
+    (
+        "crates/testing-hub/tests/fixtures/golden-export/repos/alpha.nvim-356bf237c7fc.json",
+        "TESTS/golden/testing-export-1/repos/alpha.nvim-356bf237c7fc.json",
+    ),
+    (
+        "crates/testing-hub/tests/fixtures/golden-export/repos/beta.nvim-ac6d3a4ece7f.json",
+        "TESTS/golden/testing-export-1/repos/beta.nvim-ac6d3a4ece7f.json",
+    ),
+    (
+        "crates/testing-hub/tests/fixtures/golden-export/repos/gamma.nvim-bed2b5150df9.json",
+        "TESTS/golden/testing-export-1/repos/gamma.nvim-bed2b5150df9.json",
     ),
 ];
 

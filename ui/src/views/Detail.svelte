@@ -1,11 +1,11 @@
 <script lang="ts">
   // One repository: its rows of the overview again, the link to its CI run, and its red cases with their output.
-  import type { App } from '../lib/app.svelte';
+  import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { caseTitle, redCases, shown, viewOf, type Tone } from '../lib/model';
   import ToneView from './Tone.svelte';
 
-  let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+  let { app, t }: { app: Reader; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
 
   const doc = $derived(app.repo);
   const view = $derived(doc ? viewOf(doc.repo) : null);
@@ -91,6 +91,7 @@
       {/if}
     {/if}
 
+    {#if app.hasFindings}
     <h2>{t('findings.heading')}</h2>
     {#if app.findingsFailure}
       <p class="bad" role="status">{t('findings.failed', { message: shown(app.findingsFailure) ?? '' })}</p>
@@ -132,6 +133,7 @@
           </li>
         {/each}
       </ul>
+    {/if}
     {/if}
   {/if}
 </section>

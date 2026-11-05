@@ -3,7 +3,7 @@ import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.j
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
 import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
 import type { Case, Fleet, RepoDoc, Row } from './contract';
-import { caseTitle, findingsOf, notesOf, redCases, remoteTone, rowsOf, runLink, shown, verdictTone, viewOf } from './model';
+import { ageOf, caseTitle, findingsOf, notesOf, redCases, remoteTone, rowsOf, runLink, shown, verdictTone, viewOf } from './model';
 
 const fleet = fleetJson as unknown as Fleet;
 const repo = repoJson as unknown as RepoDoc;
@@ -150,5 +150,17 @@ describe('the findings', () => {
     });
     expect(a?.run).toEqual({ source: 'ci', os: 'ubuntu', link: good });
     expect(b?.run).toEqual({ source: 'ci', os: null, link: null });
+  });
+});
+
+describe('the age of an export', () => {
+  const NOW = Date.parse('2026-11-05T12:00:00Z');
+  it('says how long ago, and nothing for what is no time or lies ahead', () => {
+    expect(ageOf('2026-11-05T11:59:30Z', NOW)).toEqual({ unit: 'now', n: 0 });
+    expect(ageOf('2026-11-05T11:15:00Z', NOW)).toEqual({ unit: 'minutes', n: 45 });
+    expect(ageOf('2026-11-05T09:00:00Z', NOW)).toEqual({ unit: 'hours', n: 3 });
+    expect(ageOf('2026-11-01T12:00:00Z', NOW)).toEqual({ unit: 'days', n: 4 });
+    expect(ageOf('never', NOW)).toBeNull();
+    expect(ageOf('2026-11-05T13:00:00Z', NOW)).toBeNull();
   });
 });

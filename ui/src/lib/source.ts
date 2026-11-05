@@ -13,6 +13,8 @@ export interface Capabilities {
   session: boolean;
   /** It says which engine answers (`about`). */
   about: boolean;
+  /** It has the findings of a run; an export folder holds none. */
+  findings: boolean;
 }
 
 /** A read of the fleet: a new document, or the one the page holds is still the current one. */
@@ -35,6 +37,8 @@ export interface TestingSource {
   fleet(etag: string | null): Promise<FleetResult>;
   /** One repository with its red cases, by its key of the fleet. */
   repo(key: string, signal?: AbortSignal): Promise<RepoDoc>;
+  /** The findings of the last run of a repository; only with the capability `findings`. */
+  finding?(key: string, signal?: AbortSignal): Promise<FindingsDoc>;
 }
 
 /** Where the routes of this app live (`IDENTITY.route` of testing-hub). */
@@ -42,7 +46,7 @@ export const API = '/api/testing';
 
 /** The hub of testing-desktop: the transport (token, refusal, pairing, hello) is the kit's. */
 export class HubSource extends HubClient<Fleet> implements TestingSource {
-  readonly capabilities: Capabilities = { session: true, about: true };
+  readonly capabilities: Capabilities = { session: true, about: true, findings: true };
 
   constructor(fetchFn: typeof fetch, base: string = '') {
     super(fetchFn, API, base);

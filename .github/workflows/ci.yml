@@ -178,6 +178,12 @@ jobs:
       - name: Browser tests (Playwright, axe, hostile output)
         working-directory: ui
         run: pnpm e2e
+      # The web variant: the single file, opened from disk, on the golden export. No hub.
+      - name: The page of the web variant (file://, no request, no violation of its policy)
+        working-directory: ui
+        run: |
+          pnpm web:build
+          pnpm web:e2e
       # The hub's folder and the state file of the run are gone (ui/e2e/cleanup.ts). Not strict: Chrome and
       # Playwright keep caches of their own in the temp dir.
       - name: The browser tests left nothing in the temp dir
@@ -188,7 +194,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (node24)
         with:
           name: playwright-traces
-          path: ui/test-results
+          path: |
+            ui/test-results
+            ui/test-results-web
           if-no-files-found: ignore
           retention-days: 14
 

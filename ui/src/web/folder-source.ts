@@ -19,7 +19,7 @@ export const MAX_FILES = 2000;
 /** All documents of one export together: they are held in memory. */
 export const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
-export type ExportProblem = 'no_manifest' | 'too_new' | 'not_export' | 'hash' | 'missing' | 'too_large' | 'bad_path' | 'invalid';
+export type ExportProblem = 'no_manifest' | 'repos_folder' | 'too_new' | 'not_export' | 'hash' | 'missing' | 'too_large' | 'bad_path' | 'invalid';
 
 /** Why an export cannot be used. `detail` is a path of the export or a word of the contract, never the text of a document. */
 export class ExportError extends Error {
@@ -43,6 +43,9 @@ export interface Snapshot {
 
 // The two kinds of file of an export.
 const FLEET_PATH = 'fleet.json';
+// The folder of the documents of the repositories, and the usual name of an export inside a bigger folder (a data repository).
+const REPOS_DIR = 'repos';
+const EXPORT_DIR = 'export';
 const REPO_PATH = /^repos\/([A-Za-z0-9_.-]{1,140})\.json$/;
 
 /** The file at a path of the folder, by walking it: a folder chosen through an input has no other way. */
@@ -97,8 +100,26 @@ function checked(doc: unknown, path: string): unknown {
   return doc;
 }
 
+/**
+ * The folder of the export the person meant: the chosen one, or its subfolder `export`. The picker shows folders only, so
+ * nobody sees the manifest while choosing; choosing one level too high is the ordinary mistake. One level and one name: a
+ * search through a whole tree of repositories could take an export nobody meant.
+ */
+async function exportFolder(chosen: DirHandleLike): Promise<DirHandleLike | null> {
+  if ((await fileAt(chosen, MANIFEST)) !== null) return chosen;
+  for await (const entry of chosen.values()) {
+    if (entry.kind === 'directory' && entry.name === EXPORT_DIR) {
+      return (await fileAt(entry, MANIFEST)) !== null ? entry : null;
+    }
+  }
+  return null;
+}
+
 /** Read one export whole, or refuse it. */
-export async function readExport(root: DirHandleLike, maxTotal: number = MAX_TOTAL_BYTES): Promise<Snapshot> {
+export async function readExport(chosen: DirHandleLike, maxTotal: number = MAX_TOTAL_BYTES): Promise<Snapshot> {
+  const root = await exportFolder(chosen);
+  // A folder cannot be asked for its parent: `repos` can only say where to go.
+  if (root === null) throw new ExportError(chosen.name === REPOS_DIR ? 'repos_folder' : 'no_manifest', MANIFEST);
   const manifestFile = await fileAt(root, MANIFEST);
   if (manifestFile === null) throw new ExportError('no_manifest', MANIFEST);
   const manifestBlob = await manifestFile.getFile();
@@ -137,7 +158,9 @@ export async function readExport(root: DirHandleLike, maxTotal: number = MAX_TOT
 }
 
 /** What the folder looks like now, without reading a document: the sizes and times of the files the page reads. */
-export async function signatureOf(root: DirHandleLike): Promise<string> {
+export async function signatureOf(chosen: DirHandleLike): Promise<string> {
+  // The same folder the read takes: else a new export in a subfolder would never be noticed.
+  const root = (await exportFolder(chosen)) ?? chosen;
   const lines: string[] = [];
   const add = async (handle: FileHandleLike, path: string): Promise<void> => {
     const file = await handle.getFile();
@@ -145,7 +168,7 @@ export async function signatureOf(root: DirHandleLike): Promise<string> {
   };
   for await (const entry of root.values()) {
     if (entry.kind === 'file' && (entry.name === MANIFEST || entry.name === FLEET_PATH)) await add(entry, entry.name);
-    if (entry.kind === 'directory' && entry.name === 'repos') {
+    if (entry.kind === 'directory' && entry.name === REPOS_DIR) {
       for await (const inner of entry.values()) {
         if (inner.kind === 'file') await add(inner, `repos/${inner.name}`);
       }

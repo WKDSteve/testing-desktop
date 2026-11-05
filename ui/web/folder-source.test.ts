@@ -24,7 +24,7 @@ function golden(): Tree {
 }
 
 /** A folder over a map of paths, as the browser hands one out; `time` is what `lastModified` says. */
-function folder(tree: Tree, time = 1): DirHandleLike {
+function folder(tree: Tree, time = 1, rootName = 'export'): DirHandleLike {
   const dir = (prefix: string, name: string): DirHandleLike => ({
     kind: 'directory',
     name,
@@ -54,7 +54,7 @@ function folder(tree: Tree, time = 1): DirHandleLike {
       }
     },
   });
-  return dir('', 'export');
+  return dir('', rootName);
 }
 
 const text = (bytes: Uint8Array | undefined) => new TextDecoder().decode(bytes);
@@ -100,6 +100,33 @@ describe('reading an export', () => {
     none.delete('testing-export.json');
     expect((await refused(none)).code).toBe('no_manifest');
     expect((await refused(new Map(golden()).set('testing-export.json', encode('{')))).code).toBe('invalid');
+  });
+
+  it('finds the export in the subfolder export, the mistake of choosing one level too high', async () => {
+    const nested: Tree = new Map([...golden()].map(([path, bytes]) => [`export/${path}`, bytes]));
+    nested.set('README.md', encode('the data repository'));
+    const snapshot = await readExport(folder(nested, 1, 'testing-results'));
+    expect(snapshot.repos.has(ALPHA)).toBe(true);
+  });
+
+  it('takes the chosen folder first, and looks no further than one level and that one name', async () => {
+    const own = golden();
+    const both: Tree = new Map(own);
+    for (const [path, bytes] of own) both.set(`export/${path}`, path === 'fleet.json' ? encode('{') : bytes);
+    // The broken inner one is not read: the folder chosen is an export itself.
+    expect((await readExport(folder(both))).repos.has(ALPHA)).toBe(true);
+
+    const other: Tree = new Map([...own].map(([path, bytes]) => [`out/${path}`, bytes]));
+    await expect(readExport(folder(other, 1, 'data'))).rejects.toMatchObject({ code: 'no_manifest' });
+    const deep: Tree = new Map([...own].map(([path, bytes]) => [`a/export/${path}`, bytes]));
+    await expect(readExport(folder(deep, 1, 'data'))).rejects.toMatchObject({ code: 'no_manifest' });
+    const emptyExport: Tree = new Map([['export/notes.txt', encode('x')]]);
+    await expect(readExport(folder(emptyExport, 1, 'data'))).rejects.toMatchObject({ code: 'no_manifest' });
+  });
+
+  it('says where to go when the folder repos of an export was chosen', async () => {
+    const inner: Tree = new Map([[`${ALPHA}.json`, encode('{}')]]);
+    await expect(readExport(folder(inner, 1, 'repos'))).rejects.toMatchObject({ code: 'repos_folder' });
   });
 
   it('refuses a file that does not match its sum, even of the same size', async () => {
@@ -229,5 +256,10 @@ describe('the signature of the folder', () => {
     // The daten repository is a git repository: what git does there is not a new export.
     expect(await signatureOf(folder(new Map(tree).set('.git/HEAD', encode('x'))))).toBe(before);
     expect(await signatureOf(folder(new Map(tree).set('README.md', encode('x'))))).toBe(before);
+    // An export in the subfolder export: the signature looks where the read looks.
+    const nested: Tree = new Map([...tree].map(([path, bytes]) => [`export/${path}`, bytes]));
+    const outer = await signatureOf(folder(nested, 1, 'data'));
+    expect(outer).toBe(before);
+    expect(await signatureOf(folder(nested, 2, 'data'))).not.toBe(outer);
   });
 });

@@ -136,7 +136,13 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await openPaired(page);
     await expectAccessible(page, `overview (${scheme})`);
-    await page.getByRole('button', { name: 'alpha.nvim' }).click();
+    // The colours of the palette under the pointer and with the focus ring: axe reads the state the page is in.
+    const repo = page.getByRole('button', { name: 'alpha.nvim' });
+    await repo.hover();
+    await expectAccessible(page, `overview, hover (${scheme})`);
+    await repo.focus();
+    await expectAccessible(page, `overview, focus (${scheme})`);
+    await repo.click();
     await expect(page.getByRole('heading', { name: 'Red cases' })).toBeVisible();
     await expectAccessible(page, `repository (${scheme})`);
   });

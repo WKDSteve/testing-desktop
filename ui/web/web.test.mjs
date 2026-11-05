@@ -90,6 +90,40 @@ describe('the check of the documents', () => {
   });
 });
 
+describe('the workflow that publishes the page', () => {
+  const workflow = readFileSync(join(here, '..', '..', '.github', 'workflows', 'web.yml'), 'utf8');
+
+  it('starts only on a tag or by hand, and only from main or a tag: it has the rights of the maintainer', () => {
+    const on = /^on:\n([\s\S]*?)^permissions:/m.exec(workflow)?.[1] ?? '';
+    expect(on).toContain('tags: ["v*"]');
+    expect(on).toContain('workflow_dispatch');
+    expect(on).not.toMatch(/branches|pull_request|workflow_run|schedule/);
+    expect(workflow).toContain('refs/heads/main | refs/tags/v*)');
+  });
+
+  it('holds no secret, and pins its actions by commit', () => {
+    expect(workflow).not.toMatch(/secrets\.|GITHUB_TOKEN/);
+    for (const [, ref] of workflow.matchAll(/uses:\s*\S+@(\S+)/g)) expect(ref).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it('tests before it publishes, and adds nothing but the page and its sums', () => {
+    const at = (text) => workflow.indexOf(text);
+    expect(at('pnpm test')).toBeGreaterThan(-1);
+    expect(at('pnpm test')).toBeLessThan(at('pnpm web:build'));
+    expect(at('pnpm web:build')).toBeLessThan(at('pnpm web:e2e'));
+    expect(at('pnpm web:e2e')).toBeLessThan(at('Publish to testing-web'));
+    expect(workflow).toContain('git add testing.html SHA256SUMS');
+    expect(workflow).not.toMatch(/git add (-A|\.)/);
+  });
+
+  it('puts the name of a ref into no script: it is an environment variable there', () => {
+    const run = workflow.slice(workflow.indexOf('Publish to testing-web'));
+    expect(run).toContain('REF_NAME: ${{ github.ref_name }}');
+    expect(run.slice(run.indexOf('run: |'))).not.toContain('${{');
+  });
+});
+
+
 describe('the words of the way in', () => {
   it('has a word for every reason a folder is refused', () => {
     const entry = readFileSync(join(WEB_SRC, 'entry.ts'), 'utf8');

@@ -57,6 +57,22 @@ disagree, so a raised appkit tag raises them too.
 7. A **published release is never cut again** (`NREL-10`): a mistake is fixed in the next patch
    version.
 
+## The web variant
+
+[`web.yml`](../.github/workflows/web.yml) builds `testing.html`, tests it (the checks of the page, then the built file
+from disk in Chrome) and only then puts it with its `SHA256SUMS` into the public repository
+[testing-web](https://github.com/WKDSteve/testing-web). Unlike a release **there is no draft: the push is public at
+once.** It runs on every tag `v*`, so the tag of step 4 publishes the page too, and by hand on `main`:
+
+```
+gh workflow run web.yml --ref main
+```
+
+A page that did not change is not committed again. It pushes with the git credentials of the runner, there is no secret
+in the workflow. testing-web holds the page, its sums and its README, never an export. After the first run: the README of
+testing-web no longer says "Not built yet", and the tile of hub-desktop gets its web variant
+(`crates/hub-desktop/src/catalog.rs`).
+
 ## When something is wrong
 
 - *the tag says X but Cargo.toml says Y*: bump the version (step 2) and tag again; delete the tag

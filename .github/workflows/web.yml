@@ -1,0 +1,102 @@
+# The web variant: builds the page as one file (ui/dist-web/testing.html), tests it, and puts it into the repository
+# WKDSteve/testing-web, from which it is opened on a machine that may not install anything:
+#
+#   git clone https://github.com/WKDSteve/testing-web   (git pull for a newer one)
+#   open file:///C:/repos/testing-web/testing.html      (a local file: no server, no hosting)
+#
+# Runs on a tag (v*) and by hand. Like ci.yml it runs on the maintainer's self-hosted Windows runner, whose git credentials
+# push to testing-web (a public repository: reading it needs no login, only the push needs them): there is no deploy key
+# and no secret in this workflow, and a workflow that anybody else could trigger would have the maintainer's rights, which
+# is why it has no `pull_request` trigger and no `workflow_run`. testing-web holds only the page, its sums and a README,
+# never an export: the results stay in a repository of their own.
+# The file is built from the ref, opened in Chrome from disk with the requests counted (ui/e2e-web), and only then published.
+
+name: web
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -e -o pipefail {0}
+
+jobs:
+  publish:
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 30
+    steps:
+      # By hand the workflow can be started on any branch: what is public comes from main or a tag.
+      - name: Only main or a tag
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/main | refs/tags/v*) ;;
+            *)
+              echo "::error::the page is published from main or a tag v*, not from $GITHUB_REF"
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          persist-credentials: false
+      - name: Install
+        working-directory: ui
+        run: pnpm install --frozen-lockfile
+      # A temp dir of this job, empty at the start, as in ci.yml.
+      - name: Temp dir of this job
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "job-temp-$env:GITHUB_JOB-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $dir -ErrorAction Stop | Out-Null
+          "TEMP=$dir", "TMP=$dir", "TMPDIR=$dir", "JOB_TEMP=$dir" | Add-Content -Path $env:GITHUB_ENV
+      - name: Tests of the page
+        working-directory: ui
+        run: |
+          pnpm check
+          pnpm test
+      - name: Build the page
+        working-directory: ui
+        # The build the page names (Help): the ref, its commit and the day it was built.
+        run: WEB_BUILD="$GITHUB_REF_NAME@${GITHUB_SHA::7} $(date -u +%Y-%m-%d)" pnpm web:build
+      # The built file itself, from disk, in Chrome: what is published is what was tested.
+      - name: Open the file from disk in Chrome
+        working-directory: ui
+        run: pnpm web:e2e
+      - name: The tests left nothing in the temp dir
+        run: python tools/check-temp-leftovers.py --dir "$JOB_TEMP"
+      - name: Traces of failed browser tests
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1 (node24)
+        with:
+          name: playwright-traces
+          path: ui/test-results-web
+          if-no-files-found: ignore
+          retention-days: 14
+      # testing-web holds nothing but the built page, its sums and its README. A page that did not change is not committed
+      # again.
+      - name: Publish to testing-web
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          sha="$(git rev-parse --short HEAD)"
+          publish="$RUNNER_TEMP/testing-web"
+          rm -rf "$publish"
+          git clone --quiet https://github.com/WKDSteve/testing-web "$publish"
+          cp ui/dist-web/testing.html "$publish/testing.html"
+          cd "$publish"
+          sha256sum *.html > SHA256SUMS
+          git add testing.html SHA256SUMS
+          if git diff --cached --quiet; then
+            echo "testing.html is the same as the published one"
+          else
+            git commit --quiet -m "testing.html, built from testing-desktop@$sha ($REF_NAME)"
+            git push --quiet origin HEAD
+          fi

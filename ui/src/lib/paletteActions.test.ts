@@ -87,10 +87,11 @@ describe('about', () => {
     none.stop();
 
     const said = await started(
-      json({ app: 'testing-desktop', version: '1', engine: { version: '0.1', git: 'abc', nvim: '0.12' }, reads: { state_dir: 'default', areas: 'default' } }),
+      json({ app: 'testing-desktop', version: '1', engine: { version: '0.1', git: 'abc', nvim: '0.12' }, reads: { state_dir: 'default', areas: 'default' }, ci: 'no_token' }),
     );
     await expect.poll(() => said.about?.engine?.git).toBe('abc');
     expect(said.about?.reads.stateDir).toBe('default');
+    expect(said.about?.ci).toBe('no_token');
     said.stop();
   });
 });

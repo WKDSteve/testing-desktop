@@ -73,6 +73,7 @@ impl Fixture {
         Ask {
             state_dir: Some(self.dir.join("state")),
             areas: Some(self.dir.join("areas.json")),
+            ..Ask::default()
         }
     }
 }
@@ -107,6 +108,56 @@ async fn engine_or_skip(root: &Path) -> Option<CliEngine> {
 
 fn json(text: &str) -> Value {
     serde_json::from_str(text).unwrap()
+}
+
+/// The real engine takes the token on stdin and says that it does. The repositories of the root have no remote, so no
+/// request goes out (no network in a test); the answers of GitHub are recorded in the specs of testing.nvim.
+#[tokio::test]
+async fn the_real_engine_takes_a_token_in_the_request_and_writes_it_nowhere() {
+    const TOKEN: &str = "github_pat_spy0123456789abcdefABCDEF";
+    let fx = Fixture::new();
+    let Some(engine) = engine_or_skip(&fx.root()).await else {
+        return;
+    };
+    let info = probe(&engine).await.expect("hello");
+    assert!(
+        info.capabilities
+            .iter()
+            .any(|c| c == testing_hub::github::REMOTE_CAPABILITY),
+        "{:?}",
+        info.capabilities
+    );
+    let ask = Ask {
+        github_token: testing_hub::github::GithubToken::parse(TOKEN),
+        ..fx.ask()
+    };
+    let reply = engine
+        .call(Calls::Fleet, Some(&ask.fleet()))
+        .await
+        .expect("fleet with a token");
+    assert!(!reply.text.contains(TOKEN));
+    let doc = json(&reply.text);
+    assert_eq!(doc["remote"]["asked"], true, "{doc}");
+    assert!(
+        doc["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["ci_remote"].is_object()),
+        "every row has the record of the adapter: {doc}"
+    );
+    // Nothing of it in the state folder either: the cache of the adapter holds answers, not the token.
+    fn holds(dir: &Path, needle: &str) -> bool {
+        std::fs::read_dir(dir).unwrap().flatten().any(|e| {
+            let path = e.path();
+            if path.is_dir() {
+                holds(&path, needle)
+            } else {
+                std::fs::read_to_string(&path).is_ok_and(|t| t.contains(needle))
+            }
+        })
+    }
+    assert!(!holds(&fx.dir.join("state"), TOKEN));
 }
 
 #[tokio::test]

@@ -156,6 +156,8 @@ test('the palette opens a repository by its name and filters the red ones', asyn
   // The help menu says which engine answers.
   await page.getByRole('menubar').getByRole('menuitem', { name: 'Help' }).click();
   await expect(page.getByRole('menu')).toContainText('testing.nvim');
+  // And why the CI columns say "not asked": this hub is told not to ask (`ask_github`).
+  await expect(page.getByRole('menu')).toContainText('not asked, switched off');
   expect(seen.errors).toEqual([]);
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);

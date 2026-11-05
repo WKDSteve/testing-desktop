@@ -15,6 +15,7 @@ use appkit_hub::{HubStatus, Limits};
 use serde_json::Value;
 
 use crate::engine::{cli_config, probe, Ask, CliEngine, Engine, DISCOVERY};
+use crate::github::CiState;
 use crate::settings::TestingSettings;
 use crate::store::RefreshOptions;
 use crate::ui::UiFiles;
@@ -220,20 +221,33 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
             .as_ref()
             .filter(|(p, _)| p.is_file())
             .map(|(p, _)| p.clone()),
+        github_token: None,
     };
-    let origins = Origins {
+    let mut origins = Origins {
         state_dir: places.state_dir.as_ref().map(|(_, o)| *o),
         areas: places
             .areas
             .as_ref()
             .filter(|(p, _)| p.is_file())
             .map(|(_, o)| *o),
+        ..Origins::default()
     };
 
     let state = engine_state(&file, &env).await;
     if let Some(note) = &state.note {
         eprintln!("{note}");
     }
+
+    let (github_token, ci) =
+        crate::github::resolve(&file.app, &state.status, crate::github::from_gh).await?;
+    if ci == CiState::NoToken {
+        eprintln!("note: no GitHub token (github_token_file, or `gh auth login`): the CI columns say not asked");
+    }
+    origins.ci = ci;
+    let ask = Ask {
+        github_token,
+        ..ask
+    };
 
     let watch = places
         .state_dir

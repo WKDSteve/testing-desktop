@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::engine::{Ask, Engine};
+use crate::github::CiState;
 use crate::settings::Origin;
 use crate::store::{self, RefreshOptions, SnapshotStore, StoreOptions, SHAPE};
 use crate::watch::{self, Hint, Watcher};
@@ -40,6 +41,8 @@ pub struct TestingRuntime {
 pub struct Origins {
     pub state_dir: Option<Origin>,
     pub areas: Option<Origin>,
+    /// Whether the hub asks GitHub, and why not.
+    pub ci: CiState,
 }
 
 /// What the hub watches: the state folder, and how often it scans.

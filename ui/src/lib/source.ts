@@ -25,6 +25,8 @@ export interface About {
   engine: { version: string | null; git: string | null; nvim: string | null } | null;
   engineProblem: string | null;
   reads: { stateDir: string | null; areas: string | null };
+  /** Whether the hub asks GitHub, and why not: `file`, `gh`, `no_token`, `engine_too_old`, `no_engine`, `off`. */
+  ci: string | null;
 }
 
 export interface TestingSource {
@@ -87,6 +89,7 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
           : null,
       engineProblem: textOf(doc['engine_problem']),
       reads: { stateDir: field(reads, 'state_dir'), areas: field(reads, 'areas') },
+      ci: textOf(doc['ci']),
     };
   }
 }

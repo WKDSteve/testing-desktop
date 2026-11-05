@@ -22,7 +22,7 @@ export interface View {
   red: boolean;
 }
 
-const RED_STATES: readonly RemoteState[] = ['failure', 'rejected', 'cancelled'];
+const RED_STATES: readonly RemoteState[] = ['failure', 'rejected', 'cancelled', 'no_runner'];
 
 /** The tone of a state of the CI adapter. */
 export function remoteTone(state: RemoteState | null | undefined): Tone {
@@ -32,6 +32,7 @@ export function remoteTone(state: RemoteState | null | undefined): Tone {
     case 'failure':
     case 'rejected':
     case 'cancelled':
+    case 'no_runner':
       return 'red';
     case 'running':
     case 'queued':

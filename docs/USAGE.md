@@ -29,6 +29,10 @@ Remove it with `uninstall.ps1` (`scripts/uninstall.ps1`, or the file of the rele
 - **The folder of your repositories**: `vault` of `config.json`, else `TESTING_REPOS_ROOT`, else `REPOS_DIR`.
 - **The data classes of this device**: `areas` of `config.json` or `TESTING_DESKTOP_AREAS`, by default the `areas.json`
   of tasks-desktop. Only the `public` and `internal` repositories it names are shown; without the file none is.
+- **A GitHub token, for the CI columns** (optional): `github_token_file` of `config.json` names a file with a read-only
+  token (Actions and Metadata read; on Linux and macOS the file must be for you only), else the hub takes `gh auth token`
+  once at its start. Without either the columns say "not asked", and Help says why. `"ask_github": false` switches it off.
+  The hub asks GitHub at most once a minute per repository, however often a page reads.
 - **The state of testing.nvim**: `state_dir` of `config.json` or `TESTING_DESKTOP_STATE_DIR`, by default the state folder
   of Neovim (`%LOCALAPPDATA%\nvim-data`).
 

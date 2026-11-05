@@ -211,6 +211,7 @@ async fn about(State(st): State<Arc<Shared>>, RawQuery(query): RawQuery) -> Resp
         "state_dir": rt.origins.state_dir.map(crate::settings::Origin::word),
         "areas": rt.origins.areas.map(crate::settings::Origin::word),
     });
+    body["ci"] = json!(rt.origins.ci.word());
     json_response(StatusCode::OK, body.to_string(), None)
 }
 

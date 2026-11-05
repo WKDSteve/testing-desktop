@@ -18,6 +18,8 @@ use appkit_hub::discovery::{engine_script, DiscoverySpec, Setup};
 use appkit_hub::env::Env;
 use serde_json::{json, Map, Value};
 
+use crate::github::{GithubToken, REMOTE_MAX_AGE_SECS};
+
 /// The contract version this hub speaks.
 pub const SCHEMA: u64 = 1;
 
@@ -81,8 +83,10 @@ pub fn cli_config(setup: &Setup, env: Env) -> CliEngineConfig {
         lib_dir: setup.lib_dir.as_ref().map(|l| l.value.clone()),
         extra_areas: Vec::new(),
         env,
-        // A fleet of fifty repositories asks git about each of them.
-        timeout: std::time::Duration::from_secs(60),
+        // A fleet of fifty repositories asks git about each of them, and GitHub with a token: this is longer than the
+        // limit of the CI adapter (`testing.ci.remote.DEADLINE_MS`, 120 s), which then answers for the repositories it
+        // has no answer for. Shorter, a slow GitHub would cost the local results of the whole fleet.
+        timeout: std::time::Duration::from_secs(150),
         max_queue: 16,
         // A document of the engine is at most 8 MiB (testing.nvim `testing.export.MAX_DOC_BYTES`).
         max_reply_bytes: 16 * 1024 * 1024,
@@ -121,24 +125,29 @@ impl Calls {
 
 /// What every request of the hub carries: the export form (no absolute path, only the
 /// repositories the data classes release), the state folder and the `areas.json` of this device.
-/// A part that is `None` is left out: the engine then says what it could not read.
+/// A part that is `None` is left out: the engine then says what it could not read. With a token,
+/// `fleet` and `repo` also ask GitHub, within `REMOTE_MAX_AGE_SECS`; `finding` never does.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Ask {
     pub state_dir: Option<PathBuf>,
     pub areas: Option<PathBuf>,
+    pub github_token: Option<GithubToken>,
 }
 
 impl Ask {
     /// The request of `fleet`.
     #[must_use]
     pub fn fleet(&self) -> Value {
-        Value::Object(self.base())
+        let mut map = self.base();
+        self.ask_github(&mut map);
+        Value::Object(map)
     }
 
     /// The request of `repo` for the repository with this key of `fleet`.
     #[must_use]
     pub fn repo(&self, key: &str) -> Value {
         let mut map = self.base();
+        self.ask_github(&mut map);
         map.insert("repo".to_owned(), json!(key));
         Value::Object(map)
     }
@@ -151,6 +160,14 @@ impl Ask {
         map.remove("export");
         map.insert("repo".to_owned(), json!(key));
         Value::Object(map)
+    }
+
+    fn ask_github(&self, map: &mut Map<String, Value>) {
+        if let Some(token) = &self.github_token {
+            map.insert("remote".to_owned(), json!(true));
+            map.insert("github_token".to_owned(), json!(token.expose()));
+            map.insert("remote_max_age".to_owned(), json!(REMOTE_MAX_AGE_SECS));
+        }
     }
 
     fn base(&self) -> Map<String, Value> {
@@ -285,6 +302,7 @@ mod tests {
         let ask = Ask {
             state_dir: Some(PathBuf::from("/state/nvim")),
             areas: Some(PathBuf::from("/config/tasks-desktop/areas.json")),
+            github_token: None,
         };
         assert_eq!(
             ask.fleet(),
@@ -308,6 +326,28 @@ mod tests {
                 "areas": "/config/tasks-desktop/areas.json",
             })
         );
+    }
+
+    #[test]
+    fn a_token_goes_into_the_requests_that_ask_github_and_no_other() {
+        const TOKEN: &str = "github_pat_0123456789abcdefABCDEF";
+        let ask = Ask {
+            github_token: GithubToken::parse(TOKEN),
+            ..Ask::default()
+        };
+        let key = "alpha.nvim-0123456789ab";
+        for request in [ask.fleet(), ask.repo(key)] {
+            assert_eq!(request["remote"], true);
+            assert_eq!(request["github_token"], TOKEN);
+            assert_eq!(request["remote_max_age"], REMOTE_MAX_AGE_SECS);
+        }
+        let finding = ask.finding(key);
+        assert!(!finding.to_string().contains(TOKEN), "{finding}");
+        assert!(finding.get("remote").is_none(), "{finding}");
+        // Without a token the hub does not ask.
+        assert!(Ask::default().fleet().get("remote").is_none());
+        // And the request is what stands in `Debug` of the settings: the token does not.
+        assert!(!format!("{ask:?}").contains(TOKEN));
     }
 
     #[test]

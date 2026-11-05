@@ -10,6 +10,9 @@
 //! `areas` is the `areas.json` of the data classes of this device, for the same reason; without it the
 //! file in the config folder of tasks-desktop (`places::areas_file`). `TESTING_DESKTOP_AREAS`
 //! overrides the file.
+//!
+//! `github_token_file` holds the token the hub asks GitHub with (`github`); without it the hub takes
+//! `gh auth token` once. `ask_github = false` asks GitHub with neither.
 
 use std::path::{Path, PathBuf};
 
@@ -26,6 +29,12 @@ pub struct TestingSettings {
     /// The `areas.json` of the data classes; none: the one of tasks-desktop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub areas: Option<PathBuf>,
+    /// A file with the GitHub token, for the user only; none: `gh auth token`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_token_file: Option<PathBuf>,
+    /// `false`: the hub does not ask GitHub; none: it does when it has a token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ask_github: Option<bool>,
 }
 
 /// Is this a path the hub may hand to the engine? Whole (absolute), no `..`, no control character.
@@ -57,6 +66,9 @@ impl AppSettings for TestingSettings {
         }
         if let Some(path) = &self.areas {
             check_path("areas", path)?;
+        }
+        if let Some(path) = &self.github_token_file {
+            check_path("github_token_file", path)?;
         }
         Ok(())
     }
@@ -156,17 +168,23 @@ mod tests {
         let ok = TestingSettings {
             state_dir: Some(root()),
             areas: Some(root().join("areas.json")),
+            github_token_file: Some(root().join("token")),
+            ask_github: Some(true),
         };
         assert!(ok.validate().is_ok());
         assert!(TestingSettings::default().validate().is_ok());
         for bad in [
             TestingSettings {
                 state_dir: Some(PathBuf::from("nope")),
-                areas: None,
+                ..TestingSettings::default()
             },
             TestingSettings {
-                state_dir: None,
                 areas: Some(PathBuf::from("areas.json")),
+                ..TestingSettings::default()
+            },
+            TestingSettings {
+                github_token_file: Some(PathBuf::from("token")),
+                ..TestingSettings::default()
             },
         ] {
             assert!(bad.validate().is_err(), "{bad:?}");
@@ -176,7 +194,11 @@ mod tests {
 
     fn file(state_dir: Option<PathBuf>, areas: Option<PathBuf>) -> FileConfig<TestingSettings> {
         FileConfig {
-            app: TestingSettings { state_dir, areas },
+            app: TestingSettings {
+                state_dir,
+                areas,
+                ..TestingSettings::default()
+            },
             ..FileConfig::default()
         }
     }

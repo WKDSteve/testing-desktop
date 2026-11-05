@@ -16,6 +16,7 @@ mod answer;
 pub mod app;
 pub mod background;
 pub mod engine;
+pub mod github;
 mod live;
 pub mod places;
 mod routes;

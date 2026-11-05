@@ -15,7 +15,7 @@ function row(patch: Partial<Row>): Row {
 describe('the tones', () => {
   it('reads every state of the CI adapter, and what it does not know as unknown, never green', () => {
     expect(remoteTone('success')).toBe('green');
-    for (const s of ['failure', 'rejected', 'cancelled'] as const) expect(remoteTone(s)).toBe('red');
+    for (const s of ['failure', 'rejected', 'cancelled', 'no_runner'] as const) expect(remoteTone(s)).toBe('red');
     expect(remoteTone('running')).toBe('running');
     expect(remoteTone('queued')).toBe('running');
     expect(remoteTone('waiting_runner')).toBe('waiting');

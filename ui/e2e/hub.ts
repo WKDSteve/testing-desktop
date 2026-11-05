@@ -128,7 +128,8 @@ function fill(root: string): { root: string; config: string } {
   mkdirSync(config);
   writeFileSync(
     join(config, 'config.json'),
-    JSON.stringify({ vault: repos, engine_dir: engineDir(), state_dir: state, areas: join(root, 'areas.json') }),
+    // `ask_github`: the tests do not depend on a login of `gh` on the machine, and ask no network.
+    JSON.stringify({ vault: repos, engine_dir: engineDir(), state_dir: state, areas: join(root, 'areas.json'), ask_github: false }),
   );
   return { root, config };
 }

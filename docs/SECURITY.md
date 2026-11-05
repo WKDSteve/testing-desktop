@@ -18,6 +18,8 @@ a session. This page says what is the testing hub's own.
 | The event stream tells no content | An event says that the fleet changed and names no repository; a session opens at most four streams, and a session that was closed takes its stream with it. | `tests/routes.rs` |
 | A change costs one question, a request none | Only the three result files of a project in the state folder wake the scan, so what else writes there (and a page that reads often) does not start processes. | `src/watch.rs` tests; `tests/routes.rs` |
 | Data classes fail closed | The hub reads the export form: no absolute path, and only the `public` and `internal` repositories that the `areas.json` of the device names. Without the file none is shown; a private one never. | `tests/engine.rs`; `e2e/app.spec.ts` |
+| The GitHub token stays in the hub | From `github_token_file` (for the user only; on other rights, a broken file or a wrong path the start stops) or one `gh auth token` at the start, without a shell and with a time limit. It goes to the engine only in the requests of `fleet` and `repo`, as JSON on stdin: never in an argument or the environment of the child. No answer holds it, and its type has no printable form. `about` says where it came from as a word. | `src/github.rs`, `src/engine.rs`, `tests/routes.rs`, and the specs of testing.nvim |
+| GitHub is asked at a fixed rate | However often a page reads, the engine asks GitHub at most once a minute per repository (`remote_max_age`, the stored answers of its CI adapter), with ETags. | `src/github.rs`, `tests/routes.rs`, and the specs of testing.nvim |
 | Output of a test is text | Names and output of red cases are written by whatever ran: they are shown as text, never as markup or a link, and hidden and reordering characters are made visible (`⟦U+202E⟧`). | `e2e/app.spec.ts` (a repository with markup, a script link, reordering characters and very long output) |
 | The page's policy | The policy of appkit for every page; nothing of this page breaks it. | the matrix; `e2e/app.spec.ts` (no violation in any test) |
 | Nothing of a result in the browser | The session is in `sessionStorage` of the tab, and `localStorage` stays empty. | `e2e/app.spec.ts` |
@@ -27,7 +29,6 @@ a session. This page says what is the testing hub's own.
 
 - It is not a defence against someone who already runs code as you: they can read `control.secret` and the state of
   testing.nvim.
-- It does not ask GitHub: the CI columns say "not asked", and the hub has no token.
 - It does not run tests, and it does not write into a repository.
 
 ## The CI of this repository

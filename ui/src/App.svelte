@@ -6,7 +6,7 @@
   import { defaultKeymap, resolveKey, type ChordState } from 'appkit-ui/keymap';
   import MenuBar, { type Menu } from 'appkit-ui/MenuBar.svelte';
   import type { App } from './lib/app.svelte';
-  import { langOf, textsOf } from './lib/i18n';
+  import { DICTIONARIES, langOf, textsOf, type Key } from './lib/i18n';
   import { shown } from './lib/model';
   import Detail from './views/Detail.svelte';
   import Overview from './views/Overview.svelte';
@@ -24,6 +24,12 @@
 
   function onFocus(): void {
     if (app.phase === 'ready') void app.refresh();
+  }
+
+  /** The words of what `about` says of GitHub; a word this page does not know says nothing. */
+  function ciWord(word: string | null): Key | null {
+    const key = `about.ci.${word ?? ''}`;
+    return key in DICTIONARIES.en ? (key as Key) : null;
   }
 
   const menus = $derived<Menu[]>([
@@ -59,6 +65,7 @@
                 kind: 'info' as const,
                 label: t('about.reads', { state: shown(app.about.reads.stateDir) ?? '?', areas: shown(app.about.reads.areas) ?? '?' }),
               },
+              ...(ciWord(app.about.ci) ? [{ kind: 'info' as const, label: t(ciWord(app.about.ci) as Key) }] : []),
             ]
           : []),
       ],

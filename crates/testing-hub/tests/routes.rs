@@ -13,6 +13,7 @@ use appkit_hub::{HubStatus, Limits, RunningServer};
 use appkit_scratch::Scratch;
 use serde_json::{json, Value};
 use testing_hub::engine::Ask;
+use testing_hub::github::{CiState, GithubToken};
 use testing_hub::settings::Origin;
 use testing_hub::store::RefreshOptions;
 use testing_hub::{Origins, Watch};
@@ -132,6 +133,7 @@ fn ask() -> Ask {
     Ask {
         state_dir: Some(place("state")),
         areas: Some(place("areas.json")),
+        ..Ask::default()
     }
 }
 
@@ -160,6 +162,16 @@ async fn start_watching(engine: &Arc<FakeEngine>, state: &Path) -> Hub {
 }
 
 async fn start_with(engine: Option<Arc<FakeEngine>>, limits: Limits, watch: Option<Watch>) -> Hub {
+    start_asking(engine, limits, watch, ask(), CiState::NoToken).await
+}
+
+async fn start_asking(
+    engine: Option<Arc<FakeEngine>>,
+    limits: Limits,
+    watch: Option<Watch>,
+    ask: Ask,
+    ci: CiState,
+) -> Hub {
     let control = Secret::generate(TOKEN_BYTES).unwrap();
     let has_engine = engine.is_some();
     let server = testing_hub::start(testing_hub::Start {
@@ -175,10 +187,11 @@ async fn start_with(engine: Option<Arc<FakeEngine>>, limits: Limits, watch: Opti
             testing_hub::app::no_engine_status()
         },
         engine: engine.map(|e| e as Arc<dyn Engine>),
-        ask: ask(),
+        ask,
         origins: Origins {
             state_dir: Some(Origin::Default),
             areas: Some(Origin::Setting),
+            ci,
         },
         watch,
         ui: testing_hub::ui::UiFiles::none(),
@@ -276,6 +289,109 @@ async fn fleet_takes_no_query_and_without_an_engine_says_it_is_not_ready() {
         assert_eq!(r.json()["error"]["code"], "engine_unavailable", "{name}");
         assert_eq!(r.json()["error"]["problem"], "no_engine", "{name}");
     }
+}
+
+/// A token that is in no golden document.
+const TOKEN: &str = "github_pat_spy0123456789abcdefABCDEF";
+
+#[tokio::test]
+async fn a_token_goes_to_the_engine_in_the_requests_that_ask_github_and_comes_back_in_no_answer() {
+    let engine = FakeEngine::new();
+    let hub = start_asking(
+        Some(Arc::clone(&engine)),
+        Limits::default(),
+        None,
+        Ask {
+            github_token: GithubToken::parse(TOKEN),
+            ..ask()
+        },
+        CiState::Gh,
+    )
+    .await;
+
+    let mut answers = Vec::new();
+    for path in [
+        route("fleet"),
+        format!("{}?key={BETA}", route("repo")),
+        format!("{}?key={BETA}", route("finding")),
+        route("about"),
+    ] {
+        let reply = get(&hub.server, &path, Some(&hub.token)).await;
+        assert_eq!(reply.status, 200, "{path}");
+        assert!(!reply.body.contains(TOKEN), "{path}: {}", reply.body);
+        answers.push(reply);
+    }
+    let about: Value = serde_json::from_str(&answers[3].body).unwrap();
+    assert_eq!(about["ci"], "gh", "where it came from, as a word");
+
+    for method in ["fleet", "repo"] {
+        let asked = engine.asked(method);
+        assert_eq!(asked.len(), 1, "{method}");
+        let params = asked[0].as_ref().unwrap();
+        assert_eq!(params["remote"], true, "{method}");
+        assert_eq!(params["github_token"], TOKEN, "{method}");
+        assert_eq!(params["remote_max_age"], 60, "{method}");
+    }
+    let finding = engine.asked("finding");
+    let params = finding[0].as_ref().unwrap();
+    assert!(params.get("github_token").is_none(), "{params}");
+    assert!(params.get("remote").is_none(), "{params}");
+
+    // A page that reads the fleet again does not start the engine, so it does not reach GitHub.
+    let before = engine.asked("fleet").len();
+    for _ in 0..5 {
+        let reply = get(&hub.server, &route("fleet"), Some(&hub.token)).await;
+        assert_eq!(reply.status, 200);
+    }
+    assert_eq!(
+        engine.asked("fleet").len(),
+        before,
+        "no question per page view"
+    );
+}
+
+#[tokio::test]
+async fn an_engine_that_fails_does_not_bring_the_token_into_the_answer() {
+    let engine = FakeEngine::new();
+    *engine.repo.lock().unwrap() = RepoAnswer::Timeout;
+    let hub = start_asking(
+        Some(Arc::clone(&engine)),
+        Limits::default(),
+        None,
+        Ask {
+            github_token: GithubToken::parse(TOKEN),
+            ..ask()
+        },
+        CiState::File,
+    )
+    .await;
+    let reply = get(
+        &hub.server,
+        &format!("{}?key={BETA}", route("repo")),
+        Some(&hub.token),
+    )
+    .await;
+    assert_ne!(reply.status, 200);
+    assert!(!reply.body.contains(TOKEN), "{}", reply.body);
+}
+
+#[tokio::test]
+async fn without_a_token_nothing_asks_github_and_about_says_why() {
+    let engine = FakeEngine::new();
+    let hub = start(Some(Arc::clone(&engine))).await;
+    let reply = get(&hub.server, &route("fleet"), Some(&hub.token)).await;
+    assert_eq!(reply.status, 200);
+    let asked = engine.asked("fleet");
+    let params = asked[0].as_ref().unwrap();
+    assert!(params.get("remote").is_none(), "{params}");
+    assert!(params.get("github_token").is_none(), "{params}");
+    let about: Value = serde_json::from_str(
+        &get(&hub.server, &route("about"), Some(&hub.token))
+            .await
+            .body,
+    )
+    .unwrap();
+    assert_eq!(about["ci"], "no_token");
 }
 
 #[tokio::test]

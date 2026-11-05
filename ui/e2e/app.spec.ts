@@ -105,6 +105,9 @@ test('a repository shows its red cases with what was expected and what came', as
   await expect(item).toContainText('3');
   await expect(item).toContainText('Actual');
   await expect(item).toContainText('2');
+  // The findings of the same run: read by their own route, shown below the cases.
+  await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
+  await expect(page.locator('ul.findings > li').filter({ hasText: 'alpha' }).first()).toBeVisible();
   await page.getByRole('button', { name: /All repositories/ }).click();
   await expect(page.getByRole('heading', { name: 'Repositories' })).toBeVisible();
   expect(seen.errors).toEqual([]);
@@ -124,6 +127,9 @@ test('hostile output of a test is shown as text: no markup runs, reordering char
   // No link is made of a text that is not a CI run.
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
   await expect(page.locator('main img, main svg:not([aria-hidden])')).toHaveCount(0);
+  // The findings carry the same output: as text too, and without a link made of it.
+  await expect(page.locator('ul.findings > li').first()).toBeVisible();
+  await expect(page.locator('ul.findings a')).toHaveCount(0);
   // Two cases of one name (one id twice) are both there, and the page did not stop over them.
   await expect(page.locator('ol.cases > li').filter({ hasText: '› twice' })).toHaveCount(2);
   expect(seen.errors).toEqual([]);

@@ -2,7 +2,7 @@
 // a folder of an export answers in the web variant (testing-web), both through `TestingSource`. Only the documents
 // of `testing-export/1` cross it, as the engine wrote them.
 
-import type { Fleet, RepoDoc } from './contract';
+import type { Fleet, FindingsDoc, RepoDoc } from './contract';
 import { ApiError, etagOf, failure, HubClient, textOf } from 'appkit-ui/client';
 
 export { ApiError };
@@ -63,6 +63,12 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
   repo(key: string, signal?: AbortSignal): Promise<RepoDoc> {
     const path = `${this.route('repo')}?key=${encodeURIComponent(key)}`;
     return this.json<RepoDoc>(path, signal ? { signal } : undefined);
+  }
+
+  /** The findings of the last run of one repository (the hub only; an export folder holds none). */
+  finding(key: string, signal?: AbortSignal): Promise<FindingsDoc> {
+    const path = `${this.route('finding')}?key=${encodeURIComponent(key)}`;
+    return this.json<FindingsDoc>(path, signal ? { signal } : undefined);
   }
 
   /** What this build is and which engine answers: only the words the page shows are taken. */

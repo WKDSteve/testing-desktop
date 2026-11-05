@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.json';
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
+import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
 import type { Case, Fleet, RepoDoc, Row } from './contract';
-import { caseTitle, notesOf, redCases, remoteTone, rowsOf, runLink, shown, verdictTone, viewOf } from './model';
+import { caseTitle, findingsOf, notesOf, redCases, remoteTone, rowsOf, runLink, shown, verdictTone, viewOf } from './model';
 
 const fleet = fleetJson as unknown as Fleet;
 const repo = repoJson as unknown as RepoDoc;
@@ -120,5 +121,34 @@ describe('foreign text', () => {
     const red = redCases(repo.cases);
     expect(red.length).toBeGreaterThan(0);
     expect(red.every((c) => !['pass', 'skip', 'xfail'].includes(c.status))).toBe(true);
+  });
+});
+
+describe('the findings', () => {
+  it('reads the findings of the golden document in their order', () => {
+    const list = findingsOf(findingsJson);
+    expect(list.map((f) => f.kind)).toEqual(expect.arrayContaining(['case', 'flaky']));
+    expect(list[0]).toMatchObject({ fp: '0131da64ae656bac', title: 'fail: reads a file', where: { file: 'TESTS/x_spec.lua', line: 12 } });
+  });
+
+  it('leaves out what is no finding, and reads a field of another type as nothing', () => {
+    const list = findingsOf({
+      findings: [null, 'x', [], {}, { fp: 7 }, { fp: 'ok', kind: 5, title: {}, excerpt: null, where: { file: 3, line: 'x' }, run: 'no' }],
+    });
+    expect(list).toEqual([{ fp: 'ok', kind: 'unknown', title: '', excerpt: '', where: null, repro: null, rule: null, run: null }]);
+    expect(findingsOf({})).toEqual([]);
+    expect(findingsOf({ findings: 'x' })).toEqual([]);
+  });
+
+  it('makes a link only of a CI run of GitHub', () => {
+    const good = 'https://github.com/WKDSteve/testing.nvim/actions/runs/123';
+    const [a, b] = findingsOf({
+      findings: [
+        { fp: 'a', run: { source: 'ci', os: 'ubuntu', url: good } },
+        { fp: 'b', run: { source: 'ci', os: null, url: 'javascript:alert(1)' } },
+      ],
+    });
+    expect(a?.run).toEqual({ source: 'ci', os: 'ubuntu', link: good });
+    expect(b?.run).toEqual({ source: 'ci', os: null, link: null });
   });
 });

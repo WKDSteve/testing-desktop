@@ -90,6 +90,49 @@
         <p class="muted">{t('detail.omitted', { n: doc.cases_omitted })}</p>
       {/if}
     {/if}
+
+    <h2>{t('findings.heading')}</h2>
+    {#if app.findingsFailure}
+      <p class="bad" role="status">{t('findings.failed', { message: shown(app.findingsFailure) ?? '' })}</p>
+    {:else if app.findings === null}
+      <p class="muted" role="status">{t('findings.loading')}</p>
+    {:else if app.findings.length === 0}
+      <p class="muted">{t('findings.none')}</p>
+    {:else}
+      <ul class="findings">
+        <!-- By position: the fingerprint is the engine's, and a key twice stops the page. -->
+        {#each app.findings as f, i (i)}
+          <li>
+            <div class="case-head">
+              <span class="tag">{shown(f.kind) ?? ''}</span>
+              <strong>{shown(f.title) ?? ''}</strong>
+              {#if f.where}
+                <span class="muted mono">{shown(f.where.file)}{#if f.where.line !== null}, {t('detail.line', { n: f.where.line })}{/if}</span>
+              {/if}
+            </div>
+            {#if f.excerpt}
+              <pre>{shown(f.excerpt)}</pre>
+            {/if}
+            {#if f.repro}
+              <p class="label">{t('findings.repro')}</p>
+              <pre>{shown(f.repro)}</pre>
+            {/if}
+            {#if f.rule}
+              <p class="label">{t('findings.rule')}: <span class="mono">{shown(f.rule)}</span></p>
+            {/if}
+            {#if f.run}
+              <p class="label">
+                {#if f.run.link}
+                  <a href={f.run.link} target="_blank" rel="noopener noreferrer">{t('findings.run')}: {shown(f.run.source)}{#if f.run.os} ({shown(f.run.os)}){/if}</a>
+                {:else}
+                  {t('findings.run')}: {shown(f.run.source)}{#if f.run.os} ({shown(f.run.os)}){/if}
+                {/if}
+              </p>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
   {/if}
 </section>
 
@@ -135,7 +178,8 @@
     max-height: 20rem;
     overflow: auto;
   }
-  .cases > li {
+  .cases > li,
+  .findings > li {
     margin-bottom: 1rem;
     border-bottom: 1px solid var(--line);
     padding-bottom: 0.75rem;

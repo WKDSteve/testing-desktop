@@ -15,7 +15,7 @@ them. Its web variant, one HTML file opened from disk, is published to
 (`/api/testing/fleet`, `/api/testing/repo?key=...`, `/api/testing/finding?key=...`, with the digest of the document as
 the ETag). The fleet is a snapshot: a watcher of the state folder renews it, one question to the engine per change, and
 `/api/testing/events` tells the page. The page shows the fleet (the last local run and the CI on each system, red first,
-a filter for the red ones and a search) and one repository with its red cases and their output, and follows new results
+a filter for the red ones and a search) and one repository with its red cases, their output and its findings, and follows new results
 by itself. The hub does not ask GitHub for the CI state (the CI columns say "not asked"). The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
 there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 

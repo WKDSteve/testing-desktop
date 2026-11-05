@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.json';
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
+import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
 import { App, EXCHANGE_RETRIES, TOKEN_KEY, type StorageLike } from './app.svelte';
 import type { Fleet, RepoDoc } from './contract';
 import { ApiError, HubSource } from './source';
 
 const FLEET = JSON.stringify(fleetJson);
 const REPO = JSON.stringify(repoJson);
+const FINDINGS = JSON.stringify(findingsJson);
 
 class Memory implements StorageLike {
   map = new Map<string, string>();
@@ -77,6 +79,7 @@ function standard(path: string): Response {
   if (path === '/api/testing/hello') return hello();
   if (path === '/api/testing/fleet') return json(FLEET, 200, { ETag: '"sha256:e4259770b57246bc"' });
   if (path.startsWith('/api/testing/repo?key=')) return json(REPO);
+  if (path.startsWith('/api/testing/finding?key=')) return json(FINDINGS);
   return json('{"error":{"code":"nope","message":"nope"}}', 404);
 }
 
@@ -190,6 +193,62 @@ describe('the stream', () => {
     await app.onMessage(event('fleet'));
     expect(app.repo).toBeNull();
     expect(repoReads(seen).length).toBe(1);
+    app.stop();
+  });
+
+  it('the findings of the open repository are read with it, and again on an event', async () => {
+    const { app, seen } = await started();
+    await app.open('beta.nvim-ac6d3a4ece7f');
+    const asked = () => seen.filter((s) => s.path.startsWith('/api/testing/finding?key='));
+    expect(asked().map((s) => s.path)).toEqual(['/api/testing/finding?key=beta.nvim-ac6d3a4ece7f']);
+    expect(app.findings?.length).toBeGreaterThan(0);
+    expect(app.findingsFailure).toBeNull();
+    await app.onMessage(event('fleet'));
+    expect(asked().length).toBe(2);
+    app.close();
+    expect(app.findings).toBeNull();
+    await app.onMessage(event('fleet'));
+    expect(asked().length).toBe(2);
+    app.stop();
+  });
+
+  it('findings that cannot be read do not take the repository, and a read later keeps what was read', async () => {
+    let fail = true;
+    const { app } = await started((p) => (fail && p.startsWith('/api/testing/finding?key=') ? json('{"error":{"code":"x","message":"x"}}', 500) : standard(p)));
+    await app.open('beta.nvim-ac6d3a4ece7f');
+    expect(app.repo).not.toBeNull();
+    expect(app.repoFailure).toBeNull();
+    expect(app.findings).toBeNull();
+    expect(app.findingsFailure).toContain('x');
+    fail = false;
+    await app.onMessage(event('fleet'));
+    expect(app.findings?.length).toBeGreaterThan(0);
+    expect(app.findingsFailure).toBeNull();
+    fail = true;
+    await app.onMessage(event('fleet'));
+    expect(app.findings?.length).toBeGreaterThan(0);
+    expect(app.findingsFailure).toBeNull();
+    app.stop();
+  });
+
+  it('the findings of a repository opened before are not shown for the one opened last', async () => {
+    let release: (r: Response) => void = () => {};
+    let held = true;
+    const { app } = await started((p) => {
+      if (held && p === '/api/testing/finding?key=old') {
+        held = false;
+        return new Promise<Response>((resolve) => (release = resolve)) as unknown as Response;
+      }
+      return standard(p);
+    });
+    const first = app.open('old');
+    await new Promise((resolve) => setTimeout(resolve));
+    await app.open('new');
+    const fresh = app.findings;
+    release(json(JSON.stringify({ ...(findingsJson as object), findings: [] })));
+    await first;
+    expect(app.findings).toBe(fresh);
+    expect(app.findings?.length).toBeGreaterThan(0);
     app.stop();
   });
 

@@ -133,6 +133,58 @@ export function caseTitle(c: Case): string {
   return markHidden([...c.describe, c.name ?? c.id].join(' › '));
 }
 
+/** One finding of the last run, as the page shows it: every field is text of the engine or `null`, nothing else. */
+export interface Finding {
+  fp: string;
+  kind: string;
+  title: string;
+  excerpt: string;
+  where: { file: string; line: number | null } | null;
+  repro: string | null;
+  rule: string | null;
+  /** The CI run it came from, when there is one; `link` only for a run of GitHub (`runLink`). */
+  run: { source: string; os: string | null; link: string | null } | null;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/**
+ * The findings of a `findings` document. The engine's documents are foreign: a finding that is not an object or has
+ * no `fp` is left out, a field of another type is `null`, and nothing of a finding is ever read as markup or as a link
+ * (except a CI run, by `runLink`).
+ */
+export function findingsOf(doc: { findings?: unknown }): Finding[] {
+  if (!Array.isArray(doc.findings)) return [];
+  const out: Finding[] = [];
+  for (const raw of doc.findings as unknown[]) {
+    const f = record(raw);
+    const fp = f ? text(f['fp']) : null;
+    if (!f || !fp) continue;
+    const where = record(f['where']);
+    const file = where ? text(where['file']) : null;
+    const line = where && typeof where['line'] === 'number' && Number.isFinite(where['line']) ? where['line'] : null;
+    const run = record(f['run']);
+    const source = run ? text(run['source']) : null;
+    out.push({
+      fp,
+      kind: text(f['kind']) ?? 'unknown',
+      title: text(f['title']) ?? '',
+      excerpt: text(f['excerpt']) ?? '',
+      where: file !== null ? { file, line } : null,
+      repro: text(f['repro']),
+      rule: text(f['rule']),
+      run: source !== null && run ? { source, os: text(run['os']), link: runLink(text(run['url'])) } : null,
+    });
+  }
+  return out;
+}
+
 /** The red cases of a repository: those that failed in any way, in the order of the document. */
 export function redCases(cases: readonly Case[]): Case[] {
   return cases.filter((c) => c.status !== 'pass' && c.status !== 'skip' && c.status !== 'xfail');

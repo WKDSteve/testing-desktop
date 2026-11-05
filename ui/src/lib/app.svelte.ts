@@ -6,6 +6,7 @@
 import { StreamSession } from 'appkit-ui/session';
 import type { SseMessage } from 'appkit-ui/sse';
 import type { Fleet, RepoDoc } from './contract';
+import { findingsOf, type Finding } from './model';
 import { ApiError, type HubSource } from './source';
 
 /** Where the session token of the tab is kept: the tab only (`sessionStorage`), never longer. */
@@ -65,6 +66,9 @@ export class App {
   openKey = $state<string | null>(null);
   repo = $state<RepoDoc | null>(null);
   repoFailure = $state<string | null>(null);
+  /** The findings of the open repository (`null` until read); a failure of this read never takes the repository. */
+  findings = $state<Finding[] | null>(null);
+  findingsFailure = $state<string | null>(null);
 
   /** The event stream of the hub (the kit's `StreamSession`). */
   readonly stream = new StreamSession();
@@ -200,6 +204,21 @@ export class App {
       // What was read stays: a failure of this read only replaces a repository the page does not hold yet.
       if (this.repo === null) this.repoFailure = messageOf(error);
     }
+    await this.readFindings(key, abort.signal);
+  }
+
+  /** The findings of the repository `key`, which is open; an answer for another one, or an aborted read, is dropped. */
+  private async readFindings(key: string, signal: AbortSignal): Promise<void> {
+    try {
+      const doc = await this.env.hub.finding(key, signal);
+      if (signal.aborted || this.openKey !== key) return;
+      this.findings = findingsOf(doc);
+      this.findingsFailure = null;
+    } catch (error) {
+      if (signal.aborted || this.openKey !== key) return;
+      // What was read stays, as with the repository.
+      if (this.findings === null) this.findingsFailure = messageOf(error);
+    }
   }
 
   /** Read the fleet again; a read under way is joined, not doubled. */
@@ -236,6 +255,9 @@ export class App {
     this.openKey = key;
     this.repo = null;
     this.repoFailure = null;
+    this.findings = null;
+    this.findingsFailure = null;
+    const findings = this.readFindings(key, abort.signal);
     try {
       const doc = await this.env.hub.repo(key, abort.signal);
       if (abort.signal.aborted || this.openKey !== key) return;
@@ -244,6 +266,7 @@ export class App {
       if (abort.signal.aborted || this.openKey !== key) return;
       this.repoFailure = messageOf(error);
     }
+    await findings;
   }
 
   close(): void {
@@ -251,6 +274,8 @@ export class App {
     this.openKey = null;
     this.repo = null;
     this.repoFailure = null;
+    this.findings = null;
+    this.findingsFailure = null;
   }
 
   private lostSession(): void {

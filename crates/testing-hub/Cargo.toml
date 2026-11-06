@@ -1,6 +1,6 @@
 [package]
 name = "testing-hub"
-version = "0.0.0"
+version = "0.1.0"
 description = "Hub of testing-desktop: the test and CI results of the repositories that use testing.nvim (on appkit)"
 edition.workspace = true
 rust-version.workspace = true

@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "testing-hub"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "appkit-core",
  "appkit-hub",

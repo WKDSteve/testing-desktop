@@ -72,6 +72,8 @@ The first page is the fleet: every repository with its last local run and the CI
 filter for the red ones and a search. A click opens one repository with its red cases and their output. A run in a
 terminal shows by itself a moment after it ends: the hub watches the state folder and tells the page (a change of the CI
 record too; a new commit or a changed `areas.json` shows within the regular scan of 45 seconds). The page also reads
-again when the window gets the focus back. The CI columns say "not asked" for now: the hub does not ask GitHub yet.
+again when the window gets the focus back. The word in a cell ("green", "3 failed", "unknown", "not asked") is explained
+for its repository when the pointer rests on it, for example "The last CI run of images.nvim on ubuntu failed."; a
+screen reader reads the sentence after the word.
 
 More on the security of the server: [SECURITY.md](SECURITY.md). On releases: [RELEASING.md](RELEASING.md).

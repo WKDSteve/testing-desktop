@@ -51,6 +51,22 @@ test('the overview shows the released repositories, red first, and leaves the pr
   // The CI was not asked by this hub: it says so instead of showing a state.
   await expect(page.getByRole('row', { name: /beta\.nvim/ })).toContainText('not asked');
 
+  // The word of a cell is explained for its repository: on hover as a sentence, and to a screen reader after the word.
+  const cell = page.getByRole('row', { name: /alpha\.nvim/ }).getByRole('cell').first();
+  const tip = cell.locator('.tip');
+  const sentence = 'The last local run of alpha.nvim is red: 1 failed (failures, errors, time-outs and crashes).';
+  await expect(tip).toHaveAttribute('data-tip', sentence);
+  await expect(cell).toContainText(sentence);
+  const shownTip = () => tip.evaluate((el) => getComputedStyle(el, '::after').display);
+  expect(await shownTip()).toBe('none');
+  await tip.hover();
+  expect(await shownTip()).toBe('block');
+  await page.getByRole('heading', { name: 'Repositories' }).hover();
+  await expect(page.getByRole('row', { name: /beta\.nvim/ }).locator('.tip').nth(1)).toHaveAttribute(
+    'data-tip',
+    'GitHub was not asked about beta.nvim: no token, or switched off (see Help).',
+  );
+
   // A read of the fleet is one read: nothing asks again by itself.
   const before = seen.fleetReads();
   await page.waitForTimeout(1000);

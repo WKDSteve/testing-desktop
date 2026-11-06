@@ -3,7 +3,8 @@ import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.j
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
 import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
 import type { Case, Fleet, RepoDoc, Row } from './contract';
-import { ageOf, caseTitle, findingsOf, greenPercent, notesOf, redCases, remoteTone, rowsOf, runLink, runTone, shown, verdictTone, viewOf } from './model';
+import { textsOf } from './i18n';
+import { ageOf, caseTitle, ciTip, findingsOf, greenPercent, localTip, notesOf, redCases, remoteTone, rowsOf, runLink, runTone, shown, verdictTone, viewOf } from './model';
 
 const fleet = fleetJson as unknown as Fleet;
 const repo = repoJson as unknown as RepoDoc;
@@ -179,5 +180,58 @@ describe('the age of an export', () => {
     expect(ageOf('2026-11-01T12:00:00Z', NOW)).toEqual({ unit: 'days', n: 4 });
     expect(ageOf('never', NOW)).toBeNull();
     expect(ageOf('2026-11-05T13:00:00Z', NOW)).toBeNull();
+  });
+});
+
+describe('the sentence of a cell', () => {
+  const views = Object.fromEntries(rowsOf(fleet).map((v) => [v.name, v]));
+  const de = textsOf('de');
+  const say = (tip: { key: Parameters<typeof de>[0]; params: Record<string, string | number> }) => de(tip.key, tip.params);
+
+  it('names the repository and the system, and says what the word in the cell means', () => {
+    expect(say(ciTip(views['alpha.nvim']!, 'ubuntu'))).toBe('Der letzte CI-Lauf von alpha.nvim auf ubuntu war grün.');
+    expect(say(ciTip(views['beta.nvim']!, 'windows'))).toBe('Der letzte CI-Lauf von beta.nvim auf windows ist fehlgeschlagen.');
+    expect(say(localTip(views['alpha.nvim']!))).toBe('Der letzte lokale Lauf von alpha.nvim war grün.');
+    expect(say(localTip(views['gamma.nvim']!))).toBe('Auf diesem Rechner ist kein Lauf von gamma.nvim gespeichert.');
+  });
+
+  it('counts the failed cases of a red local run', () => {
+    const tip = localTip(views['beta.nvim']!);
+    expect(tip.key).toBe('tip.local.failed');
+    expect(tip.params['n']).toBe(views['beta.nvim']!.local!.failed);
+    expect(localTip({ ...views['beta.nvim']!, local: { tone: 'red', verdict: 'red', failed: 0, ts: null } }).key).toBe('tip.local.red');
+  });
+
+  it('does not call a part of the suite or an unknown verdict green', () => {
+    const base = views['alpha.nvim']!;
+    expect(localTip(viewOf(row({ local: { ...row({}).local!, verdict: 'green-partial' } }))).key).toBe('tip.local.partial');
+    expect(localTip({ ...base, local: { tone: 'unknown', verdict: 'surprise', failed: 0, ts: null } }).key).toBe('tip.local.unknown');
+  });
+
+  it('explains a system without a job by the state of the repository, else by the missing job', () => {
+    expect(ciTip(views['gamma.nvim']!, 'macos').key).toBe('tip.ci.no_github');
+    expect(ciTip(views['beta.nvim']!, 'macos').key).toBe('tip.ci.no_job');
+  });
+
+  it('says that GitHub was not asked when the row has no CI state at all', () => {
+    expect(ciTip(viewOf(row({ ci_remote: null })), 'ubuntu').key).toBe('tip.ci.not_asked');
+  });
+
+  it('has a sentence for every state of the adapter, and reads a state it does not know as unknown', () => {
+    const base = views['alpha.nvim']!;
+    const states = ['failure', 'rejected', 'cancelled', 'no_runner', 'unknown', 'waiting_runner', 'queued', 'running', 'success', 'skipped', 'no_run', 'no_github'] as const;
+    for (const state of states) {
+      const tip = ciTip({ ...base, ci: { ...base.ci, ubuntu: { tone: remoteTone(state), state, link: null } } }, 'ubuntu');
+      expect(tip.key).toBe(`tip.ci.${state}`);
+      expect(say(tip), state).toContain('alpha.nvim');
+    }
+    const odd = ciTip({ ...base, ci: { ...base.ci, ubuntu: { tone: 'unknown', state: 'surprise' as never, link: null } } }, 'ubuntu');
+    expect(odd.key).toBe('tip.ci.unknown');
+  });
+
+  it('shows hidden characters of a name instead of obeying them', () => {
+    const tip = ciTip(viewOf(row({ name: 'a‮b' })), 'ubuntu');
+    expect(tip.params['repo']).toBe(shown('a‮b'));
+    expect(tip.params['repo']).not.toContain('‮');
   });
 });

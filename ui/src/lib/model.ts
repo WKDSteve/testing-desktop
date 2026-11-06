@@ -4,6 +4,7 @@
 
 import { markHidden } from 'appkit-ui/text';
 import type { Case, Cell, Fleet, RemoteState, Row } from './contract';
+import type { Key } from './i18n';
 
 /** The three systems of the CI, in the order of the columns. */
 export const SYSTEMS = ['ubuntu', 'windows', 'macos'] as const;
@@ -92,6 +93,56 @@ export function viewOf(row: Row): View {
     (remote !== null && RED_STATES.includes(remote.state)) ||
     SYSTEMS.some((s) => ci[s].tone === 'red');
   return { key: row.key, name: row.name, local, ci, run, red };
+}
+
+/** The sentence that explains one cell of the overview: a key of the words and what fills it. */
+export interface Tip {
+  key: Key;
+  params: Record<string, string | number>;
+}
+
+/** What the cell of the local run of a repository means. */
+export function localTip(view: View): Tip {
+  const repo = markHidden(view.name);
+  const local = view.local;
+  if (!local) return { key: 'tip.local.none', params: { repo } };
+  if (local.failed > 0) return { key: 'tip.local.failed', params: { repo, n: local.failed } };
+  if (local.tone === 'green') return { key: 'tip.local.green', params: { repo } };
+  if (local.tone === 'red') return { key: 'tip.local.red', params: { repo } };
+  if (local.verdict === 'green-partial') return { key: 'tip.local.partial', params: { repo } };
+  return { key: 'tip.local.unknown', params: { repo } };
+}
+
+/** The states a sentence exists for; a state the page does not know reads as unknown. */
+const TIP_STATES: readonly RemoteState[] = [
+  'failure',
+  'rejected',
+  'cancelled',
+  'no_runner',
+  'unknown',
+  'waiting_runner',
+  'queued',
+  'running',
+  'success',
+  'skipped',
+  'no_run',
+  'no_github',
+];
+
+/** The states of a whole repository that explain a system without a job of its own. */
+const WHOLE_STATES: readonly RemoteState[] = ['rejected', 'skipped', 'no_run', 'no_github', 'unknown'];
+
+/** What the cell of the CI of a repository on one system means. */
+export function ciTip(view: View, system: System): Tip {
+  const params = { repo: markHidden(view.name), system };
+  if (view.run === null) return { key: 'tip.ci.not_asked', params };
+  const state = view.ci[system].state;
+  if (state === null) {
+    const whole = view.run.state;
+    if (whole !== null && WHOLE_STATES.includes(whole)) return { key: `tip.ci.${whole}`, params };
+    return { key: 'tip.ci.no_job', params };
+  }
+  return { key: TIP_STATES.includes(state) ? `tip.ci.${state}` : 'tip.ci.unknown', params };
 }
 
 /** The rows of the fleet: red first, then by name; with `onlyRed` the red ones only; `query` a part of the name. */

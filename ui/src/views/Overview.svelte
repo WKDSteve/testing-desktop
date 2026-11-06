@@ -2,7 +2,8 @@
   // The fleet: one row per repository, the last local run and the CI on each system; red rows first.
   import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
-  import { notesOf, rowsOf, shown, SYSTEMS, type Tone } from '../lib/model';
+  import { ciTip, localTip, notesOf, rowsOf, shown, SYSTEMS, type Tip as TipWords, type Tone } from '../lib/model';
+  import Tip from './Tip.svelte';
   import ToneView from './Tone.svelte';
 
   let { app, t }: { app: Reader; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
@@ -13,6 +14,10 @@
 
   function toneWord(tone: Tone): string {
     return t(`tone.${tone}` as Key);
+  }
+
+  function tipText(tip: TipWords): string {
+    return t(tip.key, tip.params);
   }
 </script>
 
@@ -62,19 +67,23 @@
               <button type="button" class="link" onclick={() => app.open(row.key)}>{shown(row.name)}</button>
             </th>
             <td>
-              {#if row.local}
-                <ToneView tone={row.local.tone} label={row.local.failed > 0 ? t('local.failed', { n: row.local.failed }) : toneWord(row.local.tone)} />
-              {:else}
-                <span class="muted">{t('local.none')}</span>
-              {/if}
-            </td>
-            {#each SYSTEMS as system (system)}
-              <td>
-                {#if row.run === null}
-                  <span class="muted">{t('ci.not_asked')}</span>
+              <Tip text={tipText(localTip(row))}>
+                {#if row.local}
+                  <ToneView tone={row.local.tone} label={row.local.failed > 0 ? t('local.failed', { n: row.local.failed }) : toneWord(row.local.tone)} />
                 {:else}
-                  <ToneView tone={row.ci[system].tone} label={toneWord(row.ci[system].tone)} link={row.ci[system].link} />
+                  <span class="muted">{t('local.none')}</span>
                 {/if}
+              </Tip>
+            </td>
+            {#each SYSTEMS as system, at (system)}
+              <td>
+                <Tip text={tipText(ciTip(row, system))} end={at > 0}>
+                  {#if row.run === null}
+                    <span class="muted">{t('ci.not_asked')}</span>
+                  {:else}
+                    <ToneView tone={row.ci[system].tone} label={toneWord(row.ci[system].tone)} link={row.ci[system].link} />
+                  {/if}
+                </Tip>
               </td>
             {/each}
           </tr>

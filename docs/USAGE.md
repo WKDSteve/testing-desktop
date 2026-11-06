@@ -76,4 +76,30 @@ again when the window gets the focus back. The word in a cell ("green", "3 faile
 for its repository when the pointer rests on it, for example "The last CI run of images.nvim on ubuntu failed."; a
 screen reader reads the sentence after the word.
 
+### A test sheet step by step
+
+A repository lists its test sheets (the files below its `TESTS/sheets`; see `docs/SHEETS.md` of testing.nvim). **Step
+through** runs one the way a debugger runs a program: the hub starts testing.nvim's `testing sheets step` as a child
+and the page is its client, the same as `:Testing sheet step` in the editor, with the same words. One run at a time per
+hub.
+
+- Left: the steps of the size that runs, each with its state (not yet, next, runs, pass, fail, not run), its number,
+  its action and its note, and a breakpoint dot in front of it. A click on a step chooses it.
+- Right: the tile of the chosen step (else of the last one that did something): what it does, how long it took, the
+  reason of a failure, for a Neovim sheet the screen of the child editor as text, for a browser or desktop sheet the
+  picture of the target after the step.
+- The buttons, and the same keys as in the editor: **Next** (`n`) runs this step; **Continue** (`c`) runs on to the
+  next breakpoint, a failed step or the end; **Until here** (`u`) runs on to the chosen step; **Breakpoint** (`b`)
+  sets or removes one on the chosen step, in every size; **Abort** (`a`) ends the run.
+- A question of the sheet (`ask`) stops the run and shows the question with **Yes** (`y`), **No** and a note; a no
+  fails the step with the note as its reason.
+- The last line says where the run stands: paused before a step, a failed step, the question, or `finished: pass`.
+  A run that went through without an abort counts as a verdict, as the line under it says.
+
+A failed step pauses so you can look at it; a browser sheet opens its window beside the page. The run writes no state
+and no snapshot. What testing.nvim refuses (the workstation rule, a root that is not trusted), the page shows with the
+reason: trust comes from `TESTING_TRUST_ROOTS` of the hub's environment, as in a terminal. Leaving the page (the menu
+**View › All repositories**) does not end the run; **View › Step by step** comes back to it, and the hub's own stop
+ends it.
+
 More on the security of the server: [SECURITY.md](SECURITY.md). On releases: [RELEASING.md](RELEASING.md).

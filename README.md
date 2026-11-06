@@ -15,15 +15,17 @@ them. Its web variant, one HTML file opened from disk, is published to
 (`/api/testing/fleet`, `/api/testing/repo?key=...`, `/api/testing/finding?key=...`, with the digest of the document as
 the ETag). The fleet is a snapshot: a watcher of the state folder renews it, one question to the engine per change, and
 `/api/testing/events` tells the page. The page shows the fleet (the last local run and the CI on each system, red first,
-a filter for the red ones and a search) and one repository with its red cases, their output, its findings and the history of its runs, and follows new results
-by itself. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
+a filter for the red ones and a search) and one repository with its red cases, their output, its findings, the history of its runs and its test sheets, and follows new results
+by itself. A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
 there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 
 ## Principles
 
 - **The engine is the only source.** testing.nvim writes every result. The app reads its versioned documents
   (`testing-export/1`) and never parses a state file of its own.
-- **Read only.** The hub starts no test run in this phase and writes into no repository.
+- **Read only, with one exception.** The hub starts no test run of its own and writes into no repository. What a
+  session may start is a stepped run of a test sheet (testing.nvim's `testing sheets step`), in a repository of the
+  fleet, under testing.nvim's own gates; it writes no state.
 - **Loopback only, token always.** Host and Origin are checked, there is no data endpoint without a session.
 - **Data classes fail closed.** The hub reads the export form of the engine: no absolute path, and only the
   repositories the data classes of the device release.
@@ -38,7 +40,8 @@ there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [do
 | ui-read | the read-only interface: overview, filter "red", detail with the red cases, link to the CI run |
 | release | CI, the rolling build, releases and the install scripts |
 | web | the same interface as `testing.html` for `file://`, reading an export folder: built (`pnpm web:build`), not published yet |
-| later | history of runs, starting a run through the engine, a panel in the central hub |
+| sheets | a test sheet step by step from the page (`/api/testing/sheet-step`): the engine's `testing sheets step` as a child of the hub, its events on the stream, the page as its client (the same as the panel in the editor) |
+| later | starting a run through the engine, a panel in the central hub, the stepped run in testing-web over the event stream, an explanation per step (`ai`) |
 
 The planning notes live outside this repository, in the maintainer's task vault.
 

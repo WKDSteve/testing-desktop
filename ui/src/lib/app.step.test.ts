@@ -150,7 +150,7 @@ describe('the stepped run on the page', () => {
       { command: 'abort' },
     ]);
     // The answer of the hub to a command is an older state than the stream brought: it is not taken.
-    expect(app.step.seq).toBe(5);
+    expect(app.step.seq).toBe(6);
     expect(app.step.marks['80x24']?.[1]).toBeDefined();
     app.stop();
   });

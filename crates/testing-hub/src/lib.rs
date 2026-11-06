@@ -1,6 +1,8 @@
 //! The hub of testing-desktop, on `appkit-hub`: its names, its settings, the engine seam to
 //! testing.nvim (`testing-export/1`, read only) and the routes a session reads (`fleet`, `repo`,
 //! `finding`, `events`, `about`). The fleet is a snapshot that a watcher of the state folder renews.
+//! The one thing a session may start is a stepped run of a test sheet (`sheet-step`, `sheetstep`):
+//! the engine's `testing sheets step` as a child of the hub, in a repository of the fleet.
 //! The commands of the program (`serve`, `start`, `stop`, `open`, `autostart`, `install`,
 //! `uninstall`) are in `app` and `background`.
 
@@ -22,6 +24,8 @@ pub mod places;
 mod routes;
 mod runtime;
 pub mod settings;
+pub mod sheetstep;
+mod stepping;
 pub mod store;
 pub mod ui;
 pub mod watch;
@@ -99,6 +103,9 @@ pub struct Start {
     /// The state folder to watch for new results, with the timings of the scan. `None`: nothing is
     /// watched, the snapshot of the fleet changes when it is too old (`limits.snapshot_max_age`).
     pub watch: Option<Watch>,
+    /// How a stepped run of a test sheet is started (`testing sheets step` as a child); `None`: the page
+    /// cannot start one.
+    pub step: Option<sheetstep::StepProgram>,
     /// The files of the page; [`ui::UiFiles::none`] serves the placeholder page of the core.
     pub ui: ui::UiFiles,
 }
@@ -121,7 +128,8 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
             app: IDENTITY.app,
             version: version(),
             build_id: BUILD,
-            // Nothing writes: no route has the limit of the writes.
+            // The two POST routes of a stepped run (`sheet-step/start`, `sheet-step/command`) have the strict
+            // limit of a mutation; no route needs the coarse one of a write that only its body tells from a dry run.
             guard_rules: GuardRules::new(IDENTITY.route("hello"), []),
             ui: Arc::new(s.ui),
             runtime: TestingRuntime::reading(
@@ -132,6 +140,7 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
                     origins: s.origins,
                     max_age,
                     watch: s.watch,
+                    step: s.step,
                 },
             ),
             // There is one repositories root and no list to choose from, so this is never called.

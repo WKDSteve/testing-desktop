@@ -296,6 +296,7 @@ async fn the_hub_serves_the_fleet_of_the_real_engine() {
         ask: fx.ask(),
         origins: Origins::default(),
         watch: None,
+        step: None,
         ui: testing_hub::ui::UiFiles::none(),
     })
     .await
@@ -376,6 +377,7 @@ async fn a_real_run_is_seen_by_the_watcher_and_its_findings_are_one_document() {
             state_dir: fx.dir.join("state"),
             refresh: RefreshOptions::default(),
         }),
+        step: None,
         ui: testing_hub::ui::UiFiles::none(),
     })
     .await
@@ -442,4 +444,275 @@ async fn a_real_run_is_seen_by_the_watcher_and_its_findings_are_one_document() {
 
 fn route_of(name: &str) -> String {
     testing_hub::IDENTITY.route(name)
+}
+
+/// The sheet of the fixture's `alpha.nvim`: two steps in the child editor, the second looks at what the first set.
+const SMOKE_SHEET: &str = r#"return {
+  id = "alpha.smoke",
+  title = "alpha smoke",
+  engine = "rpc",
+  steps = {
+    { lua = "vim.g.alpha_smoke = 1", note = "set the value" },
+    { expect = "vim.g.alpha_smoke == 1", note = "the value holds" },
+  },
+}
+"#;
+
+/// The tests of a stepped run, one at a time: each starts a hub, the engine, `sheets step` and its child editor,
+/// and three at once beside the other tests of this file are more Neovims than a loaded machine answers in time.
+static STEPPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// The hub with the real engine and its `testing sheets step`, started with this environment: the trust of the
+/// root (or none) goes to the child as from a terminal.
+async fn hub_stepping(fx: &Fixture, trust: bool) -> Option<(appkit_hub::RunningServer, String)> {
+    let repo = fx.root().join("alpha.nvim");
+    std::fs::create_dir_all(repo.join("TESTS").join("sheets")).unwrap();
+    std::fs::write(
+        repo.join("TESTS").join("minimal_init.lua"),
+        "-- the child editor of the sheets\n",
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("TESTS").join("sheets").join("smoke.sheet.lua"),
+        SMOKE_SHEET,
+    )
+    .unwrap();
+    let mut pairs: Vec<(String, String)> = std::env::vars()
+        .filter(|(k, _)| k != "TESTING_TRUST_ROOTS" && k != "TESTING_TRUST" && k != "CI")
+        .collect();
+    if trust {
+        pairs.push((
+            "TESTING_TRUST_ROOTS".to_owned(),
+            fx.root().display().to_string(),
+        ));
+    }
+    let env = Env::from_pairs(pairs);
+    let file = FileConfig::<TestingSettings> {
+        vault: Some(fx.root()),
+        ..FileConfig::default()
+    };
+    engine_or_skip(&fx.root()).await?;
+    let setup = discover(&DISCOVERY, &file, AppInputs::default(), &env)
+        .await
+        .expect("the engine was found a moment ago");
+    let step = testing_hub::sheetstep::StepProgram::from_setup(&setup, &env);
+    let engine = CliEngine::new(cli_config(&setup, env));
+    let info = probe(&engine).await.expect("hello");
+    let control = Secret::generate(TOKEN_BYTES).unwrap();
+    let server = testing_hub::start(testing_hub::Start {
+        addr: "127.0.0.1:0".parse().unwrap(),
+        limits: Limits::default(),
+        clock: Arc::new(ManualClock::new()),
+        pairing_ttl: Duration::from_secs(60),
+        control_secret: control.clone(),
+        instance: Secret::generate(CODE_BYTES).unwrap(),
+        status: appkit_hub::HubStatus {
+            engine_ready: true,
+            problem: None,
+            capabilities: info.capabilities,
+        },
+        engine: Some(Arc::new(engine) as Arc<dyn Engine>),
+        ask: fx.ask(),
+        origins: Origins::default(),
+        watch: None,
+        step: Some(step),
+        ui: testing_hub::ui::UiFiles::none(),
+    })
+    .await
+    .expect("the hub starts");
+    let token = session(&server, &control).await;
+    Some((server, token))
+}
+
+/// The key of alpha.nvim in the fleet of the real engine.
+async fn alpha_key(server: &appkit_hub::RunningServer, token: &str) -> String {
+    let fleet = get(server, &route_of("fleet"), Some(token)).await.json();
+    fleet["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == "alpha.nvim")
+        .and_then(|r| r["key"].as_str())
+        .unwrap()
+        .to_owned()
+}
+
+/// The state of the run once `running` is false, within a patience.
+async fn run_ended(server: &appkit_hub::RunningServer, token: &str) -> Value {
+    let end = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let state = get(server, &route_of("sheet-step"), Some(token))
+            .await
+            .json();
+        if state["running"] == false {
+            return state;
+        }
+        assert!(
+            std::time::Instant::now() < end,
+            "the run did not end: {state}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// A real sheet of a repository of the fixture, run step by step through the hub by the real `testing sheets step`:
+/// the child editor runs unseen, the page gets its steps, its screen as text and the green end.
+#[tokio::test]
+async fn a_real_sheet_runs_step_by_step_through_the_hub() {
+    let fx = Fixture::new();
+    let _one_at_a_time = STEPPING.lock().await;
+    let Some((server, token)) = hub_stepping(&fx, true).await else {
+        return;
+    };
+    let key = alpha_key(&server, &token).await;
+    let listed = get(
+        &server,
+        &format!("{}?key={key}", route_of("sheet-step/sheets")),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(listed.status, 200, "{listed:?}");
+    assert_eq!(listed.json()["sheets"], serde_json::json!(["smoke"]));
+
+    let started = common::post(
+        &server,
+        &route_of("sheet-step/start"),
+        Some(&token),
+        &serde_json::json!({ "key": key, "sheet": "smoke" }).to_string(),
+    )
+    .await;
+    assert_eq!(started.status, 200, "{started:?}");
+    let state = started.json();
+    assert_eq!(state["running"], true, "{state}");
+    assert_eq!(state["events"][0]["event"], "start", "{state}");
+    assert_eq!(state["events"][0]["id"], "alpha.smoke");
+    assert!(state["events"][0].get("root").is_none(), "{state}");
+    let shown = fx.dir.display().to_string();
+    assert!(
+        !started.body.contains(&shown) && !started.body.contains(&shown.replace('\\', "/")),
+        "a path of the fixture reached the page: {}",
+        started.body
+    );
+
+    for command in ["next", "continue"] {
+        // Paused before the step: the command goes through.
+        let end = std::time::Instant::now() + Duration::from_secs(60);
+        loop {
+            let state = get(&server, &route_of("sheet-step"), Some(&token))
+                .await
+                .json();
+            let last = state["events"].as_array().unwrap().last().cloned();
+            if last.is_some_and(|e| e["event"] == "paused") {
+                break;
+            }
+            assert!(std::time::Instant::now() < end, "{state}");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let r = common::post(
+            &server,
+            &route_of("sheet-step/command"),
+            Some(&token),
+            &serde_json::json!({ "command": command }).to_string(),
+        )
+        .await;
+        assert_eq!(r.status, 200, "{r:?}");
+    }
+    let state = run_ended(&server, &token).await;
+    let events = state["events"].as_array().unwrap();
+    let last = events.last().unwrap();
+    assert_eq!(last["event"], "end", "{state}");
+    assert_eq!(last["status"], "pass", "{state}");
+    assert_eq!(last["verdict"], true);
+    let step1 = events
+        .iter()
+        .find(|e| e["event"] == "step-after" && e["n"] == 1)
+        .unwrap();
+    assert_eq!(step1["status"], "pass", "{step1}");
+    assert!(
+        step1["screen"].is_array(),
+        "an rpc sheet leaves its screen as text: {step1}"
+    );
+    server.shutdown().await;
+}
+
+/// The trust gate of testing.nvim holds for a run from the page: a root that is not trusted is refused by the engine
+/// before anything runs, and the page gets the reason, without the path.
+#[tokio::test]
+async fn a_run_in_a_root_that_is_not_trusted_is_refused_by_the_engine() {
+    let fx = Fixture::new();
+    let _one_at_a_time = STEPPING.lock().await;
+    let Some((server, token)) = hub_stepping(&fx, false).await else {
+        return;
+    };
+    let key = alpha_key(&server, &token).await;
+    let r = common::post(
+        &server,
+        &route_of("sheet-step/start"),
+        Some(&token),
+        &serde_json::json!({ "key": key, "sheet": "smoke" }).to_string(),
+    )
+    .await;
+    assert_eq!(r.status, 422, "{r:?}");
+    assert_eq!(r.json()["error"]["code"], "refused");
+    assert_eq!(r.json()["error"]["exit"], 2);
+    let message = r.json()["error"]["message"].as_str().unwrap().to_owned();
+    assert!(message.contains("trust"), "{message}");
+    let shown = fx.dir.display().to_string();
+    assert!(
+        !message.contains(&shown) && !message.contains(&shown.replace('\\', "/")),
+        "{message}"
+    );
+    server.shutdown().await;
+}
+
+/// `abort` from the page reaches the real engine as its own command: the child takes its editor down and says
+/// `end` (aborted) by itself, within the grace, so that nothing has to be killed.
+#[tokio::test]
+async fn an_abort_from_the_page_ends_the_real_engine_with_its_own_end() {
+    let fx = Fixture::new();
+    let _one_at_a_time = STEPPING.lock().await;
+    let Some((server, token)) = hub_stepping(&fx, true).await else {
+        return;
+    };
+    let key = alpha_key(&server, &token).await;
+    let started = common::post(
+        &server,
+        &route_of("sheet-step/start"),
+        Some(&token),
+        &serde_json::json!({ "key": key, "sheet": "smoke" }).to_string(),
+    )
+    .await;
+    assert_eq!(started.status, 200, "{started:?}");
+    // Paused before the first step.
+    let end = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let state = get(&server, &route_of("sheet-step"), Some(&token))
+            .await
+            .json();
+        let last = state["events"].as_array().unwrap().last().cloned();
+        if last.is_some_and(|e| e["event"] == "paused") {
+            break;
+        }
+        assert!(std::time::Instant::now() < end, "{state}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let r = common::post(
+        &server,
+        &route_of("sheet-step/command"),
+        Some(&token),
+        &serde_json::json!({ "command": "abort" }).to_string(),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{r:?}");
+    let since = std::time::Instant::now();
+    let state = run_ended(&server, &token).await;
+    let last = state["events"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(last["event"], "end", "{state}");
+    assert_eq!(last["status"], "aborted", "{state}");
+    assert!(
+        since.elapsed() < testing_hub::sheetstep::GRACE,
+        "the child ended by itself, not by the kill: {:?}",
+        since.elapsed()
+    );
+    server.shutdown().await;
 }

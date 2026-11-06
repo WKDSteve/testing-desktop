@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 use crate::engine::{Ask, Engine};
 use crate::github::CiState;
 use crate::settings::Origin;
+use crate::sheetstep::{SheetStep, StepProgram};
 use crate::store::{self, RefreshOptions, SnapshotStore, StoreOptions, SHAPE};
 use crate::watch::{self, Hint, Watcher};
 
@@ -29,6 +30,8 @@ pub struct TestingRuntime {
     pub(crate) store: Arc<SnapshotStore>,
     /// The event streams that are open, by session token.
     pub(crate) streams: Arc<StreamCounter>,
+    /// The one stepped run of a test sheet, and what the page may ask of it.
+    pub(crate) sheet_step: Arc<SheetStep>,
     /// The refresher; ended when the hub stops.
     jobs: Mutex<Vec<JoinHandle<()>>>,
     // Kept alive: the refresher ends when every sender of hints is gone.
@@ -107,6 +110,8 @@ pub struct Reading {
     pub max_age: Option<Duration>,
     /// `None`: nothing is watched, the snapshot changes when it is too old.
     pub watch: Option<Watch>,
+    /// How a stepped run of a sheet is started; `None`: the page cannot start one.
+    pub step: Option<StepProgram>,
 }
 
 impl TestingRuntime {
@@ -121,6 +126,7 @@ impl TestingRuntime {
                 origins: Origins::default(),
                 max_age: None,
                 watch: None,
+                step: None,
             },
         )
     }
@@ -135,6 +141,7 @@ impl TestingRuntime {
             origins,
             max_age,
             watch,
+            step,
         } = reading;
         let store = SnapshotStore::with_params(
             engine.clone(),
@@ -165,6 +172,8 @@ impl TestingRuntime {
             ));
             hints = Some(tx);
         }
+        // Only with an engine: the program of a run is the engine's own.
+        let sheet_step = Arc::new(SheetStep::new(step.filter(|_| engine.is_some())));
         Self {
             status,
             engine,
@@ -172,6 +181,7 @@ impl TestingRuntime {
             origins,
             store,
             streams: Arc::default(),
+            sheet_step,
             jobs: Mutex::new(jobs),
             _hints: hints,
             _watcher: watcher,
@@ -187,6 +197,8 @@ impl Runtime for TestingRuntime {
     }
 
     fn stop(&self) {
+        // A run under way ends with the hub: nothing stays behind.
+        self.sheet_step.stop();
         let mut jobs = self
             .jobs
             .lock()

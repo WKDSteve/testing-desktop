@@ -156,6 +156,20 @@ impl Ask {
         Value::Object(map)
     }
 
+    /// The request of `repo` in the local form, for the hub itself: the document carries the absolute `root`
+    /// of the repository with this key, which a stepped run of a sheet needs and the page never sees. The local
+    /// form asks no data classes and no GitHub.
+    #[must_use]
+    pub fn repo_local(&self, key: &str) -> Value {
+        let mut map = Map::new();
+        map.insert("export".to_owned(), json!(false));
+        if let Some(dir) = &self.state_dir {
+            map.insert("state_dir".to_owned(), json!(dir.display().to_string()));
+        }
+        map.insert("repo".to_owned(), json!(key));
+        Value::Object(map)
+    }
+
     /// The request of `finding` for the repository with this key of `fleet`. Findings have one form
     /// and always ask the data classes, so the engine takes no `export` for them.
     #[must_use]
@@ -321,6 +335,15 @@ mod tests {
             "alpha.nvim-0123456789ab"
         );
         assert_eq!(ask.repo("alpha.nvim-0123456789ab")["export"], true);
+        // The local form, for the hub's own use: the root comes back, no data classes are asked.
+        assert_eq!(
+            ask.repo_local("alpha.nvim-0123456789ab"),
+            json!({
+                "export": false,
+                "state_dir": "/state/nvim",
+                "repo": "alpha.nvim-0123456789ab",
+            })
+        );
         // The engine refuses `export` for findings: they have one form.
         assert_eq!(
             ask.finding("alpha.nvim-0123456789ab"),

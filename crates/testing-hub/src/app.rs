@@ -17,6 +17,7 @@ use serde_json::Value;
 use crate::engine::{cli_config, probe, Ask, CliEngine, Engine, DISCOVERY};
 use crate::github::CiState;
 use crate::settings::TestingSettings;
+use crate::sheetstep::StepProgram;
 use crate::store::RefreshOptions;
 use crate::ui::UiFiles;
 use crate::{client, Origins, Start, Watch, IDENTITY};
@@ -97,6 +98,8 @@ pub struct EngineState {
     pub status: HubStatus,
     /// Only when the engine answered `hello` as this app needs.
     pub engine: Option<Arc<dyn Engine>>,
+    /// How a stepped run of a sheet is started with that engine; with `engine`.
+    pub step: Option<StepProgram>,
     /// A longer text for the terminal of whoever started the hub (it may hold paths; `hello` gets
     /// only the short code of `status`).
     pub note: Option<String>,
@@ -126,6 +129,7 @@ pub async fn engine_state(file: &FileConfig<TestingSettings>, env: &Env) -> Engi
             capabilities: Vec::new(),
         },
         engine: None,
+        step: None,
         note: Some(note),
     };
     let file = with_root_default(file, env);
@@ -143,6 +147,7 @@ pub async fn engine_state(file: &FileConfig<TestingSettings>, env: &Env) -> Engi
                 capabilities: info.capabilities,
             },
             engine: Some(engine as Arc<dyn Engine>),
+            step: Some(StepProgram::from_setup(&setup, env)),
             note: setup
                 .lib_problem
                 .as_ref()
@@ -282,6 +287,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         ask: ask.clone(),
         origins,
         watch: watch.clone(),
+        step: state.step.clone(),
         ui: ui.clone(),
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server

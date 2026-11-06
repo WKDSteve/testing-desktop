@@ -5,6 +5,10 @@
 //!
 //! [`ROUTES`] is the one list of them: the router is built from it and the security matrix reads
 //! its names, so a route cannot be served without the matrix trying it without a session.
+//!
+//! The routes of a stepped run of a sheet (`sheet-step`, in `stepping`) are the two POSTs of this
+//! hub: they start the engine's `testing sheets step` in a repository of the fleet and pass it a
+//! command of a closed list.
 
 use std::sync::Arc;
 
@@ -13,15 +17,14 @@ use axum::extract::{RawQuery, State};
 use axum::http::header::{self, HeaderMap};
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::routing::{get, MethodRouter};
+use axum::routing::{get, post, MethodRouter};
 use axum::Router;
 use serde_json::{json, Value};
 
 use crate::answer::{engine_failure, engine_unavailable};
 use crate::engine::{is_repo_key, Ask, Calls, EngineError, Method, Reply};
-use crate::live;
 use crate::runtime::TestingRuntime;
-use crate::IDENTITY;
+use crate::{live, stepping, IDENTITY};
 
 /// The core of the hub with the runtime of this app.
 pub type Shared = Core<TestingRuntime>;
@@ -36,6 +39,11 @@ pub const ROUTES: &[(&str, MakeRoute)] = &[
     ("finding", || get(finding)),
     ("events", || get(live::events)),
     ("about", || get(about)),
+    ("sheet-step", || get(stepping::state)),
+    ("sheet-step/sheets", || get(stepping::sheets)),
+    ("sheet-step/start", || post(stepping::start)),
+    ("sheet-step/command", || post(stepping::command)),
+    ("sheet-step/image", || get(stepping::image)),
 ];
 
 /// The router of the app, built from [`ROUTES`] and from nothing else. Invariant: this stays a
@@ -259,7 +267,21 @@ mod tests {
             assert!(IDENTITY.route(name).starts_with("/api/testing/"), "{name}");
             assert_eq!(names.iter().filter(|n| *n == name).count(), 1, "{name}");
         }
-        assert_eq!(names, ["fleet", "repo", "finding", "events", "about"]);
+        assert_eq!(
+            names,
+            [
+                "fleet",
+                "repo",
+                "finding",
+                "events",
+                "about",
+                "sheet-step",
+                "sheet-step/sheets",
+                "sheet-step/start",
+                "sheet-step/command",
+                "sheet-step/image",
+            ]
+        );
     }
 
     #[test]

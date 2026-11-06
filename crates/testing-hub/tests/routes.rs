@@ -194,6 +194,7 @@ async fn start_asking(
             ci,
         },
         watch,
+        step: None,
         ui: testing_hub::ui::UiFiles::none(),
     })
     .await

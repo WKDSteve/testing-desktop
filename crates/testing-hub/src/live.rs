@@ -36,6 +36,10 @@ impl Stream for EventStream {
 /// then one `fleet` event per change. An event is a hint: the client reads again. There is no
 /// replay: a client that connects reads the snapshot first. A client that was too slow for the
 /// buffer gets `resync` and reads everything again.
+///
+/// The lines of a stepped run of a sheet come on the same stream, as `sheet-step` events with the
+/// number of the run and of the line (`sheetstep`): a client reads the state of the run first and
+/// takes only the lines after it; after a `resync` it reads the state again.
 pub(crate) async fn events(
     State(st): State<Arc<Shared>>,
     RawQuery(query): RawQuery,
@@ -65,6 +69,7 @@ pub(crate) async fn events(
         return engine_failure(error);
     }
     let (mut changes, seq, rev) = rt.store.subscribe();
+    let mut steps = rt.sheet_step.subscribe();
     let (tx, rx) = mpsc::channel::<Bytes>(16);
     let heartbeat = st.limits.heartbeat;
     let instance = st.instance.clone();
@@ -89,6 +94,14 @@ pub(crate) async fn events(
             let message = tokio::select! {
                 change = changes.recv() => match change {
                     Ok(c) => c.to_sse(SHAPE.event),
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        "event: resync\ndata: {}\n\n".to_owned()
+                    }
+                    Err(broadcast::error::RecvError::Closed) => return,
+                },
+                line = steps.recv() => match line {
+                    Ok(line) => line.to_string(),
+                    // Too slow for the lines of the run: the client reads its state again.
                     Err(broadcast::error::RecvError::Lagged(_)) => {
                         "event: resync\ndata: {}\n\n".to_owned()
                     }

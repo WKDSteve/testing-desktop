@@ -158,9 +158,19 @@ pub async fn engine_state(file: &FileConfig<TestingSettings>, env: &Env) -> Engi
 /// kit holds (a page must not see old results for long).
 const WATCHED_SNAPSHOT_MAX_AGE: Duration = Duration::from_secs(45);
 
+/// What a request may take beyond the call of the engine it waits for: the hub's own work around it.
+const REQUEST_MARGIN: Duration = Duration::from_secs(15);
+
 /// The limits of the hub, with the age of the snapshot that fits how it learns of a change.
+///
+/// A request that finds no snapshot waits for the engine to read the fleet, which takes most of a minute with GitHub
+/// (and up to `ENGINE_TIMEOUT`). The limit of the kit (30 s) is made for an engine that answers in a moment: with it
+/// the first page of a fleet that asks GitHub got "the request took too long" while the engine was still reading.
 fn limits_for(watching: bool) -> Limits {
-    let limits = Limits::default();
+    let limits = Limits {
+        request_timeout: crate::engine::ENGINE_TIMEOUT + REQUEST_MARGIN,
+        ..Limits::default()
+    };
     if watching {
         Limits {
             snapshot_max_age: Some(WATCHED_SNAPSHOT_MAX_AGE),
@@ -504,6 +514,17 @@ mod tests {
             limits_for(false).snapshot_max_age,
             Limits::default().snapshot_max_age
         );
+    }
+
+    /// A request waits for the engine: a limit below the engine's own cuts off the first read of a fleet.
+    #[test]
+    fn a_request_may_take_longer_than_the_call_of_the_engine_it_waits_for() {
+        for watching in [true, false] {
+            assert!(
+                limits_for(watching).request_timeout > crate::engine::ENGINE_TIMEOUT,
+                "watching: {watching}"
+            );
+        }
     }
 
     #[test]

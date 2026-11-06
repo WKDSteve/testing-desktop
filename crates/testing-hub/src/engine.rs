@@ -72,6 +72,13 @@ pub async fn probe(engine: &dyn Engine) -> Result<EngineInfo, ProbeProblem> {
     appkit_hub::engine::probe(engine, &DIALECT).await
 }
 
+/// How long one call of the engine may take. A fleet of fifty repositories asks git about each of them, and GitHub
+/// with a token: this is longer than the limit of the CI adapter (`testing.ci.remote.DEADLINE_MS`, 120 s), which then
+/// answers for the repositories it has no answer for. Shorter, a slow GitHub would cost the local results of the
+/// whole fleet. A request of a page waits for such a call, so the limit of a request is above this one
+/// (`app::limits_for`).
+pub const ENGINE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(150);
+
 /// The configuration of a `CliEngine` for what the setup found.
 #[must_use]
 pub fn cli_config(setup: &Setup, env: Env) -> CliEngineConfig {
@@ -83,10 +90,7 @@ pub fn cli_config(setup: &Setup, env: Env) -> CliEngineConfig {
         lib_dir: setup.lib_dir.as_ref().map(|l| l.value.clone()),
         extra_areas: Vec::new(),
         env,
-        // A fleet of fifty repositories asks git about each of them, and GitHub with a token: this is longer than the
-        // limit of the CI adapter (`testing.ci.remote.DEADLINE_MS`, 120 s), which then answers for the repositories it
-        // has no answer for. Shorter, a slow GitHub would cost the local results of the whole fleet.
-        timeout: std::time::Duration::from_secs(150),
+        timeout: ENGINE_TIMEOUT,
         max_queue: 16,
         // A document of the engine is at most 8 MiB (testing.nvim `testing.export.MAX_DOC_BYTES`).
         max_reply_bytes: 16 * 1024 * 1024,

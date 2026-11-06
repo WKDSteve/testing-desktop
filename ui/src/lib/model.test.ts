@@ -230,8 +230,8 @@ describe('the sentence of a cell', () => {
   });
 
   it('shows hidden characters of a name instead of obeying them', () => {
-    const tip = ciTip(viewOf(row({ name: 'a‮b' })), 'ubuntu');
-    expect(tip.params['repo']).toBe(shown('a‮b'));
-    expect(tip.params['repo']).not.toContain('‮');
+    const tip = ciTip(viewOf(row({ name: 'a\u202eb' })), 'ubuntu');
+    expect(tip.params['repo']).toBe(shown('a\u202eb'));
+    expect(tip.params['repo']).not.toContain('\u202e');
   });
 });

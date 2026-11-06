@@ -28,7 +28,7 @@
     color: var(--text);
     font-weight: 400;
     white-space: normal;
-    box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+    box-shadow: var(--shadow);
     pointer-events: none;
     display: none;
   }

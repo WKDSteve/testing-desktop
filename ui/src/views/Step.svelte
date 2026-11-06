@@ -284,6 +284,22 @@
   .screen {
     white-space: pre;
   }
+  .controls button {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.6rem;
+    font: inherit;
+    cursor: pointer;
+  }
+  .controls button:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  .controls button:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
   .controls {
     display: flex;
     gap: 0.5rem;

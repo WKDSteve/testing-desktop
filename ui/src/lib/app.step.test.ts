@@ -123,10 +123,17 @@ describe('the stepped run on the page', () => {
     expect(app.step.paused).toBe('start');
     expect(app.step.at).toBe(1);
     await app.stepNext();
+    expect(posts.at(-1)?.body).toEqual({ command: 'next' });
+    const asked = posts.length;
     await app.onMessage(line(7, 4, ev('step-before', { size: '80x24', n: 1, total: 2, action: 'keys', value: ':UI<CR>' })));
+    // While the step runs a key sends nothing: the command would wait in the pipe and run the next step unasked.
+    await app.stepNext();
+    await app.stepContinue();
+    expect(posts.length).toBe(asked);
     await app.onMessage(line(7, 5, ev('step-after', { size: '80x24', n: 1, status: 'pass', ms: 3, image: true })));
+    await app.onMessage(line(7, 6, ev('paused', { size: '80x24', n: 2, reason: 'step' })));
     expect(app.step.marks['80x24']?.[1]?.image).toBe(true);
-    app.stepChosen = 2;
+    app.stepChosen = 3;
     await app.stepUntil();
     await app.stepToggleBreak(2);
     expect(app.step.breaks).toEqual([2]);
@@ -136,7 +143,7 @@ describe('the stepped run on the page', () => {
     await app.stepAbort();
     expect(posts.map((p) => p.body)).toEqual([
       { command: 'next' },
-      { command: 'until', n: 2 },
+      { command: 'until', n: 3 },
       { command: 'break', n: 2 },
       { command: 'clear', n: 2 },
       { command: 'continue' },

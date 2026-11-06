@@ -76,6 +76,8 @@ test('a sheet of a repository runs step by step from the page, and its steps sho
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);
   await expectAccessible(page, 'stepped run');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expectAccessible(page, 'stepped run (dark)');
 });
 
 test('a run can be aborted, and a sheet the engine does not know is refused with its reason', async ({ page }) => {

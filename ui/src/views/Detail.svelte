@@ -238,6 +238,22 @@
     padding: 0;
     margin: 0;
   }
+  .sheets button {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.6rem;
+    font: inherit;
+    cursor: pointer;
+  }
+  .sheets button:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  .sheets button:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
   .sheets > li {
     display: flex;
     gap: 0.75rem;

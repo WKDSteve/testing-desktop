@@ -250,7 +250,8 @@ export class App extends Reader {
 
   /** Run this step; to a question this is a no. */
   stepNext(): Promise<void> {
-    return this.stepCommand(this.step.question ? { command: 'answer', yes: false } : { command: 'next' });
+    if (this.step.question) return this.stepCommand({ command: 'answer', yes: false });
+    return this.step.paused === null ? Promise.resolve() : this.stepCommand({ command: 'next' });
   }
 
   /** Yes to the question; nothing without one. */
@@ -264,14 +265,16 @@ export class App extends Reader {
     return this.stepCommand(note ? { command: 'answer', yes, text: note } : { command: 'answer', yes });
   }
 
+  /** Run on from a stop; nothing while a step runs or a question waits. */
   stepContinue(): Promise<void> {
+    if (this.step.paused === null || this.step.question) return Promise.resolve();
     return this.stepCommand({ command: 'continue' });
   }
 
   /** Run on up to the chosen step; nothing when it is not a later one. */
   stepUntil(): Promise<void> {
     const n = this.stepChosen;
-    if (n === null || n <= (this.step.at ?? 0)) return Promise.resolve();
+    if (n === null || n <= (this.step.at ?? 0) || this.step.paused === null || this.step.question) return Promise.resolve();
     return this.stepCommand({ command: 'until', n });
   }
 

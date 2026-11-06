@@ -274,8 +274,10 @@ export function fromStream(state: StepState, data: string): StepState {
   const session = num(line['session']);
   const seq = num(line['seq']);
   if (session === null || seq === null) return state;
-  // Another run than the one the page holds: a start the page did not see; it reads the state again (the caller).
-  if (state.session !== null && session !== state.session) return { ...state, session, seq: 0, stale: true } as StepState;
+  // Another run than the one the page holds, or a later line of a run it never read (it came while the run was under
+  // way): it missed the start and reads the state again (the caller).
+  const missed = state.session === null ? seq > 1 : session !== state.session;
+  if (missed) return { ...state, session, seq: 0, stale: true } as StepState;
   if (seq <= state.seq) return state;
   const next = reduce(state, line['event']);
   return { ...next, session, seq, running: next.finished === null && next.exit === null };

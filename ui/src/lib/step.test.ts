@@ -113,6 +113,10 @@ describe('the model of a stepped run', () => {
     expect(fromStream(s, '{not json')).toBe(s);
     const other = fromStream(s, line(5, 1, start));
     expect(isStale(other)).toBe(true);
+    // A page that holds no run: the first line of a run is taken, a later one means it missed the start.
+    expect(isStale(fromStream(emptyStep(), line(5, 1, start)))).toBe(false);
+    expect(fromStream(emptyStep(), line(5, 1, start)).doc).not.toBeNull();
+    expect(isStale(fromStream(emptyStep(), line(5, 7, ev('paused', { size: '80x24', n: 2, reason: 'step' }))))).toBe(true);
     // The end on the stream ends the run.
     s = fromStream(s, line(4, 5, ev('end', { status: 'pass', ok: true, verdict: true, failures: [], snapshots: [], ms: 9 })));
     expect(s.running).toBe(false);

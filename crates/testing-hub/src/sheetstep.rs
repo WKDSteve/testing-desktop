@@ -62,6 +62,10 @@ pub const START_WAIT: Duration = Duration::from_secs(20);
 /// editor, a browser) down first, which takes a second, and a few more on a loaded machine.
 pub const GRACE: Duration = Duration::from_secs(10);
 
+/// How long the last lines of a child that ended are read. A process it left behind (a target that did not go down)
+/// may hold its stdout and stderr for as long as it lives; that does not hold the run.
+const DRAIN: Duration = Duration::from_secs(2);
+
 /// The largest picture that is served.
 pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 
@@ -74,11 +78,18 @@ const MAX_REPLAY: usize = 20_000;
 /// The variables of the person's environment that `sheets step` reads itself and gets beyond the allow-list of
 /// the engine: the trust of roots and the rule of the workstation (the child refuses where a terminal would),
 /// where Neovim keeps the pictures of a run (`stdpath("cache")`), and `SYSTEMDRIVE`, without which Neovim on
-/// Windows takes ten seconds to end the child editor of a sheet (measured: an abort then outlives the grace).
+/// Windows takes ten seconds to end the child editor of a sheet (measured: an abort then outlives the grace). A
+/// browser or desktop sheet finds its driver through the `TESTING_*` and Playwright variables (without them it is a
+/// reported skip that a terminal would not have), and the program a sheet names may be built with `cargo`.
 const PASS_THROUGH: &[&str] = &[
     "TESTING_TRUST_ROOTS",
     "NVIM_MACHINE_ROLE",
     "TESTING_ALLOW_WORKSTATION",
+    "TESTING_PLAYWRIGHT_DIR",
+    "TESTING_DESKTOP_DRIVER",
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
     "SYSTEMDRIVE",
     "LOCALAPPDATA",
     "APPDATA",
@@ -109,11 +120,7 @@ impl StepProgram {
             extra_areas: &setup.extra_areas,
         };
         let mut vars_env = child_env(env, Some(&vars));
-        for name in PASS_THROUGH {
-            if let Some(value) = env.get(name) {
-                vars_env.push((OsString::from(name), value.clone()));
-            }
-        }
+        vars_env.extend(passed_through(env));
         Self {
             program: setup.nvim.value.clone(),
             args: ["--headless", "-u", "NONE", "-i", "NONE", "-n", "-l"]
@@ -305,6 +312,24 @@ struct Replay {
 }
 
 impl Replay {
+    /// A breakpoint set or cleared during the run: the child announces none, and a page that comes later reads the
+    /// breakpoints from `start`.
+    fn set_break(&mut self, n: u64, on: bool) {
+        let Some(breaks) = self
+            .start
+            .as_mut()
+            .and_then(|start| start.get_mut("breaks"))
+            .and_then(Value::as_array_mut)
+        else {
+            return;
+        };
+        breaks.retain(|b| b.as_u64() != Some(n));
+        if on {
+            breaks.push(Value::from(n));
+            breaks.sort_by_key(|b| b.as_u64().unwrap_or(0));
+        }
+    }
+
     fn events(&self) -> Vec<Value> {
         let mut out = Vec::new();
         out.extend(self.start.iter().cloned());
@@ -334,6 +359,8 @@ struct Session {
     replay: Replay,
     pictures: BTreeMap<(String, u64), Pictures>,
     stderr: String,
+    /// Why the hub ended the child, for the page.
+    astray: Option<String>,
 }
 
 /// Why a run did not start.
@@ -494,6 +521,7 @@ impl SheetStep {
                 replay: Replay::default(),
                 pictures: BTreeMap::new(),
                 stderr: String::new(),
+                astray: None,
             });
             drop(guard);
             self.spawn_tasks(id, child, stdin, stdout, stderr, stdin_rx, kill_rx);
@@ -566,7 +594,7 @@ impl SheetStep {
             });
         }
         let me = Arc::clone(self);
-        let reader = tokio::spawn(async move {
+        let mut reader = tokio::spawn(async move {
             let Some(stdout) = stdout else {
                 return;
             };
@@ -591,7 +619,7 @@ impl SheetStep {
             }
         });
         let me = Arc::clone(self);
-        let errs = tokio::spawn(async move {
+        let mut errs = tokio::spawn(async move {
             let Some(mut stderr) = stderr else {
                 return;
             };
@@ -615,8 +643,15 @@ impl SheetStep {
                     None
                 }
             };
-            let _ = reader.await;
-            let _ = errs.await;
+            let drained = tokio::time::timeout(DRAIN, async {
+                let _ = (&mut reader).await;
+                let _ = (&mut errs).await;
+            })
+            .await;
+            if drained.is_err() {
+                reader.abort();
+                errs.abort();
+            }
             me.on_exit(id, code);
         });
     }
@@ -663,7 +698,8 @@ impl SheetStep {
             }
             _ => {}
         }
-        let value = Value::Object(event);
+        let mut value = Value::Object(event);
+        hide_root(&mut value, &s.root);
         s.replay.count += 1;
         if s.replay.count > MAX_REPLAY {
             drop(guard);
@@ -716,6 +752,7 @@ impl SheetStep {
             match guard.as_mut().filter(|s| s.id == id && s.running) {
                 Some(s) => {
                     s.stdin = None;
+                    s.astray = Some(why.to_owned());
                     s.kill.take()
                 }
                 None => None,
@@ -738,7 +775,10 @@ impl SheetStep {
         s.kill = None;
         let mut line = None;
         if s.replay.end.is_none() {
-            let detail = scrub(&s.stderr, &[&s.root]);
+            let detail = s
+                .astray
+                .clone()
+                .unwrap_or_else(|| scrub(&s.stderr, &[&s.root]));
             let value = json!({ "event": "exit", "code": code, "detail": detail });
             s.replay.exit = Some(value.clone());
             s.replay.current = None;
@@ -763,10 +803,15 @@ impl SheetStep {
             self.abort();
             return Ok(());
         }
-        let guard = self.lock();
-        let Some(s) = guard.as_ref().filter(|s| s.running) else {
+        let mut guard = self.lock();
+        let Some(s) = guard.as_mut().filter(|s| s.running) else {
             return Err(CommandError::NotRunning);
         };
+        match command {
+            Command::Break(n) => s.replay.set_break(*n, true),
+            Command::Clear(n) => s.replay.set_break(*n, false),
+            _ => {}
+        }
         if let Some(stdin) = &s.stdin {
             // A writer that is gone is a child that is ending: nothing to say to it.
             let _ = stdin.send(command.line());
@@ -846,6 +891,40 @@ fn take_path(event: &mut Map<String, Value>, field: &str) -> Option<PathBuf> {
     Some(PathBuf::from(text))
 }
 
+/// The variables of [`PASS_THROUGH`] the person's environment holds.
+fn passed_through(env: &Env) -> Vec<(OsString, OsString)> {
+    PASS_THROUGH
+        .iter()
+        .filter_map(|name| env.get(name).map(|v| (OsString::from(name), v.clone())))
+        .collect()
+}
+
+/// `root` in a text becomes `<path>`, in both ways of writing it.
+fn hide_in_text(text: &str, root: &Path) -> String {
+    let shown = root.display().to_string();
+    if shown.len() <= 3 {
+        return text.to_owned();
+    }
+    text.replace(&shown, "<path>")
+        .replace(&shown.replace('\\', "/"), "<path>")
+}
+
+/// `root` becomes `<path>` in every text of a value: the lines of the engine (a failure, a snapshot, a reason) may
+/// name a file of the run in their wording.
+fn hide_root(value: &mut Value, root: &Path) {
+    match value {
+        Value::String(text) => {
+            let hidden = hide_in_text(text, root);
+            if hidden != *text {
+                *text = hidden;
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|item| hide_root(item, root)),
+        Value::Object(map) => map.values_mut().for_each(|item| hide_root(item, root)),
+        _ => {}
+    }
+}
+
 fn sse_line(session: u64, seq: u64, event: &Value) -> Arc<str> {
     let data = json!({ "session": session, "seq": seq, "event": event });
     Arc::from(format!("event: {EVENT}\ndata: {data}\n\n"))
@@ -857,11 +936,7 @@ fn sse_line(session: u64, seq: u64, event: &Value) -> Arc<str> {
 pub fn scrub(text: &str, roots: &[&Path]) -> String {
     let mut out = text.to_owned();
     for root in roots {
-        let shown = root.display().to_string();
-        if shown.len() > 3 {
-            out = out.replace(&shown, "<path>");
-            out = out.replace(&shown.replace('\\', "/"), "<path>");
-        }
+        out = hide_in_text(&out, root);
     }
     let cleaned: String = out
         .chars()
@@ -884,6 +959,51 @@ pub fn scrub(text: &str, roots: &[&Path]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_the_engines_of_a_sheet_read_reaches_the_child_and_nothing_else_does() {
+        let env = Env::from_pairs([
+            ("TESTING_PLAYWRIGHT_DIR", "playwright"),
+            ("TESTING_DESKTOP_DRIVER", "driver"),
+            ("PLAYWRIGHT_BROWSERS_PATH", "browsers"),
+            ("CARGO_HOME", "cargo"),
+            ("RUSTUP_HOME", "rustup"),
+            ("A_SECRET_TOKEN", "secret"),
+        ]);
+        let passed = passed_through(&env);
+        let names: Vec<_> = passed.iter().map(|(k, _)| k.to_str().unwrap()).collect();
+        for name in [
+            "TESTING_PLAYWRIGHT_DIR",
+            "TESTING_DESKTOP_DRIVER",
+            "PLAYWRIGHT_BROWSERS_PATH",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+        ] {
+            assert!(names.contains(&name), "{name} is not passed on");
+        }
+        assert!(!names.contains(&"A_SECRET_TOKEN"));
+    }
+
+    #[test]
+    fn a_folder_of_the_run_is_hidden_inside_every_text_of_an_event() {
+        let root = Path::new("C:\\work\\repo");
+        let mut event = json!({
+            "reason": "no file C:/work/repo/a.txt",
+            "failures": ["C:\\work\\repo\\b.txt differs"],
+            "nested": { "line": "C:/work/repo" },
+            "n": 3,
+        });
+        hide_root(&mut event, root);
+        assert_eq!(
+            event,
+            json!({
+                "reason": "no file <path>/a.txt",
+                "failures": ["<path>\\b.txt differs"],
+                "nested": { "line": "<path>" },
+                "n": 3,
+            })
+        );
+    }
 
     #[test]
     fn a_command_is_one_of_the_list_and_its_line_is_built_here() {
@@ -1017,6 +1137,7 @@ mod tests {
             replay: Replay::default(),
             pictures: BTreeMap::new(),
             stderr: String::new(),
+            astray: None,
         });
         let mut rx = step.subscribe();
         step.on_line(
@@ -1066,6 +1187,7 @@ mod tests {
             replay: Replay::default(),
             pictures: BTreeMap::new(),
             stderr: String::new(),
+            astray: None,
         });
         let lines = [
             r#"{"schema":"testing-sheet-session/1","event":"start","id":"s","steps":[]}"#,

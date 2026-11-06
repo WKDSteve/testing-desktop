@@ -201,7 +201,7 @@ export class App extends Reader {
   private takeStep(doc: unknown): void {
     const next = fromDocument(doc);
     if (next.session === this.step.session && next.seq < this.step.seq) return;
-    // The breakpoints of the page hold for the run they were set in: the hub's document knows only the first ones.
+    // The breakpoints of this page hold while it follows the run; a page that comes later reads them from the hub.
     if (next.session === this.step.session) next.breaks = this.step.breaks;
     this.step = next;
   }

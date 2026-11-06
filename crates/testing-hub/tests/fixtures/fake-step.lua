@@ -10,6 +10,7 @@
 --   hang     stops before the first step and waits for its stdin to close (writes started, ended)
 --   deaf     stops before the first step and never reads its stdin; writes `alive` every 100 ms
 --   chatty   after start, one line longer than the hub takes
+--   orphan   leaves a process behind that holds its stdout and stderr, and ends
 
 -- luacheck: globals vim
 
@@ -114,6 +115,19 @@ elseif sheet == "chatty" then
 	io.stdout:flush()
 	vim.wait(10000)
 	os.exit(0)
+elseif sheet == "orphan" then
+	start(STEPS)
+	-- As a target that outlives its run does: it inherits the pipes of the child and keeps them for a while.
+	local handle = vim.uv.spawn(vim.v.progpath, {
+		args = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "--cmd", "lua vim.wait(25000)", "--cmd", "qa!" },
+		stdio = { nil, 1, 2 },
+		detached = true,
+	})
+	assert(handle, "fake-step: no process to leave behind")
+	handle:unref()
+	emit("end", { status = "pass", ok = true, verdict = true, failures = {}, snapshots = {}, ms = 1 })
+	io.stdout:flush()
+	os.exit(0)
 elseif sheet == "ask" then
 	start({ { n = 1, action = "ask", value = "Does it sound right?" } })
 	emit("step-before", { size = SIZE, n = 1, total = 1, action = "ask", value = "Does it sound right?" })
@@ -206,7 +220,15 @@ elseif sheet == "green" then
 		emit("step-after", after)
 		n = n + 1
 	end
-	emit("end", { status = "pass", ok = true, verdict = true, failures = {}, snapshots = {}, ms = 12 })
+	-- as the engine says it for a `shot` step: a path of this machine in a line of text
+	emit("end", {
+		status = "pass",
+		ok = true,
+		verdict = true,
+		failures = {},
+		snapshots = { "screenshot " .. root .. "/TESTS/sheets/out/fake.80x24.png" },
+		ms = 12,
+	})
 	os.exit(0)
 else
 	io.stderr:write("testing sheets: no sheet " .. sheet .. " in " .. root .. "/TESTS/sheets\n")

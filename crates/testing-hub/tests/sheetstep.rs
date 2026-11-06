@@ -342,12 +342,15 @@ async fn a_run_goes_step_by_step_and_its_lines_come_on_the_stream_without_a_path
             .status,
         200
     );
+    // A page that reads the state now, after a reload, knows the breakpoint.
+    assert_eq!(hub.state().await["events"][0]["breaks"], json!([2]));
     assert_eq!(
         hub.command(json!({ "command": "clear", "n": 2 }))
             .await
             .status,
         200
     );
+    assert_eq!(hub.state().await["events"][0]["breaks"], json!([]));
     assert_eq!(
         hub.command(json!({ "command": "until", "n": 2 }))
             .await
@@ -369,6 +372,16 @@ async fn a_run_goes_step_by_step_and_its_lines_come_on_the_stream_without_a_path
         "{}",
         stream.seen
     );
+    // A path inside a line of the engine is no path on the page either, in the state or on the stream.
+    assert_eq!(
+        state["events"][4]["snapshots"],
+        json!(["screenshot <path>/TESTS/sheets/out/fake.80x24.png"])
+    );
+    let state_text = state.to_string();
+    for shown in [root_text.clone(), root_text.replace('\\', "/")] {
+        assert!(!state_text.contains(&shown), "a path: {state_text}");
+        assert!(!stream.seen.contains(&shown), "a path: {}", stream.seen);
+    }
 
     // The picture of step 1 is served by its step; a step without one, and a request that names a file, are not.
     let image = hub
@@ -613,6 +626,30 @@ async fn a_child_that_writes_a_line_beyond_the_limit_is_ended() {
     assert_eq!(r.status, 200, "{r:?}");
     let state = hub.ended().await;
     assert_eq!(events(&state).last().map(String::as_str), Some("exit"));
+    // The page is told why the run went.
+    let detail = state["events"].as_array().unwrap().last().unwrap()["detail"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(detail.contains("longer than the limit"), "{detail}");
+}
+
+#[tokio::test]
+async fn a_process_the_child_left_behind_does_not_hold_the_run() {
+    let fx = Fixture::new();
+    let Some(program) = program_or_skip() else {
+        return;
+    };
+    let hub = start_hub(&fx, Some(program)).await;
+    let r = hub.start("orphan").await;
+    assert_eq!(r.status, 200, "{r:?}");
+    // The process left behind keeps the pipes for 25 s; the run is over long before that, and the next one can start.
+    let state = hub.ended().await;
+    assert_eq!(events(&state).last().map(String::as_str), Some("end"));
+    let again = hub.start("hang").await;
+    assert_eq!(again.status, 200, "{again:?}");
+    hub.command(json!({ "command": "abort" })).await;
+    hub.ended().await;
 }
 
 #[tokio::test]

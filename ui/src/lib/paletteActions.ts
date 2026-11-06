@@ -18,6 +18,7 @@ export function paletteActions(app: Reader, t: Say): PaletteAction[] {
       app.onlyRed = !app.onlyRed;
     },
   });
+  if (app.hasStep && !app.stepView) out.push({ key: 'go.step', label: t('menu.step'), hint: '', run: () => app.showStep() });
   out.push({ key: 'reload', label: t('menu.reload'), hint: '', run: () => app.reload() });
   return out;
 }

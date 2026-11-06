@@ -32,6 +32,11 @@ export class Reader {
   /** The findings of the open repository (`null` until read); a failure of this read never takes the repository. */
   findings = $state<Finding[] | null>(null);
   findingsFailure = $state<string | null>(null);
+  /** The test sheets of the open repository, by name (`null` until read); only a source with the capability `step`. */
+  sheets = $state<string[] | null>(null);
+  sheetsFailure = $state<string | null>(null);
+  /** The page shows the stepped run instead of the fleet or a repository (the hub only). */
+  stepView = $state(false);
 
   /** What this build and its engine are (the help menu); `null` until read, and when the source does not say. */
   about = $state<About | null>(null);
@@ -46,6 +51,24 @@ export class Reader {
   /** Whether this source has findings at all: without, the views leave them out. */
   get hasFindings(): boolean {
     return this.source.capabilities.findings;
+  }
+
+  /** Whether this source can run a test sheet step by step: without, the views offer none. */
+  get hasStep(): boolean {
+    return this.source.capabilities.step;
+  }
+
+  /** Show the stepped run (`App` has one; a folder has none, so this does nothing). */
+  showStep(): void {}
+
+  /** Leave the stepped run for the fleet or the open repository; the run goes on. */
+  hideStep(): void {
+    this.stepView = false;
+  }
+
+  /** Run a sheet of the open repository step by step (`App`); a folder cannot. */
+  stepSheet(_name: string): Promise<void> {
+    return Promise.resolve();
   }
 
   /** Whether an answer that comes in now still counts. */
@@ -74,6 +97,20 @@ export class Reader {
       if (this.repo === null) this.repoFailure = messageOf(error);
     }
     await this.readFindings(key, abort.signal);
+  }
+
+  /** The sheets of the repository `key`, which is open; an answer for another one, or an aborted read, is dropped. */
+  private async readSheets(key: string, signal: AbortSignal): Promise<void> {
+    if (!this.source.sheets) return;
+    try {
+      const names = await this.source.sheets(key, signal);
+      if (signal.aborted || this.openKey !== key) return;
+      this.sheets = names;
+      this.sheetsFailure = null;
+    } catch (error) {
+      if (signal.aborted || this.openKey !== key) return;
+      if (this.sheets === null) this.sheetsFailure = messageOf(error);
+    }
   }
 
   /** The findings of the repository `key`, which is open; an answer for another one, or an aborted read, is dropped. */
@@ -132,7 +169,10 @@ export class Reader {
     this.repoFailure = null;
     this.findings = null;
     this.findingsFailure = null;
+    this.sheets = null;
+    this.sheetsFailure = null;
     const findings = this.readFindings(key, abort.signal);
+    const sheets = this.readSheets(key, abort.signal);
     try {
       const doc = await this.source.repo(key, abort.signal);
       if (abort.signal.aborted || this.openKey !== key) return;
@@ -142,6 +182,7 @@ export class Reader {
       this.repoFailure = messageOf(error);
     }
     await findings;
+    await sheets;
   }
 
   close(): void {
@@ -151,6 +192,9 @@ export class Reader {
     this.repoFailure = null;
     this.findings = null;
     this.findingsFailure = null;
+    this.sheets = null;
+    this.sheetsFailure = null;
+    this.stepView = false;
   }
 
   openPalette(): void {

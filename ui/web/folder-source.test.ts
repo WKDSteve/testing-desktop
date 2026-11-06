@@ -241,8 +241,8 @@ describe('the source', () => {
     await expect(source.repo('nope.nvim-000000000000')).rejects.toBeInstanceOf(ExportError);
   });
 
-  it('says that it has no session, no engine and no findings', async () => {
-    expect(new FolderSource(await snapshot()).capabilities).toEqual({ session: false, about: false, findings: false });
+  it('says that it has no session, no engine, no findings and no stepped run', async () => {
+    expect(new FolderSource(await snapshot()).capabilities).toEqual({ session: false, about: false, findings: false, step: false });
   });
 });
 

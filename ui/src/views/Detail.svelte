@@ -96,6 +96,26 @@
       <HistoryView history={doc.history} {t} />
     {/if}
 
+    {#if app.hasStep}
+      <h2>{t('step.sheets')}</h2>
+      {#if app.sheetsFailure}
+        <p class="bad" role="status">{t('step.sheets.failed', { message: shown(app.sheetsFailure) ?? '' })}</p>
+      {:else if app.sheets === null}
+        <p class="muted" role="status">{t('step.sheets.loading')}</p>
+      {:else if app.sheets.length === 0}
+        <p class="muted">{t('step.sheets.none')}</p>
+      {:else}
+        <ul class="sheets">
+          {#each app.sheets as name (name)}
+            <li>
+              <span class="mono">{shown(name)}</span>
+              <button type="button" onclick={() => void app.stepSheet(name)}>{t('step.run', { name: shown(name) ?? '' })}</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+
     {#if app.hasFindings}
     <h2>{t('findings.heading')}</h2>
     {#if app.findingsFailure}
@@ -212,5 +232,16 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
+  }
+  .sheets {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .sheets > li {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.25rem 0;
   }
 </style>

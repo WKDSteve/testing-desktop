@@ -15,6 +15,8 @@ export interface Capabilities {
   about: boolean;
   /** It has the findings of a run; an export folder holds none. */
   findings: boolean;
+  /** It can run a test sheet step by step (the hub, with an engine); a folder cannot. */
+  step: boolean;
 }
 
 /** A read of the fleet: a new document, or the one the page holds is still the current one. */
@@ -39,14 +41,22 @@ export interface TestingSource {
   repo(key: string, signal?: AbortSignal): Promise<RepoDoc>;
   /** The findings of the last run of a repository; only with the capability `findings`. */
   finding?(key: string, signal?: AbortSignal): Promise<FindingsDoc>;
+  /** The names of the test sheets of a repository (its `TESTS/sheets`); only with the capability `step`. */
+  sheets?(key: string, signal?: AbortSignal): Promise<string[]>;
 }
+
+/** A command to a stepped run, as the hub takes it (`sheetstep::Command`): a closed list, the hub builds the line. */
+export type StepCommand =
+  | { command: 'next' | 'continue' | 'abort' }
+  | { command: 'until' | 'break' | 'clear'; n: number }
+  | { command: 'answer'; yes: boolean; text?: string };
 
 /** Where the routes of this app live (`IDENTITY.route` of testing-hub). */
 export const API = '/api/testing';
 
 /** The hub of testing-desktop: the transport (token, refusal, pairing, hello) is the kit's. */
 export class HubSource extends HubClient<Fleet> implements TestingSource {
-  readonly capabilities: Capabilities = { session: true, about: true, findings: true };
+  readonly capabilities: Capabilities = { session: true, about: true, findings: true, step: true };
 
   constructor(fetchFn: typeof fetch, base: string = '') {
     super(fetchFn, API, base);
@@ -75,6 +85,36 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
   finding(key: string, signal?: AbortSignal): Promise<FindingsDoc> {
     const path = `${this.route('finding')}?key=${encodeURIComponent(key)}`;
     return this.json<FindingsDoc>(path, signal ? { signal } : undefined);
+  }
+
+  /** The names of the sheets of one repository, nothing of their content. */
+  async sheets(key: string, signal?: AbortSignal): Promise<string[]> {
+    const path = `${this.route('sheet-step/sheets')}?key=${encodeURIComponent(key)}`;
+    const doc = await this.json<Record<string, unknown>>(path, signal ? { signal } : undefined);
+    return Array.isArray(doc['sheets']) ? doc['sheets'].filter((s): s is string => typeof s === 'string') : [];
+  }
+
+  /** Where the stepped run of the hub stands: its state document (`lib/step.ts` folds it). */
+  stepState(): Promise<unknown> {
+    return this.json<unknown>(this.route('sheet-step'));
+  }
+
+  /** Start a stepped run of a sheet of a repository; the state of the run comes back. */
+  stepStart(key: string, sheet: string): Promise<unknown> {
+    return this.postJson<unknown>(this.route('sheet-step/start'), { key, sheet });
+  }
+
+  /** One command of the list to the run. */
+  stepCommand(command: StepCommand): Promise<unknown> {
+    return this.postJson<unknown>(this.route('sheet-step/command'), command);
+  }
+
+  /** The picture of a step of the run (`image`: the target after the step, `shot`: the file of a `shot` step). */
+  async stepImage(size: string, n: number, kind: 'image' | 'shot', signal?: AbortSignal): Promise<Blob> {
+    const path = `${this.route('sheet-step/image')}?size=${encodeURIComponent(size)}&n=${n}&kind=${kind}`;
+    const response = await this.request(path, signal ? { signal } : {});
+    if (!response.ok) throw await failure(response);
+    return response.blob();
   }
 
   /** What this build is and which engine answers: only the words the page shows are taken. */

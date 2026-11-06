@@ -4,8 +4,9 @@
 
 import { StreamSession } from 'appkit-ui/session';
 import type { SseMessage } from 'appkit-ui/sse';
-import { Reader } from './reader.svelte';
-import { ApiError, type HubSource } from './source';
+import { messageOf, Reader } from './reader.svelte';
+import { ApiError, type HubSource, type StepCommand } from './source';
+import { emptyStep, fromDocument, fromStream, isStale, STREAM_EVENT, type StepState } from './step';
 
 export type { Phase } from './reader.svelte';
 
@@ -46,6 +47,13 @@ export class App extends Reader {
   pairRefused = $state(false);
   /** The hub took no more pairing attempts for now; the code was not looked at. */
   pairLimited = $state(false);
+
+  /** The stepped run of a sheet, as the hub holds it (`lib/step.ts`); the stream keeps it current. */
+  step = $state<StepState>(emptyStep());
+  /** Why the last start or command of the run was refused; `null` once one went through. */
+  stepFailure = $state<string | null>(null);
+  /** The step whose tile is shown, chosen in the list; `null`: the last one that did something. */
+  stepChosen = $state<number | null>(null);
 
   /** The event stream of the hub (the kit's `StreamSession`). */
   readonly stream = new StreamSession();
@@ -161,12 +169,23 @@ export class App extends Reader {
 
   /** One event of the stream. Returns when what it asked for is read (the tests wait for it). */
   async onMessage(message: SseMessage): Promise<void> {
+    if (message.event === STREAM_EVENT) {
+      const next = fromStream(this.step, message.data);
+      // A line of a run the page does not hold: its state is read whole.
+      if (isStale(next)) await this.readStep();
+      else this.step = next;
+      return;
+    }
     if (message.event === 'fleet' || message.event === 'resync') {
       // An event of this hub names no repository: it says that the fleet changed.
       await this.readAgain();
+      // Too slow for the lines of a run: its state is read whole.
+      if (message.event === 'resync') await this.readStep();
       return;
     }
     if (message.event === 'hello') {
+      // The stream was down for a while: what a run did meanwhile is in its state.
+      if (this.step.session !== null) await this.readStep();
       // Where the stream stands: another revision than ours came between our read and the stream.
       try {
         const doc = JSON.parse(message.data) as { rev?: unknown };
@@ -176,6 +195,101 @@ export class App extends Reader {
       }
       await this.readAgain();
     }
+  }
+
+  /** The state of the run as the hub holds it; a state older than what the stream brought is not taken. */
+  private takeStep(doc: unknown): void {
+    const next = fromDocument(doc);
+    if (next.session === this.step.session && next.seq < this.step.seq) return;
+    // The breakpoints of the page hold for the run they were set in: the hub's document knows only the first ones.
+    if (next.session === this.step.session) next.breaks = this.step.breaks;
+    this.step = next;
+  }
+
+  /** Read where the run stands. A failure leaves what the page holds. */
+  async readStep(): Promise<void> {
+    try {
+      const doc = await this.env.hub.stepState();
+      if (this.live) this.takeStep(doc);
+    } catch (error) {
+      if (this.live) this.stepFailure = messageOf(error);
+    }
+  }
+
+  override showStep(): void {
+    this.stepView = true;
+    this.paletteOpen = false;
+    if (this.step.session === null) void this.readStep();
+  }
+
+  /** Run a sheet of the open repository step by step: the page shows the run as it starts. */
+  override async stepSheet(name: string): Promise<void> {
+    const key = this.openKey;
+    if (key === null) return;
+    this.stepView = true;
+    this.stepFailure = null;
+    this.stepChosen = null;
+    try {
+      const doc = await this.env.hub.stepStart(key, name);
+      if (this.live) this.takeStep(doc);
+    } catch (error) {
+      if (this.live) this.stepFailure = messageOf(error);
+    }
+  }
+
+  /** One command to the run; what the hub answers is where the run stands now. */
+  async stepCommand(command: StepCommand): Promise<void> {
+    this.stepFailure = null;
+    try {
+      const doc = await this.env.hub.stepCommand(command);
+      if (this.live) this.takeStep(doc);
+    } catch (error) {
+      if (this.live) this.stepFailure = messageOf(error);
+    }
+  }
+
+  /** Run this step; to a question this is a no. */
+  stepNext(): Promise<void> {
+    return this.stepCommand(this.step.question ? { command: 'answer', yes: false } : { command: 'next' });
+  }
+
+  /** Yes to the question; nothing without one. */
+  stepYes(): Promise<void> {
+    return this.step.question ? this.stepCommand({ command: 'answer', yes: true }) : Promise.resolve();
+  }
+
+  /** The answer to the question, with a note. */
+  stepAnswer(yes: boolean, text: string): Promise<void> {
+    const note = text.trim();
+    return this.stepCommand(note ? { command: 'answer', yes, text: note } : { command: 'answer', yes });
+  }
+
+  stepContinue(): Promise<void> {
+    return this.stepCommand({ command: 'continue' });
+  }
+
+  /** Run on up to the chosen step; nothing when it is not a later one. */
+  stepUntil(): Promise<void> {
+    const n = this.stepChosen;
+    if (n === null || n <= (this.step.at ?? 0)) return Promise.resolve();
+    return this.stepCommand({ command: 'until', n });
+  }
+
+  /** A breakpoint on the step, or none: the page keeps it, and the run holds it in every size. */
+  stepToggleBreak(n: number | null = this.stepChosen): Promise<void> {
+    if (n === null) return Promise.resolve();
+    const set = !this.step.breaks.includes(n);
+    this.step = { ...this.step, breaks: set ? [...this.step.breaks, n].sort((a, b) => a - b) : this.step.breaks.filter((b) => b !== n) };
+    return this.stepCommand({ command: set ? 'break' : 'clear', n });
+  }
+
+  stepAbort(): Promise<void> {
+    return this.stepCommand({ command: 'abort' });
+  }
+
+  /** The picture of a step of the run, for the tile. */
+  stepImage(size: string, n: number, kind: 'image' | 'shot', signal?: AbortSignal): Promise<Blob> {
+    return this.env.hub.stepImage(size, n, kind, signal);
   }
 
   private lostSession(): void {
@@ -188,6 +302,8 @@ export class App extends Reader {
     this.about = null;
     this.fleet = null;
     this.etag = null;
+    this.step = emptyStep();
+    this.stepFailure = null;
     this.close();
   }
 }

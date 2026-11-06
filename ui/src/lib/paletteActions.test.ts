@@ -44,10 +44,12 @@ async function started(about: Response | null = null): Promise<App> {
 }
 
 describe('the palette', () => {
-  it('offers the actions of the state: the overview only when a repository is open', async () => {
+  it('offers the actions of the state: the overview only when a repository is open, the stepped run while it is not shown', async () => {
     const app = await started();
-    expect(paletteActions(app, t).map((a) => a.key)).toEqual(['only_red', 'reload']);
+    expect(paletteActions(app, t).map((a) => a.key)).toEqual(['only_red', 'go.step', 'reload']);
     await app.open(app.fleet!.repos[0]!.key);
+    expect(paletteActions(app, t).map((a) => a.key)).toEqual(['go.overview', 'only_red', 'go.step', 'reload']);
+    app.showStep();
     expect(paletteActions(app, t).map((a) => a.key)).toEqual(['go.overview', 'only_red', 'reload']);
     app.stop();
   });

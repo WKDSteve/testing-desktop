@@ -33,6 +33,19 @@ const RLO = String.fromCodePoint(0x202e);
 const PDF = String.fromCodePoint(0x202c);
 export const HOSTILE_MESSAGE = `<img src=x onerror=window.__xss=1> javascript:window.__xss=2 ${RLO}txt.exe${PDF}`;
 
+/** The one test sheet of alpha.nvim: two steps in the child editor, the second looks at what the first set. */
+export const SMOKE_SHEET = [
+  'return {',
+  '  id = "alpha.smoke",',
+  '  title = "alpha smoke",',
+  '  engine = "rpc",',
+  '  steps = {',
+  '    { lua = "vim.g.alpha_smoke = 1", note = "set the value" },',
+  '    { expect = "vim.g.alpha_smoke == 1", note = "the value holds" },',
+  '  },',
+  '}',
+].join('\n');
+
 /** The spec of beta.nvim, green as the tests start with it. */
 export const BETA_SPEC = ['describe("beta", function()', '  it("holds", function()', '    assert.is_true(true)', '  end)', 'end)'].join('\n');
 
@@ -121,6 +134,11 @@ function fill(root: string): { root: string; config: string } {
     writeFileSync(join(dir, '.testing.lua'), 'return {}\n');
     writeRun(root, r.name, r.spec);
   }
+  // A test sheet of alpha.nvim, for the stepped run from the page: an rpc sheet, its child editor unseen.
+  const sheets = join(repos, 'alpha.nvim', 'TESTS', 'sheets');
+  mkdirSync(sheets, { recursive: true });
+  writeFileSync(join(repos, 'alpha.nvim', 'TESTS', 'minimal_init.lua'), '-- the child editor of the sheets of alpha.nvim\n');
+  writeFileSync(join(sheets, 'smoke.sheet.lua'), `${SMOKE_SHEET}\n`);
   const areas: Record<string, { class: string; repo: string }> = {};
   for (const r of REPOS) areas[r.name] = { class: r.class, repo: r.name };
   writeFileSync(join(root, 'areas.json'), JSON.stringify({ schema: 1, areas }));
@@ -135,7 +153,14 @@ function fill(root: string): { root: string; config: string } {
 }
 
 export function env(config: string): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = { ...process.env, TESTING_DESKTOP_CONFIG_DIR: config, TESTING_DESKTOP_PORT: String(port()) };
+  // The repositories of the tests are trusted for a stepped run of a sheet: the hub passes the trust on to
+  // `testing sheets step`, which reads it as from a terminal. The role of the machine is left as it is.
+  const out: NodeJS.ProcessEnv = {
+    ...process.env,
+    TESTING_DESKTOP_CONFIG_DIR: config,
+    TESTING_DESKTOP_PORT: String(port()),
+    TESTING_TRUST_ROOTS: join(dirname(config), 'repos'),
+  };
   // The places of the settings file, not those of whoever runs the tests.
   delete out['TESTING_DESKTOP_STATE_DIR'];
   delete out['TESTING_DESKTOP_AREAS'];

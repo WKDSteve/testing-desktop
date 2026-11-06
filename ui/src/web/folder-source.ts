@@ -178,7 +178,7 @@ export async function signatureOf(chosen: DirHandleLike): Promise<string> {
 }
 
 export class FolderSource implements TestingSource {
-  readonly capabilities: Capabilities = { session: false, about: false, findings: false };
+  readonly capabilities: Capabilities = { session: false, about: false, findings: false, step: false };
   private snapshot: Snapshot;
 
   constructor(snapshot: Snapshot) {

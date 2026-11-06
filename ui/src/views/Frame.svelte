@@ -27,7 +27,8 @@
       id: 'view',
       label: t('menu.view'),
       items: [
-        { kind: 'radio', label: t('menu.overview'), checked: app.openKey === null, onselect: () => app.close() },
+        { kind: 'radio', label: t('menu.overview'), checked: app.openKey === null && !app.stepView, onselect: () => app.close() },
+        ...(app.hasStep ? [{ kind: 'radio' as const, label: t('menu.step'), checked: app.stepView, onselect: () => app.showStep() }] : []),
         { kind: 'check', label: t('fleet.only_red'), checked: app.onlyRed, onselect: () => (app.onlyRed = !app.onlyRed) },
         { kind: 'separator' },
         { kind: 'action', label: t('menu.reload'), onselect: () => void app.reload() },

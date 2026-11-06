@@ -42,16 +42,16 @@ disagree, so a raised appkit tag raises them too.
    - makes the draft with the notes of `.github/release-notes.md` (`{tag}` in them becomes the tag; the
      notes stay on the page when it is published, so they say nothing about being a draft) and adds the
      archive, the stamped install script, the uninstall script and `SHA256SUMS` (`publish`).
-5. **Open the draft on a clean user account.** The files of a draft can
-   be downloaded only by people who may write to the repository (logged in, in the browser), so the
-   script cannot fetch them by itself yet: download the archive, `SHA256SUMS` and
-   `install.ps1` into one folder and run `install.ps1 -File <the archive>` there
-   (the sums are found beside it). Start the hub, run it again (repair), run `uninstall.ps1` with and
-   without `-PurgeSettings`. The download path of the script (no `-File`) is tried after
-   publishing, once, with the line of the notes. A green build is not a program that was tried
-   (`NREL-07`). Do this in a normal terminal of the user, not from an agent session (`WIN-03`). A
-   build machine that runs elevated needs `-AllowElevated` (PowerShell) for the scripts; a user
-   session does not and should not.
+5. **Try the draft, in one command.** `scripts/try-release.ps1 -Tag vX.Y.Z` takes the files of the release
+   (through `gh`, which may read a draft), checks them against `SHA256SUMS`, installs the archive with the
+   `install.ps1` of the release, asks the installed program for its version, starts the hub, asks it for a
+   pairing link and its page, stops it and installs once more (the repair). It prints one line per step and
+   ends with exit 1 when one failed. The release stays installed; `-Uninstall` also tries `uninstall.ps1`
+   (twice: the second run must find nothing to do), `-PurgeSettings` with it removes the settings too. It
+   works on the real installation of the user: a hub that runs is stopped. Do this in a normal terminal of
+   the user, not from an agent session (`WIN-03`): a green build is not a program that was tried (`NREL-07`).
+   A build machine that runs elevated needs `-AllowElevated`; a user session does not and should not. The
+   download path of `install.ps1` (no `-File`) is tried after publishing, once, with the line of the notes.
 6. **Publish the draft** within about a day (`NREL-09`). If the tree moved on, delete the draft and
    the tag and cut again from `main`.
 7. A **published release is never cut again** (`NREL-10`): a mistake is fixed in the next patch

@@ -237,6 +237,15 @@ for (const scheme of ['light', 'dark'] as const) {
       expect(found.map((v) => `${what}: ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
     };
     await axe('way in');
+    // Axe is content with a button that does not react, so the colours are compared here.
+    const choose = page.getByRole('button', { name: 'Choose folder' });
+    const fill = () => choose.evaluate((node) => getComputedStyle(node).backgroundColor);
+    const atRest = await fill();
+    await choose.hover();
+    expect(await fill()).not.toBe(atRest);
+    await axe('way in, the button under the pointer');
+    await choose.focus();
+    await axe('way in, the button under the pointer and with the focus ring');
     await page.getByRole('button', { name: 'Choose folder' }).click();
     await page.getByRole('heading', { name: 'Repositories' }).waitFor();
     await axe('fleet');

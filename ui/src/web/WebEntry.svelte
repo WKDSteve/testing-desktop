@@ -92,6 +92,10 @@
     color: var(--accent-text);
     border-color: var(--accent);
   }
+  button.primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
   .notice {
     color: var(--bad);
     overflow-wrap: anywhere;

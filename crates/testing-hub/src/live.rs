@@ -1,36 +1,19 @@
 //! The route that follows the state folder: the event stream.
 
-use std::convert::Infallible;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
-use appkit_hub::{bearer, error_body, no_query};
-use axum::body::{Body, Bytes};
+use appkit_hub::streams::{sse_response, too_many_streams};
+use appkit_hub::{bearer, no_query};
+use axum::body::Bytes;
 use axum::extract::{RawQuery, State};
-use axum::http::header::{self, HeaderMap, HeaderValue};
-use axum::http::StatusCode;
+use axum::http::header::HeaderMap;
 use axum::response::Response;
-use futures_core::Stream;
 use serde_json::json;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::answer::{engine_failure, engine_unavailable};
 use crate::routes::Shared;
 use crate::store::SHAPE;
-
-/// The body of an event stream: what the task of the connection sends.
-struct EventStream {
-    rx: mpsc::Receiver<Bytes>,
-}
-
-impl Stream for EventStream {
-    type Item = Result<Bytes, Infallible>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.rx.poll_recv(cx).map(|item| item.map(Ok))
-    }
-}
 
 /// `GET /api/testing/events`: server-sent events. A `hello` first (with where the stream stands),
 /// then one `fleet` event per change. An event is a hint: the client reads again. There is no
@@ -58,11 +41,7 @@ pub(crate) async fn events(
         .streams
         .acquire(&token, st.limits.max_streams_per_session)
     else {
-        return error_body(
-            StatusCode::TOO_MANY_REQUESTS,
-            "too_many_streams",
-            "this session has too many open event streams",
-        );
+        return too_many_streams();
     };
     // Start from a known state: the snapshot is held before the stream is.
     if let Err(error) = rt.store.current().await {
@@ -119,10 +98,5 @@ pub(crate) async fn events(
             }
         }
     });
-    let mut response = Response::new(Body::from_stream(EventStream { rx }));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/event-stream; charset=utf-8"),
-    );
-    response
+    sse_response(rx)
 }

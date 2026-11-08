@@ -2,11 +2,11 @@
 //! carries and where its parts came from, the snapshot of the fleet with its live updates, and the
 //! watcher of the state folder.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use appkit_hub::streams::StreamCounter;
 use appkit_hub::{HubStatus, Runtime};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -53,6 +53,52 @@ pub struct Origins {
 pub struct Watch {
     pub state_dir: PathBuf,
     pub refresh: RefreshOptions,
+}
+
+/// The event streams that are open, by session token.
+#[derive(Default)]
+pub(crate) struct StreamCounter {
+    by_token: Mutex<HashMap<String, usize>>,
+}
+
+/// One open stream; the place is given back when it is dropped.
+pub(crate) struct StreamGuard {
+    counter: Arc<StreamCounter>,
+    token: String,
+}
+
+impl StreamCounter {
+    pub(crate) fn acquire(self: &Arc<Self>, token: &str, max: usize) -> Option<StreamGuard> {
+        let mut map = self
+            .by_token
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let open = map.entry(token.to_owned()).or_insert(0);
+        if *open >= max {
+            return None;
+        }
+        *open += 1;
+        Some(StreamGuard {
+            counter: Arc::clone(self),
+            token: token.to_owned(),
+        })
+    }
+}
+
+impl Drop for StreamGuard {
+    fn drop(&mut self) {
+        let mut map = self
+            .counter
+            .by_token
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(open) = map.get_mut(&self.token) {
+            *open = open.saturating_sub(1);
+            if *open == 0 {
+                map.remove(&self.token);
+            }
+        }
+    }
 }
 
 /// What the runtime is started with for the engine.

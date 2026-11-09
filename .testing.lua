@@ -8,10 +8,9 @@ return {
     browser = { playwright_dir = "ui", channel = "chrome" },
     apps = {
       -- The web variant, the single file ui/dist-web/testing.html, built fresh for the run (no server, no hub). The
-      -- "app" only says where the file is, as a file: link, and waits until the sheet is done. pnpm.cmd: an argv starts
-      -- no shell, and on Windows pnpm is that shim.
+      -- "app" only says where the file is, as a file: link, and waits until the sheet is done.
       ["web"] = {
-        build = { "pnpm.cmd", "--dir", "ui", "web:build" },
+        build = { "pnpm", "--dir", "ui", "web:build" },
         run = {
           "node",
           "-e",

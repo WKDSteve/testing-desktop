@@ -26,3 +26,6 @@ __pycache__/
 ui/test-results/
 ui/test-results-web/
 ui/playwright-report/
+
+# What a test sheet leaves to look at
+TESTS/sheets/out/

@@ -87,6 +87,8 @@ export interface StepState {
   question: { size: string; n: number; text: string } | null;
   /** What each step of each size did. */
   marks: Record<string, Record<number, Mark>>;
+  /** The notes taken in the run (`note`), per size and step, in order. */
+  notes: Record<string, Record<number, string[]>>;
   /** The breakpoints, the page's own, as the panel keeps them (the run holds them too). */
   breaks: number[];
   finished: Finished | null;
@@ -114,6 +116,7 @@ export function emptyStep(): StepState {
     paused: null,
     question: null,
     marks: {},
+    notes: {},
     breaks: [],
     finished: null,
     exit: null,
@@ -216,6 +219,15 @@ export function reduce(state: StepState, event: unknown): StepState {
       const marks = { ...state.marks, [size]: { ...(state.marks[size] ?? {}), [n]: markOf(e) } };
       return { ...state, marks, stepping: false, question: null };
     }
+    case 'note': {
+      const size = str(e['size']) ?? state.size ?? '';
+      const n = num(e['n']);
+      const text = str(e['text']);
+      if (n === null || text === null) return state;
+      const bySize = state.notes[size] ?? {};
+      const notes = { ...state.notes, [size]: { ...bySize, [n]: [...(bySize[n] ?? []), text] } };
+      return { ...state, notes };
+    }
     case 'error':
       return { ...state, error: str(e['message']) ?? '' };
     case 'task':
@@ -304,6 +316,11 @@ export function statusOf(state: StepState, n: number): StepStatus {
 /** The marks of the size that runs or ran last. */
 export function marksOf(state: StepState): Record<number, Mark> {
   return state.size ? (state.marks[state.size] ?? {}) : {};
+}
+
+/** The notes of a step in the size that runs or ran last. */
+export function notesOf(state: StepState, n: number): string[] {
+  return state.size ? (state.notes[state.size]?.[n] ?? []) : [];
 }
 
 /** The step whose tile is shown: the one chosen, else the last one that did something, else the one that runs next. */

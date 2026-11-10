@@ -6,7 +6,7 @@
   import type { App } from '../lib/app.svelte';
   import type { Key } from '../lib/i18n';
   import { shown } from '../lib/model';
-  import { marksOf, oneLine, screenRows, statusLine, statusOf, tileStep, type StepStatus } from '../lib/step';
+  import { marksOf, notesOf, oneLine, screenRows, statusLine, statusOf, tileStep, type StepStatus } from '../lib/step';
   import Picture from './Picture.svelte';
 
   let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
@@ -158,6 +158,9 @@
           <h2>{t('step.tile', { n: tileStepDoc.n, action: shown(tileStepDoc.action) ?? '' })}</h2>
           <p class="mono value">{oneLine(tileStepDoc.value, 300)}</p>
           {#if tileStepDoc.note}<p class="muted">{oneLine(tileStepDoc.note, 300)}</p>{/if}
+          {#each notesOf(run, tileStepDoc.n) as note, i (i)}
+            <p>{t('step.note', { text: oneLine(note, 400) })}</p>
+          {/each}
           {#if tileMark}
             <p>
               <span class={tileMark.status}>{stateWord(tileMark.status)}</span>

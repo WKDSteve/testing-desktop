@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyStep, fromDocument, fromStream, isStale, oneLine, reduce, screenRows, statusLine, statusOf, tileStep } from './step';
+import { emptyStep, fromDocument, fromStream, isStale, notesOf, oneLine, reduce, screenRows, statusLine, statusOf, tileStep } from './step';
 
 const SCHEMA = 'testing-sheet-session/1';
 const ev = (event: string, fields: Record<string, unknown> = {}) => ({ schema: SCHEMA, event, ...fields });
@@ -64,6 +64,17 @@ describe('the model of a stepped run', () => {
     s = reduce(s, ev('step-after', { size: '80x24', n: 3, status: 'fail', ms: 1, reason: 'too small' }));
     expect(s.question).toBeNull();
     expect(s.marks['80x24']?.[3]?.reason).toBe('too small');
+  });
+
+  it('keeps the notes of a run per step, in order, as the panel does', () => {
+    let s = reduce(emptyStep(), start);
+    s = reduce(s, ev('size', { size: '80x24', state: 'open' }));
+    s = reduce(s, ev('note', { size: '80x24', n: 1, text: 'flickers once', time: '2026-11-10T10:00:00Z' }));
+    s = reduce(s, ev('note', { size: '80x24', n: 1, text: 'and again', time: '2026-11-10T10:00:01Z' }));
+    s = reduce(s, ev('note', { size: '80x24', text: 'no step' }));
+    expect(notesOf(s, 1)).toEqual(['flickers once', 'and again']);
+    expect(notesOf(s, 2)).toEqual([]);
+    expect(notesOf(emptyStep(), 1)).toEqual([]);
   });
 
   it('refuses another schema and ignores what it does not know', () => {

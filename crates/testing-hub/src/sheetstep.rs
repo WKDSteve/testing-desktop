@@ -8,7 +8,7 @@
 //! * the child is started the way the engine is (the same Neovim, the same script, the allow-listed environment
 //!   plus the trust and the machine role of the person, which `sheets step` reads itself), with the root of a
 //!   repository that the engine named for a key of the fleet: never a path of a request;
-//! * a command is one of a closed list, built here; the text of an answer is one line of bounded length;
+//! * a command is one of a closed list, built here; the text of an answer or a note is one line of bounded length;
 //! * the page sees no path: `root` and `path` of `start`, `image` and `shot` of `step-after` are taken out, a picture
 //!   is asked for by its step, and the hub serves only the file the child named for that step;
 //! * the events are kept for a page that comes later (`start`, every `size`, every `step-after`, the last stop, the
@@ -44,6 +44,9 @@ pub const EVENT: &str = "sheet-step";
 
 /// The longest text of an answer (`answer no <text>`), in characters: one line, nothing unprintable.
 pub const MAX_ANSWER_CHARS: usize = 400;
+
+/// The longest note (`note <text>`), in bytes: the limit of `testing sheets step`.
+pub const MAX_NOTE_BYTES: usize = 1000;
 
 /// The highest step number a command may name.
 pub const MAX_STEP: u64 = 100_000;
@@ -142,8 +145,28 @@ pub enum Command {
     Until(u64),
     Break(u64),
     Clear(u64),
-    Answer { yes: bool, text: Option<String> },
+    Answer {
+        yes: bool,
+        text: Option<String>,
+    },
+    /// A note on the step where the run stands; taken at once, also while a step runs.
+    Note(String),
     Abort,
+}
+
+/// The `text` of a command, trimmed: one line without control characters. `None` when it is missing, null or empty.
+fn line_text(map: &Map<String, Value>) -> Result<Option<String>, String> {
+    match map.get("text") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) => {
+            let text = text.trim();
+            if text.chars().any(is_unprintable) {
+                return Err("text must be one line without control characters".to_owned());
+            }
+            Ok((!text.is_empty()).then(|| text.to_owned()))
+        }
+        Some(_) => Err("text must be a string".to_owned()),
+    }
 }
 
 impl Command {
@@ -194,25 +217,22 @@ impl Command {
                     .get("yes")
                     .and_then(Value::as_bool)
                     .ok_or_else(|| "answer needs yes, true or false".to_owned())?;
-                let text = match map.get("text") {
-                    None | Some(Value::Null) => None,
-                    Some(Value::String(text)) => {
-                        let text = text.trim();
-                        if text.chars().any(is_unprintable) {
-                            return Err(
-                                "text must be one line without control characters".to_owned()
-                            );
-                        }
-                        if text.chars().count() > MAX_ANSWER_CHARS {
-                            return Err(format!(
-                                "text is longer than {MAX_ANSWER_CHARS} characters"
-                            ));
-                        }
-                        (!text.is_empty()).then(|| text.to_owned())
-                    }
-                    Some(_) => return Err("text must be a string".to_owned()),
-                };
+                let text = line_text(map)?;
+                if text
+                    .as_ref()
+                    .is_some_and(|t| t.chars().count() > MAX_ANSWER_CHARS)
+                {
+                    return Err(format!("text is longer than {MAX_ANSWER_CHARS} characters"));
+                }
                 Ok(Self::Answer { yes, text })
+            }
+            "note" => {
+                no_extra(&["text"])?;
+                let text = line_text(map)?.ok_or_else(|| "note needs a text".to_owned())?;
+                if text.len() > MAX_NOTE_BYTES {
+                    return Err(format!("text is longer than {MAX_NOTE_BYTES} bytes"));
+                }
+                Ok(Self::Note(text))
             }
             other => Err(format!("unknown command {other:?}")),
         }
@@ -235,6 +255,7 @@ impl Command {
                     None => format!("answer {word}\n"),
                 }
             }
+            Self::Note(text) => format!("note {text}\n"),
         }
     }
 }
@@ -305,6 +326,8 @@ struct Replay {
     steps: BTreeMap<String, BTreeMap<u64, Value>>,
     /// The last `step-before`, `paused` or `ask`: where the run stands.
     current: Option<Value>,
+    /// Every `note`, in order.
+    notes: Vec<Value>,
     end: Option<Value>,
     /// The hub's own note when the child ended without an `end`.
     exit: Option<Value>,
@@ -337,6 +360,7 @@ impl Replay {
         for marks in self.steps.values() {
             out.extend(marks.values().cloned());
         }
+        out.extend(self.notes.iter().cloned());
         out.extend(self.current.iter().cloned());
         out.extend(self.end.iter().cloned());
         out.extend(self.exit.iter().cloned());
@@ -730,6 +754,7 @@ impl SheetStep {
                 }
             }
             "step-before" | "paused" | "ask" => s.replay.current = Some(value.clone()),
+            "note" => s.replay.notes.push(value.clone()),
             "end" => {
                 s.replay.current = None;
                 s.replay.end = Some(value.clone());
@@ -1023,6 +1048,10 @@ mod tests {
                 json!({"command": "answer", "yes": true, "text": ""}),
                 "answer yes\n",
             ),
+            (
+                json!({"command": "note", "text": " the border flickers "}),
+                "note the border flickers\n",
+            ),
         ];
         for (body, line) in cases {
             assert_eq!(Command::parse(&body).unwrap().line(), line, "{body}");
@@ -1051,6 +1080,11 @@ mod tests {
             json!({"command": "answer", "yes": true, "text": "a\u{202e}b"}),
             json!({"command": "answer", "yes": true, "text": long}),
             json!({"command": "answer", "yes": true, "text": 1}),
+            json!({"command": "note"}),
+            json!({"command": "note", "text": "   "}),
+            json!({"command": "note", "text": "two\nlines"}),
+            json!({"command": "note", "text": "x".repeat(MAX_NOTE_BYTES + 1)}),
+            json!({"command": "note", "text": "a", "n": 1}),
             json!({"command": "next", "extra": true}),
         ] {
             assert!(Command::parse(&bad).is_err(), "{bad}");
@@ -1196,6 +1230,7 @@ mod tests {
             r#"{"schema":"testing-sheet-session/1","event":"step-before","size":"80x24","n":1}"#,
             r#"{"schema":"testing-sheet-session/1","event":"step-after","size":"80x24","n":1,"status":"pass","ms":1}"#,
             r#"{"schema":"testing-sheet-session/1","event":"error","message":"x"}"#,
+            r#"{"schema":"testing-sheet-session/1","event":"note","size":"80x24","n":1,"text":"seen","time":"t"}"#,
             r#"{"schema":"testing-sheet-session/1","event":"ask","size":"80x24","n":2,"text":"ok?"}"#,
             "not json at all",
         ];
@@ -1208,8 +1243,9 @@ mod tests {
             .iter()
             .map(|e| e["event"].as_str().unwrap().to_owned())
             .collect();
-        assert_eq!(events, ["start", "size", "step-after", "ask"]);
-        assert_eq!(step.state()["seq"], 7);
+        // A note stays for a page that comes later, in front of where the run stands.
+        assert_eq!(events, ["start", "size", "step-after", "note", "ask"]);
+        assert_eq!(step.state()["seq"], 8);
         // The answer of the question ends it; the end takes the stop away.
         step.on_line(
             1,
@@ -1225,10 +1261,13 @@ mod tests {
             .iter()
             .map(|e| e["event"].as_str().unwrap().to_owned())
             .collect();
-        assert_eq!(events, ["start", "size", "step-after", "step-after", "end"]);
+        assert_eq!(
+            events,
+            ["start", "size", "step-after", "step-after", "note", "end"]
+        );
         // An exit after an `end` is no event; one without is the hub's note.
         step.on_exit(1, Some(0));
-        assert!(step.state()["events"].as_array().unwrap().len() == 5);
+        assert!(step.state()["events"].as_array().unwrap().len() == 6);
         assert_eq!(step.state()["running"], false);
     }
 }

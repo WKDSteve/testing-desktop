@@ -2,11 +2,12 @@
 
 #![allow(dead_code)]
 
+use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use appkit_core::authn::Secret;
-use appkit_hub::RunningServer;
-use appkit_testkit::wire::{request, send, Reply};
+use appkit_hub::{Limits, RunningServer};
+use appkit_testkit::wire::{parse, request, Reply};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// An open event stream, read as it comes.
@@ -52,6 +53,33 @@ impl Stream {
     pub async fn until(&mut self, needle: &str) -> String {
         self.until_within(needle, Duration::from_secs(15)).await
     }
+}
+
+/// How long a request of a test waits for its answer: longer than a request may take in the hub
+/// (`Limits::request_timeout`), so a slow answer is read whole, and one the hub gives up on shows
+/// the hub's own answer. The five seconds of `appkit_testkit::wire::send` were too short for the
+/// calls of the real engine while the other tests of the binary start their Neovims too: such an
+/// answer came after five seconds and the test saw an empty reply.
+pub fn patience() -> Duration {
+    Limits::default().request_timeout + Duration::from_secs(15)
+}
+
+/// Send the bytes and read the answer to the end, for at most `patience()`.
+pub async fn send(addr: SocketAddr, bytes: Vec<u8>) -> Reply {
+    let mut stream = tokio::net::TcpStream::connect(addr).await.expect("connect");
+    stream.write_all(&bytes).await.expect("the request is sent");
+    let mut buf = Vec::new();
+    tokio::time::timeout(patience(), stream.read_to_end(&mut buf))
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "no answer within {:?}: {:?}",
+                patience(),
+                String::from_utf8_lossy(&buf)
+            )
+        })
+        .expect("the answer is read");
+    parse(&buf)
 }
 
 pub async fn get_with(

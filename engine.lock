@@ -5,6 +5,6 @@
 # Both checkouts are pinned by commit; the golden documents of
 # crates/testing-hub/tests/fixtures/golden are copies of that commit's.
 repo       = https://github.com/WKDSteve/testing.nvim
-commit     = 9403b2ff8ee44b0812392bfbfa3074038abe2ec3
+commit     = 0d559c70c440a2c17df0777154351ce9462dc35b
 lib_repo   = https://github.com/WKDSteve/lib.nvim
-lib_commit = 4ab1b2e0870e4f5e3f8f82d47e0baf8874cc5f5b
+lib_commit = 229ebb455c33439a973629af405c4badf83ddb95

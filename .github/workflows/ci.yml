@@ -78,9 +78,10 @@ jobs:
       - run: cargo test --workspace --locked
       # No test left a folder in the temp dir of this job (a test makes its folder with `Scratch`, which removes it
       # also after a failure). Strict: whatever name a test gave its folder counts; `nvim` and `nvim.0` are what the
-      # real Neovim of the engine tests may make itself.
+      # real Neovim of the engine tests may make itself, `testing` the lock of testing.nvim's queue of heavy runs
+      # (`<tmp>/testing/heavy-run-<user>.lock`, shared by every run on the machine on purpose).
       - name: The tests left nothing in the temp dir
-        run: python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --strict --allow nvim --allow nvim.0
+        run: python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --strict --allow nvim --allow nvim.0 --allow testing
       # The install script of a release (the one of appkit's release-kit that Cargo.lock pins) and the
       # uninstall scripts against this build, in folders of their own: the login entry and the link of
       # the runner are left alone, nothing is downloaded.

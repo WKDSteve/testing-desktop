@@ -75,6 +75,11 @@ describe('the model of a stepped run', () => {
     expect(notesOf(s, 1)).toEqual(['flickers once', 'and again']);
     expect(notesOf(s, 2)).toEqual([]);
     expect(notesOf(emptyStep(), 1)).toEqual([]);
+    // A note on a step that has not run yet shows that step's tile, as the panel does.
+    s = reduce(s, ev('step-after', { size: '80x24', n: 1, status: 'pass', ms: 1 }));
+    s = reduce(s, ev('note', { size: '80x24', n: 2, text: 'next one', time: 't' }));
+    expect(tileStep(s, null)).toBe(2);
+    expect(tileStep(s, 2)).toBe(2);
   });
 
   it('refuses another schema and ignores what it does not know', () => {

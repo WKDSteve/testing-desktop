@@ -57,6 +57,13 @@ test('a sheet of a repository runs step by step from the page, and its steps sho
   await expect(page.getByRole('heading', { name: 'Step 1, lua' })).toBeVisible();
   await expect(page.getByText('Screen')).toBeVisible();
 
+  // A note: it belongs to the step the run stands before, and its tile shows it.
+  await page.getByLabel('Note on the step where the run stands').fill('  the value looks right ');
+  await page.getByRole('button', { name: 'Add note', exact: true }).click();
+  await expect(page.getByText('Note: the value looks right')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: 'Step 2, expect' })).toBeVisible();
+  await expect(page.getByLabel('Note on the step where the run stands')).toHaveValue('');
+
   // On to the end: green, and the run counts.
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('finished: pass', { timeout: 30_000 });

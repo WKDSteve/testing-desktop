@@ -49,7 +49,8 @@ export interface TestingSource {
 export type StepCommand =
   | { command: 'next' | 'continue' | 'abort' }
   | { command: 'until' | 'break' | 'clear'; n: number }
-  | { command: 'answer'; yes: boolean; text?: string };
+  | { command: 'answer'; yes: boolean; text?: string }
+  | { command: 'note'; text: string };
 
 /** Where the routes of this app live (`IDENTITY.route` of testing-hub). */
 export const API = '/api/testing';

@@ -23,6 +23,13 @@
   const ICON: Record<StepStatus, string> = { pass: '✓', fail: '✗', running: '▶', next: '▷', pending: ' ', skipped: '–' };
 
   let answer = $state('');
+  let note = $state('');
+  let noteField: HTMLInputElement | undefined = $state();
+
+  async function onNote(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (await app.stepNote(note)) note = '';
+  }
 
   function statusText(): string {
     const line = statusLine(run);
@@ -84,6 +91,7 @@
       u: () => void app.stepUntil(),
       b: () => void app.stepToggleBreak(),
       a: () => void app.stepAbort(),
+      N: () => noteField?.focus(),
     };
     const action = actions[event.key];
     if (!action) return;
@@ -118,6 +126,14 @@
       <button type="button" onclick={() => void app.stepAbort()} disabled={!run.running}>{t('step.abort')}</button>
       <span class="muted keys">{t('step.keys')}</span>
     </div>
+
+    <form class="controls note" onsubmit={onNote}>
+      <label>
+        {t('step.note_label')}
+        <input type="text" maxlength="1000" bind:value={note} bind:this={noteField} disabled={!run.running} />
+      </label>
+      <button type="submit" disabled={!run.running || note.trim() === ''}>{t('step.note_add')}</button>
+    </form>
 
     {#if run.sizes.length > 1 || doc.sizes.length > 1}
       <p class="muted sizes">

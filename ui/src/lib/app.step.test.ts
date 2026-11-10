@@ -177,6 +177,18 @@ describe('the stepped run on the page', () => {
     app.stop();
   });
 
+  it('sends a note while the run goes on, one line, never empty or too long', async () => {
+    const { app, posts } = await started();
+    await app.open(app.fleet!.repos[0]!.key);
+    await app.stepSheet('float');
+    posts.length = 0;
+    expect(await app.stepNote('  the border flickers ')).toBe(true);
+    expect(await app.stepNote('   ')).toBe(false);
+    expect(await app.stepNote('ä'.repeat(501))).toBe(false);
+    expect(posts.map((p) => p.body)).toEqual([{ command: 'note', text: 'the border flickers' }]);
+    app.stop();
+  });
+
   it('reads the state whole when a line of another run comes, or the stream says resync', async () => {
     const { app, stateReads, setState } = await started();
     await app.open(app.fleet!.repos[0]!.key);

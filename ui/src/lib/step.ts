@@ -8,6 +8,9 @@ import { markHidden } from 'appkit-ui/text';
 /** The contract the hub passes on; a higher one is refused. */
 export const SCHEMA = 'testing-sheet-session/1';
 
+/** The longest note, in bytes, as testing.nvim and the hub take it. */
+export const NOTE_MAX_BYTES = 1000;
+
 /** The event of the hub's stream that carries a line of the run. */
 export const STREAM_EVENT = 'sheet-step';
 
@@ -323,11 +326,15 @@ export function notesOf(state: StepState, n: number): string[] {
   return state.size ? (state.notes[state.size]?.[n] ?? []) : [];
 }
 
-/** The step whose tile is shown: the one chosen, else the last one that did something, else the one that runs next. */
+/**
+ * The step whose tile is shown: the one chosen, else the last one that did something or got a note, else the one that
+ * runs next.
+ */
 export function tileStep(state: StepState, chosen: number | null): number | null {
   const marks = marksOf(state);
-  if (chosen !== null && (marks[chosen] || chosen === state.at)) return chosen;
-  const done = Object.keys(marks)
+  const notes = state.size ? (state.notes[state.size] ?? {}) : {};
+  if (chosen !== null && (marks[chosen] || notes[chosen] || chosen === state.at)) return chosen;
+  const done = [...Object.keys(marks), ...Object.keys(notes)]
     .map(Number)
     .filter((n) => Number.isFinite(n));
   if (done.length > 0) return Math.max(...done);

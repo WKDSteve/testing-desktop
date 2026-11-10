@@ -85,12 +85,15 @@ hub.
 
 - Left: the steps of the size that runs, each with its state (not yet, next, runs, pass, fail, not run), its number,
   its action and its note, and a breakpoint dot in front of it. A click on a step chooses it.
-- Right: the tile of the chosen step (else of the last one that did something): what it does, how long it took, the
-  reason of a failure, for a Neovim sheet the screen of the child editor as text, for a browser or desktop sheet the
+- Right: the tile of the chosen step (else of the last one that did something or got a note): what it does, how long
+  it took, its notes, the reason of a failure, for a Neovim sheet the screen of the child editor as text, for a browser or desktop sheet the
   picture of the target after the step.
 - The buttons, and the same keys as in the editor: **Next** (`n`) runs this step; **Continue** (`c`) runs on to the
   next breakpoint, a failed step or the end; **Until here** (`u`) runs on to the chosen step; **Breakpoint** (`b`)
   sets or removes one on the chosen step, in every size; **Abort** (`a`) ends the run.
+- **Add note** (`N` goes to the field) keeps a line on the step where the run stands (before it, after a failure the
+  failed one), at any time while it runs; at most 1000 bytes. testing.nvim keeps the notes of the last run for
+  `testing sheets report`.
 - A question of the sheet (`ask`) stops the run and shows the question with **Yes** (`y`), **No** and a note; a no
   fails the step with the note as its reason.
 - The last line says where the run stands: paused before a step, a failed step, the question, or `finished: pass`.

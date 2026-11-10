@@ -92,8 +92,12 @@ class Leftovers(unittest.TestCase):
             installs = text.index("sh scripts/test-install.sh")
             self.assertGreater(text.find(check, installs), installs, name)
         ci = (root / "ci.yml").read_text(encoding="utf-8")
-        # `nvim` and `nvim.0` are what the real Neovim of the engine tests may make itself.
-        self.assertIn('python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --strict --allow nvim --allow nvim.0\n', ci)
+        # `nvim` and `nvim.0` are what the real Neovim of the engine tests may make itself, `testing` the lock folder of
+        # testing.nvim's queue of heavy runs; nothing else is allowed.
+        self.assertIn(
+            'python tools/check-temp-leftovers.py --dir "$JOB_TEMP" --strict --allow nvim --allow nvim.0 --allow testing\n',
+            ci,
+        )
 
     def test_a_missing_dir_is_no_pass(self):
         code, _, err = run(["--dir", os.path.join(self.dir, "no-such")])

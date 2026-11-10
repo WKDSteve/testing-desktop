@@ -6,7 +6,7 @@
   import type { App } from '../lib/app.svelte';
   import type { Key } from '../lib/i18n';
   import { shown } from '../lib/model';
-  import { marksOf, notesOf, oneLine, screenRows, statusLine, statusOf, tileStep, type StepStatus } from '../lib/step';
+  import { marksOf, NOTE_MAX_BYTES, noteProblem, notesOf, oneLine, screenRows, statusLine, statusOf, tileStep, type StepStatus } from '../lib/step';
   import Picture from './Picture.svelte';
 
   let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
@@ -26,9 +26,20 @@
   let note = $state('');
   let noteField: HTMLInputElement | undefined = $state();
 
+  let sendingNote = $state(false);
+  const noteTrouble = $derived(noteProblem(note));
+
+  // One note at a time; what is typed while it is on its way stays in the field.
   async function onNote(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (await app.stepNote(note)) note = '';
+    if (sendingNote || noteTrouble !== null) return;
+    const sent = note;
+    sendingNote = true;
+    try {
+      if ((await app.stepNote(sent)) && note === sent) note = '';
+    } finally {
+      sendingNote = false;
+    }
   }
 
   function statusText(): string {
@@ -93,6 +104,8 @@
       a: () => void app.stepAbort(),
       N: () => noteField?.focus(),
     };
+    // N with Shift only: with Caps Lock on, an n would land in the note field instead of running the step
+    if (event.key === 'N' && !event.shiftKey) return;
     const action = actions[event.key];
     if (!action) return;
     event.preventDefault();
@@ -130,9 +143,19 @@
     <form class="controls note" onsubmit={onNote}>
       <label>
         {t('step.note_label')}
-        <input type="text" maxlength="1000" bind:value={note} bind:this={noteField} disabled={!run.running} />
+        <input
+          type="text"
+          bind:value={note}
+          bind:this={noteField}
+          disabled={!run.running}
+          aria-invalid={noteTrouble === 'too_long'}
+          aria-describedby={noteTrouble === 'too_long' ? 'step-note-hint' : undefined}
+        />
       </label>
-      <button type="submit" disabled={!run.running || note.trim() === ''}>{t('step.note_add')}</button>
+      <button type="submit" disabled={!run.running || noteTrouble !== null || sendingNote}>{t('step.note_add')}</button>
+      {#if noteTrouble === 'too_long'}
+        <span id="step-note-hint" class="warn" role="status">{t('step.note_too_long', { max: NOTE_MAX_BYTES })}</span>
+      {/if}
     </form>
 
     {#if run.sizes.length > 1 || doc.sizes.length > 1}

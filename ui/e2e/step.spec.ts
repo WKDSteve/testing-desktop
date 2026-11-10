@@ -57,8 +57,20 @@ test('a sheet of a repository runs step by step from the page, and its steps sho
   await expect(page.getByRole('heading', { name: 'Step 1, lua' })).toBeVisible();
   await expect(page.getByText('Screen')).toBeVisible();
 
-  // A note: it belongs to the step the run stands before, and its tile shows it.
-  await page.getByLabel('Note on the step where the run stands').fill('  the value looks right ');
+  // A note: too long in bytes is said, not sent; it belongs to the step the run stands before, and its tile shows it.
+  const field = page.getByLabel('Note on the step where the run stands');
+  // N goes to the field with Shift only: an N without it (Caps Lock on) does nothing
+  await page.getByRole('heading', { name: /alpha smoke/ }).click();
+  await page.keyboard.press('N');
+  await expect(field).not.toBeFocused();
+  await page.keyboard.press('Shift+N');
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue('');
+  await field.fill('€'.repeat(334));
+  await expect(page.getByText('A note is at most 1000 bytes.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add note', exact: true })).toBeDisabled();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await field.fill('  the value looks right ');
   await page.getByRole('button', { name: 'Add note', exact: true }).click();
   await expect(page.getByText('Note: the value looks right')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Step 2, expect' })).toBeVisible();

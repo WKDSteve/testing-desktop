@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyStep, fromDocument, fromStream, isStale, notesOf, oneLine, reduce, screenRows, statusLine, statusOf, tileStep } from './step';
+import { emptyStep, fromDocument, fromStream, isStale, noteProblem, notesOf, oneLine, reduce, screenRows, statusLine, statusOf, tileStep } from './step';
 
 const SCHEMA = 'testing-sheet-session/1';
 const ev = (event: string, fields: Record<string, unknown> = {}) => ({ schema: SCHEMA, event, ...fields });
@@ -75,6 +75,11 @@ describe('the model of a stepped run', () => {
     expect(notesOf(s, 1)).toEqual(['flickers once', 'and again']);
     expect(notesOf(s, 2)).toEqual([]);
     expect(notesOf(emptyStep(), 1)).toEqual([]);
+    // What may be sent: bytes count, as in the hub, not characters.
+    expect(noteProblem('  ')).toBe('empty');
+    expect(noteProblem(' ok ')).toBeNull();
+    expect(noteProblem('€'.repeat(333))).toBeNull();
+    expect(noteProblem('€'.repeat(334))).toBe('too_long');
     // A note on a step that has not run yet shows that step's tile, as the panel does.
     s = reduce(s, ev('step-after', { size: '80x24', n: 1, status: 'pass', ms: 1 }));
     s = reduce(s, ev('note', { size: '80x24', n: 2, text: 'next one', time: 't' }));

@@ -6,7 +6,7 @@ import { StreamSession } from 'appkit-ui/session';
 import type { SseMessage } from 'appkit-ui/sse';
 import { messageOf, Reader } from './reader.svelte';
 import { ApiError, type HubSource, type StepCommand } from './source';
-import { emptyStep, fromDocument, fromStream, isStale, NOTE_MAX_BYTES, STREAM_EVENT, type StepState } from './step';
+import { emptyStep, fromDocument, fromStream, isStale, noteProblem, STREAM_EVENT, type StepState } from './step';
 
 export type { Phase } from './reader.svelte';
 
@@ -267,12 +267,11 @@ export class App extends Reader {
 
   /**
    * A note on the step where the run stands, at any time while it runs (testing.nvim takes it at once). An empty note
-   * or one over `NOTE_MAX_BYTES` is not sent: false, so that the page keeps what was typed.
+   * or one over `NOTE_MAX_BYTES` (`noteProblem`) is not sent: false, so that the page keeps what was typed.
    */
   stepNote(text: string): Promise<boolean> {
-    const note = text.trim();
-    if (!this.step.running || note === '' || new TextEncoder().encode(note).length > NOTE_MAX_BYTES) return Promise.resolve(false);
-    return this.stepCommand({ command: 'note', text: note }).then(() => this.stepFailure === null);
+    if (!this.step.running || noteProblem(text) !== null) return Promise.resolve(false);
+    return this.stepCommand({ command: 'note', text: text.trim() }).then(() => this.stepFailure === null);
   }
 
   /** Run on from a stop; nothing while a step runs or a question waits. */

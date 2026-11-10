@@ -11,6 +11,13 @@ export const SCHEMA = 'testing-sheet-session/1';
 /** The longest note, in bytes, as testing.nvim and the hub take it. */
 export const NOTE_MAX_BYTES = 1000;
 
+/** Why a note cannot be sent as it is: empty, or longer than the hub and testing.nvim take (in bytes). */
+export function noteProblem(text: string): 'empty' | 'too_long' | null {
+  const note = text.trim();
+  if (note === '') return 'empty';
+  return new TextEncoder().encode(note).length > NOTE_MAX_BYTES ? 'too_long' : null;
+}
+
 /** The event of the hub's stream that carries a line of the run. */
 export const STREAM_EVENT = 'sheet-step';
 

@@ -99,6 +99,9 @@ impl Origin {
 pub struct Places {
     pub state_dir: Option<(PathBuf, Origin)>,
     pub areas: Option<(PathBuf, Origin)>,
+    /// The `metrics.jsonl` of the heavy runs: `TESTING_METRICS_FILE` (the engine's own variable),
+    /// else the place the engine writes it to.
+    pub metrics: Option<(PathBuf, Origin)>,
 }
 
 /// Resolve [`Places`].
@@ -132,6 +135,15 @@ pub fn places(file: &FileConfig<TestingSettings>, env: &Env) -> Result<Places, S
             &file.app.areas,
             crate::places::areas_file(env),
         )?,
+        metrics: if env.get("TESTING_METRICS").is_some_and(|v| v == "off") {
+            None
+        } else {
+            pick(
+                "TESTING_METRICS_FILE",
+                &None,
+                crate::places::metrics_file(env),
+            )?
+        },
     })
 }
 

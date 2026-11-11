@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.json';
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
 import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
-import type { Case, Fleet, RepoDoc, Row } from './contract';
+import type { Case, Fleet, Metrics, RepoDoc, Row } from './contract';
 import { textsOf } from './i18n';
-import { ageOf, caseTitle, ciTip, findingsOf, greenPercent, localTip, notesOf, redCases, remoteTone, rowsOf, runLink, runTone, shown, verdictTone, viewOf } from './model';
+import { ageOf, caseTitle, ciTip, findingsOf, greenPercent, localTip, metricsSummary, notesOf, redCases, remoteTone, rowsOf, runLink, runTone, shown, verdictTone, viewOf } from './model';
 
 const fleet = fleetJson as unknown as Fleet;
 const repo = repoJson as unknown as RepoDoc;
@@ -168,6 +168,49 @@ describe('the log of the runs', () => {
     expect(greenPercent(2, 1)).toBe(67);
     expect(greenPercent(0, 0)).toBeNull();
     expect(greenPercent(0, 2)).toBe(0);
+  });
+
+  it('sums up the cost of the runs of the golden repository', () => {
+    const m = repo.metrics as Metrics;
+    expect(metricsSummary(m)).toEqual({
+      runs: 5,
+      minutes: 17,
+      waitMinutes: 0.5,
+      waited: 1,
+      quickShare: 0,
+      perPush: 5,
+      pushes: 1,
+      hitRate: 80,
+    });
+  });
+
+  it('says the share of quick commit checks only when there was one', () => {
+    const kind = (k: Metrics['kinds'][number]['kind'], runs: number) => ({
+      kind: k,
+      runs,
+      minutes: 1,
+      median_s: 1,
+      wait_minutes: 0.25,
+      waited: 1,
+      verdicts: [],
+    });
+    const base: Metrics = {
+      runs: 4,
+      minutes: 4,
+      first: '2026-11-01T10:00:00Z',
+      last: '2026-11-02T10:00:00Z',
+      backfilled: 0,
+      kinds: [kind('ci-commit', 1), kind('ci-commit-quick', 3)],
+      days: [],
+      cache: { selected: 0, cached: 0, ran: 0, hit_rate: null },
+      pushes: null,
+      runs_per_push: null,
+    };
+    expect(metricsSummary(base).quickShare).toBe(75);
+    expect(metricsSummary(base).waitMinutes).toBe(0.5);
+    expect(metricsSummary(base).perPush).toBeNull();
+    expect(metricsSummary(base).hitRate).toBeNull();
+    expect(metricsSummary({ ...base, kinds: [kind('suite', 4)] }).quickShare).toBeNull();
   });
 });
 

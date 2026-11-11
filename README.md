@@ -15,7 +15,7 @@ them. Its web variant, one HTML file opened from disk, is published to
 (`/api/testing/fleet`, `/api/testing/repo?key=...`, `/api/testing/finding?key=...`, with the digest of the document as
 the ETag). The fleet is a snapshot: a watcher of the state folder renews it, one question to the engine per change, and
 `/api/testing/events` tells the page. The page shows the fleet (the last local run and the CI on each system, red first,
-a filter for the red ones and a search) and one repository with its red cases, their output, its findings, the history of its runs and its test sheets, and follows new results
+a filter for the red ones and a search) and one repository with its red cases, their output, its findings, the history of its runs, what its heavy runs cost on this machine (runs, machine minutes, runs per push, cache, queue; the `metrics` of `testing stats`, the file handed to the engine as `params.metrics`) and its test sheets, and follows new results
 by itself. A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
 there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 

@@ -43,6 +43,26 @@ pub fn nvim_state_dir(env: &Env) -> Option<PathBuf> {
     }
 }
 
+/// The `metrics.jsonl` of the heavy runs of this machine (testing.nvim `testing.metrics`): the
+/// data folder of the user, as the engine finds it in a full environment (`%LOCALAPPDATA%` on
+/// Windows, else `$XDG_DATA_HOME` or `~/.local/share`), below `testing/`. `None` when
+/// `TESTING_METRICS=off` or the variables it needs are not set. `TESTING_METRICS_FILE` is picked
+/// before it by [`crate::settings::places`].
+#[must_use]
+pub fn metrics_file(env: &Env) -> Option<PathBuf> {
+    if env.get("TESTING_METRICS").is_some_and(|v| v == "off") {
+        return None;
+    }
+    let base = if cfg!(windows) {
+        env.path("LOCALAPPDATA")
+    } else {
+        None
+    };
+    base.or_else(|| env.path("XDG_DATA_HOME"))
+        .or_else(|| env.path("HOME").map(|h| h.join(".local").join("share")))
+        .map(|d| d.join("testing").join("metrics.jsonl"))
+}
+
 /// The `areas.json` of this device: in the config folder of tasks-desktop. `None` when there is
 /// no config folder.
 #[must_use]
@@ -53,6 +73,37 @@ pub fn areas_file(env: &Env) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_metrics_file_is_the_one_the_engine_writes() {
+        let env = Env::from_pairs([
+            ("LOCALAPPDATA", "/local"),
+            ("XDG_DATA_HOME", "/xdg"),
+            ("HOME", "/home/u"),
+        ]);
+        let want = if cfg!(windows) { "/local" } else { "/xdg" };
+        assert_eq!(
+            metrics_file(&env),
+            Some(PathBuf::from(want).join("testing").join("metrics.jsonl"))
+        );
+        let home = Env::from_pairs([("HOME", "/home/u")]);
+        assert_eq!(
+            metrics_file(&home),
+            Some(
+                PathBuf::from("/home/u")
+                    .join(".local")
+                    .join("share")
+                    .join("testing")
+                    .join("metrics.jsonl")
+            )
+        );
+        let off = Env::from_pairs([("LOCALAPPDATA", "/local"), ("TESTING_METRICS", "off")]);
+        assert_eq!(metrics_file(&off), None);
+        assert_eq!(
+            metrics_file(&Env::from_pairs::<[(&str, &str); 0], _, _>([])),
+            None
+        );
+    }
 
     #[test]
     fn the_state_folder_follows_nvim_appname_and_the_platform() {

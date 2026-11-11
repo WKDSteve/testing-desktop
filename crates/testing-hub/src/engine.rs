@@ -135,6 +135,8 @@ impl Calls {
 pub struct Ask {
     pub state_dir: Option<PathBuf>,
     pub areas: Option<PathBuf>,
+    /// The `metrics.jsonl` of the heavy runs; only `repo` takes it (the part `metrics`).
+    pub metrics: Option<PathBuf>,
     pub github_token: Option<GithubToken>,
 }
 
@@ -152,6 +154,9 @@ impl Ask {
     pub fn repo(&self, key: &str) -> Value {
         let mut map = self.base();
         self.ask_github(&mut map);
+        if let Some(file) = &self.metrics {
+            map.insert("metrics".to_owned(), json!(file.display().to_string()));
+        }
         map.insert("repo".to_owned(), json!(key));
         Value::Object(map)
     }
@@ -320,6 +325,7 @@ mod tests {
         let ask = Ask {
             state_dir: Some(PathBuf::from("/state/nvim")),
             areas: Some(PathBuf::from("/config/tasks-desktop/areas.json")),
+            metrics: Some(PathBuf::from("/local/testing/metrics.jsonl")),
             github_token: None,
         };
         assert_eq!(
@@ -335,6 +341,11 @@ mod tests {
             "alpha.nvim-0123456789ab"
         );
         assert_eq!(ask.repo("alpha.nvim-0123456789ab")["export"], true);
+        // Only `repo` names the metrics file: the engine refuses it for `fleet` and `finding`.
+        assert_eq!(
+            ask.repo("alpha.nvim-0123456789ab")["metrics"],
+            "/local/testing/metrics.jsonl"
+        );
         // The local form, for the hub's own use: the root comes back, no data classes are asked.
         assert_eq!(
             ask.repo_local("alpha.nvim-0123456789ab"),

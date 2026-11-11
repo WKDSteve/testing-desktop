@@ -3,7 +3,7 @@
 // hide or reorder what is read made visible (`shown`), and a link is built only to a CI run of GitHub (`runLink`).
 
 import { markHidden } from 'appkit-ui/text';
-import type { Case, Cell, Fleet, RemoteState, Row } from './contract';
+import type { Case, Cell, Fleet, Metrics, RemoteState, Row } from './contract';
 import type { Key } from './i18n';
 
 /** The three systems of the CI, in the order of the columns. */
@@ -184,6 +184,47 @@ export function runTone(verdict: string): Tone {
 /** The share of green among the runs with a result, in whole percent; `null`: there is none to say anything about. */
 export function greenPercent(green: number, red: number): number | null {
   return green + red > 0 ? Math.round((green / (green + red)) * 100) : null;
+}
+
+/** What the page says at a glance about the cost of a repository's heavy runs (`metrics` of its document). */
+export interface MetricsSummary {
+  runs: number;
+  minutes: number;
+  /** Minutes waited in the queue, all kinds. */
+  waitMinutes: number;
+  /** Runs that waited. */
+  waited: number;
+  /** Percent of the commit checks that were quick (`ci-commit-quick` of all `ci-commit*`); `null`: none. */
+  quickShare: number | null;
+  /** Runs of this machine per push of main; `null`: no push known. */
+  perPush: number | null;
+  pushes: number | null;
+  /** Percent of the selected spec files that came from the cache; `null`: no suite run. */
+  hitRate: number | null;
+}
+
+/** Sum up `metrics` for the tiles; the numbers stay the engine's, only added up. */
+export function metricsSummary(m: Metrics): MetricsSummary {
+  let wait = 0;
+  let waited = 0;
+  let quick = 0;
+  let full = 0;
+  for (const k of m.kinds) {
+    wait += k.wait_minutes;
+    waited += k.waited;
+    if (k.kind === 'ci-commit-quick') quick += k.runs;
+    if (k.kind === 'ci-commit') full += k.runs;
+  }
+  return {
+    runs: m.runs,
+    minutes: m.minutes,
+    waitMinutes: Math.round(wait * 10) / 10,
+    waited,
+    quickShare: quick + full > 0 ? Math.round((quick / (quick + full)) * 100) : null,
+    perPush: m.runs_per_push,
+    pushes: m.pushes,
+    hitRate: m.cache.hit_rate,
+  };
 }
 
 /** How long ago a time of a document was, for a page that shows an old state; `null`: it is no time, or in the future. */

@@ -4,6 +4,7 @@
   import type { Key } from '../lib/i18n';
   import { caseTitle, redCases, shown, viewOf, type Tone } from '../lib/model';
   import HistoryView from './History.svelte';
+  import MetricsView from './Metrics.svelte';
   import ToneView from './Tone.svelte';
 
   let { app, t }: { app: Reader; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
@@ -94,6 +95,10 @@
 
     {#if doc.history}
       <HistoryView history={doc.history} {t} />
+    {/if}
+
+    {#if doc.metrics}
+      <MetricsView metrics={doc.metrics} {t} />
     {/if}
 
     {#if app.hasStep}

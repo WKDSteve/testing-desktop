@@ -299,6 +299,8 @@ async fn the_hub_serves_the_fleet_of_the_real_engine() {
         step: None,
         ui: testing_hub::ui::UiFiles::none(),
         warm: false,
+        phone: None,
+        rerun: None,
     })
     .await
     .expect("the hub starts");
@@ -381,6 +383,8 @@ async fn a_real_run_is_seen_by_the_watcher_and_its_findings_are_one_document() {
         step: None,
         ui: testing_hub::ui::UiFiles::none(),
         warm: false,
+        phone: None,
+        rerun: None,
     })
     .await
     .expect("the hub starts");
@@ -520,6 +524,8 @@ async fn hub_stepping(fx: &Fixture, trust: bool) -> Option<(appkit_hub::RunningS
         step: Some(step),
         ui: testing_hub::ui::UiFiles::none(),
         warm: false,
+        phone: None,
+        rerun: None,
     })
     .await
     .expect("the hub starts");

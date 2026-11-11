@@ -34,6 +34,49 @@ fn app_dir(env: &Env) -> Result<PathBuf, String> {
     appkit_hub::instance::config_folder(env, &IDENTITY)
 }
 
+/// `testing-hub phone ...`: the phones of the running hub (testing mobil), with its control secret.
+///
+/// # Errors
+///
+/// A text for the person: the usage, no running hub, or the hub's refusal.
+pub async fn phone(args: &[String], usage: &str) -> Result<String, String> {
+    use appkit_hub::phone::{self, PhoneWay};
+    let env = Env::from_process();
+    let dir = app_dir(&env)?;
+    match args {
+        [cmd, rest @ ..] if cmd == "pair" => {
+            let way = match rest {
+                [] => {
+                    // The tailnet name of the settings, else the tunnel.
+                    let file: FileConfig<TestingSettings> =
+                        appkit_hub::config::load_file(&dir).map_err(|e| e.to_string())?;
+                    file.app
+                        .tailnet_name
+                        .map_or(PhoneWay::Tunnel, PhoneWay::Tailnet)
+                }
+                [flag] if flag == "--tunnel" => PhoneWay::Tunnel,
+                [flag, name] if flag == "--tailnet" && crate::phone::plain_tailnet_name(name) => {
+                    PhoneWay::Tailnet(name.clone())
+                }
+                _ => return Err(usage.to_owned()),
+            };
+            let link = phone::pairing_link(&dir, &IDENTITY, &way).await?;
+            let qr = phone::qr_text(&link)?;
+            Ok(format!(
+                "{qr}\n{link}\n\nScan the code with testing mobil (or paste the link) within 60 seconds.\n"
+            ))
+        }
+        [cmd] if cmd == "list" => phone::device_lines(&dir, &IDENTITY).await,
+        [cmd, id, level] if cmd == "level" => phone::set_level(&dir, &IDENTITY, id, level)
+            .await
+            .map(|()| format!("{id}: level {level}\n")),
+        [cmd, id] if cmd == "revoke" => phone::revoke(&dir, &IDENTITY, id)
+            .await
+            .map(|()| format!("{id}: revoked; its sessions ended\n")),
+        _ => Err(usage.to_owned()),
+    }
+}
+
 /// The port to try first: the option, the environment, the settings file, then the default.
 fn wanted_port(
     opts: &ServeOptions,
@@ -188,6 +231,39 @@ fn limits_for(watching: bool) -> Limits {
 
 /// Run the server until Ctrl-C.
 ///
+/// Phones of this hub (testing mobil): the paired devices in the config folder, the tailnet name of `tailnet_name`
+/// (or `TESTING_DESKTOP_TAILNET`), and Web Push with its key in the config folder.
+///
+/// # Errors
+///
+/// The variable names no plain host, or the push key there cannot be read or made.
+fn phone_setup(
+    dir: &std::path::Path,
+    settings: &TestingSettings,
+    env: &Env,
+) -> Result<crate::phone::Phone, String> {
+    let tailnet = match env.get("TESTING_DESKTOP_TAILNET").and_then(|v| v.to_str()) {
+        Some(name) if !name.is_empty() => {
+            if !crate::phone::plain_tailnet_name(name) {
+                return Err(
+                    "TESTING_DESKTOP_TAILNET must be a plain host name like pc.example.ts.net"
+                        .to_owned(),
+                );
+            }
+            Some(name.to_owned())
+        }
+        _ => settings.tailnet_name.clone(),
+    };
+    let transport = appkit_hub::push_net::NetPush::new()?;
+    let push = appkit_hub::push::Push::open(dir, Arc::new(transport))
+        .map_err(|e| format!("the push of the hub cannot be used: {e}"))?;
+    Ok(crate::phone::Phone {
+        devices_file: dir.join("devices.json"),
+        tailnet,
+        push: Some(Arc::new(push)),
+    })
+}
+
 /// # Errors
 ///
 /// A text for the person at the terminal: what is missing or in the way.
@@ -260,10 +336,19 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         eprintln!("note: no GitHub token (github_token_file, or `gh auth login`): the CI columns say not asked");
     }
     origins.ci = ci;
+    // A red run is started again with gh, with the token the hub reads GitHub with (its own login otherwise).
+    let rerun: Option<Arc<dyn crate::rerun::Rerunner>> = matches!(ci, CiState::File | CiState::Gh)
+        .then(|| {
+            Arc::new(crate::rerun::GhRerun {
+                program: "gh".into(),
+                token: github_token.clone(),
+            }) as Arc<dyn crate::rerun::Rerunner>
+        });
     let ask = Ask {
         github_token,
         ..ask
     };
+    let phone = Some(phone_setup(&dir, &file.app, &env)?);
 
     let watch = places
         .state_dir
@@ -291,6 +376,8 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         step: state.step.clone(),
         ui: ui.clone(),
         warm: true,
+        phone: phone.clone(),
+        rerun: rerun.clone(),
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server
     // still starts, on another port, and says so.

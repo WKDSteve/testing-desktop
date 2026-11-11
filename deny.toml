@@ -22,6 +22,8 @@ allow = [
     # its Linux backend inotify is ISC, a permissive license like MIT.
     "CC0-1.0",
     "ISC",
+    # webpki-roots (the Mozilla roots of the TLS of Web Push, through appkit-hub push-net): a list of certificates.
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]

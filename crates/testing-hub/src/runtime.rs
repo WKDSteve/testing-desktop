@@ -32,6 +32,8 @@ pub struct TestingRuntime {
     pub(crate) streams: Arc<StreamCounter>,
     /// The one stepped run of a test sheet, and what the page may ask of it.
     pub(crate) sheet_step: Arc<SheetStep>,
+    /// How a red CI run is started again; `None`: it is not.
+    pub(crate) rerun: Option<Arc<dyn crate::rerun::Rerunner>>,
     /// The refresher; ended when the hub stops.
     jobs: Mutex<Vec<JoinHandle<()>>>,
     // Kept alive: the refresher ends when every sender of hints is gone.
@@ -68,6 +70,10 @@ pub struct Reading {
     pub step: Option<StepProgram>,
     /// Read the fleet once at the start (`Start::warm`).
     pub warm: bool,
+    /// How a red CI run is started again (`ci-rerun`).
+    pub rerun: Option<Arc<dyn crate::rerun::Rerunner>>,
+    /// Web Push of the hub: with it (and an engine) the hub tells phones when a default branch turns red.
+    pub push: Option<Arc<appkit_hub::push::Push>>,
 }
 
 impl TestingRuntime {
@@ -84,6 +90,8 @@ impl TestingRuntime {
                 watch: None,
                 step: None,
                 warm: false,
+                rerun: None,
+                push: None,
             },
         )
     }
@@ -100,6 +108,8 @@ impl TestingRuntime {
             watch,
             step,
             warm,
+            rerun,
+            push,
         } = reading;
         let store = SnapshotStore::with_params(
             engine.clone(),
@@ -139,6 +149,14 @@ impl TestingRuntime {
                 let _ = store.current().await;
             }));
         }
+        // A notice to the phones when a default branch turns red: only with an engine to read the fleet.
+        if let Some(push) = push.filter(|_| engine.is_some()) {
+            jobs.push(crate::alarm::spawn(
+                Arc::clone(&store),
+                push,
+                crate::alarm::EVERY,
+            ));
+        }
         // Only with an engine: the program of a run is the engine's own.
         let sheet_step = Arc::new(SheetStep::new(step.filter(|_| engine.is_some())));
         Self {
@@ -149,6 +167,7 @@ impl TestingRuntime {
             store,
             streams: Arc::default(),
             sheet_step,
+            rerun,
             jobs: Mutex::new(jobs),
             _hints: hints,
             _watcher: watcher,

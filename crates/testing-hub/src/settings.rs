@@ -35,6 +35,10 @@ pub struct TestingSettings {
     /// `false`: the hub does not ask GitHub; none: it does when it has a token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ask_github: Option<bool>,
+    /// The name of this PC in the tailnet (`pc.example.ts.net`), when Tailscale Serve forwards it to the hub for
+    /// phones; none: a phone comes only through an SSH tunnel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tailnet_name: Option<String>,
 }
 
 /// Is this a path the hub may hand to the engine? Whole (absolute), no `..`, no control character.
@@ -61,6 +65,11 @@ pub fn check_path(name: &str, path: &Path) -> Result<(), String> {
 
 impl AppSettings for TestingSettings {
     fn validate(&self) -> Result<(), String> {
+        if let Some(name) = &self.tailnet_name
+            && !crate::phone::plain_tailnet_name(name)
+        {
+            return Err("tailnet_name must be a plain host name like pc.example.ts.net".to_owned());
+        }
         if let Some(path) = &self.state_dir {
             check_path("state_dir", path)?;
         }
@@ -210,10 +219,15 @@ mod tests {
             areas: Some(root().join("areas.json")),
             github_token_file: Some(root().join("token")),
             ask_github: Some(true),
+            tailnet_name: Some("pc.example.ts.net".to_owned()),
         };
         assert!(ok.validate().is_ok());
         assert!(TestingSettings::default().validate().is_ok());
         for bad in [
+            TestingSettings {
+                tailnet_name: Some("https://pc.example.ts.net".to_owned()),
+                ..TestingSettings::default()
+            },
             TestingSettings {
                 state_dir: Some(PathBuf::from("nope")),
                 ..TestingSettings::default()

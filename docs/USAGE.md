@@ -61,8 +61,12 @@ testing-hub open [--launch]       print (or open) a one-time pairing link
 testing-hub autostart on|off|status
 testing-hub install [--autostart] [--shortcut]
 testing-hub uninstall [--purge-settings]
+testing-hub phone pair [--tailnet <name> | --tunnel]   pair testing mobil (a QR code)
+testing-hub phone list | level <id> <level> | revoke <id>
 testing-hub --version
 ```
+
+The phone app, its ways to the hub and what it may do: [MOBILE.md](MOBILE.md).
 
 The config folder is `%APPDATA%\testing-desktop` (`TESTING_DESKTOP_CONFIG_DIR` moves it). The default port is 17618
 (`TESTING_DESKTOP_PORT`, or `port` in `config.json`). In [hub-desktop](https://github.com/WKDSteve/hub-desktop) the app is

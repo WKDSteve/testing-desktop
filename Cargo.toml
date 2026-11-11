@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/testing-hub"]
+# The shell of testing mobil is a Cargo project of its own (Tauri, Android): mobile/Cargo.toml.
+exclude = ["mobile"]
 
 [workspace.package]
 edition = "2024"
@@ -14,10 +16,10 @@ repository = "https://github.com/WKDSteve/testing-desktop"
 # once, point these at a local checkout in a .cargo/config.toml that is not committed
 # (`[patch."https://github.com/WKDSteve/appkit"]`, see the README of appkit).
 [workspace.dependencies]
-appkit-core = { git = "https://github.com/WKDSteve/appkit", tag = "v0.44.1" }
-appkit-hub = { git = "https://github.com/WKDSteve/appkit", tag = "v0.44.1" }
-appkit-testkit = { git = "https://github.com/WKDSteve/appkit", tag = "v0.44.1" }
-appkit-scratch = { git = "https://github.com/WKDSteve/appkit", tag = "v0.44.1" }
+appkit-core = { git = "https://github.com/WKDSteve/appkit", tag = "v0.46.0" }
+appkit-hub = { git = "https://github.com/WKDSteve/appkit", tag = "v0.46.0" }
+appkit-testkit = { git = "https://github.com/WKDSteve/appkit", tag = "v0.46.0" }
+appkit-scratch = { git = "https://github.com/WKDSteve/appkit", tag = "v0.46.0" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

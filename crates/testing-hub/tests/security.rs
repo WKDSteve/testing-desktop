@@ -39,6 +39,8 @@ impl Subject for Testing {
             step: None,
             ui: testing_hub::ui::UiFiles::none(),
             warm: false,
+            phone: None,
+            rerun: None,
         }))
     }
 

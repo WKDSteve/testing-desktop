@@ -12,15 +12,18 @@ use std::time::Duration;
 
 use appkit_core::authn::{Clock, Secret};
 use appkit_core::identity::AppIdentity;
-use appkit_hub::{serve, GuardRules, HubStatus, Limits, RunningServer, ServeParts};
+use appkit_hub::{serve, HubStatus, Limits, RunningServer, ServeParts};
 
+pub mod alarm;
 mod answer;
 pub mod app;
 pub mod background;
 pub mod engine;
 pub mod github;
 mod live;
+pub mod phone;
 pub mod places;
+pub mod rerun;
 mod routes;
 mod runtime;
 pub mod settings;
@@ -112,6 +115,10 @@ pub struct Start {
     /// most of a minute, which the first page would otherwise wait out. The program sets it; a test
     /// that counts the questions to the engine leaves it off.
     pub warm: bool,
+    /// Phones (testing mobil): the paired devices, the tailnet name, Web Push. `None`: no phone reaches the hub.
+    pub phone: Option<phone::Phone>,
+    /// How a red CI run is started again (`ci-rerun`); `None`: the route says it cannot.
+    pub rerun: Option<Arc<dyn rerun::Rerunner>>,
 }
 
 /// Starts the hub.
@@ -132,9 +139,7 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
             app: IDENTITY.app,
             version: version(),
             build_id: BUILD,
-            // The two POST routes of a stepped run (`sheet-step/start`, `sheet-step/command`) have the strict
-            // limit of a mutation; no route needs the coarse one of a write that only its body tells from a dry run.
-            guard_rules: GuardRules::new(IDENTITY.route("hello"), []),
+            guard_rules: phone::guard_rules(s.phone.as_ref()),
             ui: Arc::new(s.ui),
             runtime: TestingRuntime::reading(
                 s.status,
@@ -146,6 +151,8 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
                     watch: s.watch,
                     step: s.step,
                     warm: s.warm,
+                    rerun: s.rerun,
+                    push: s.phone.as_ref().and_then(|p| p.push.clone()),
                 },
             ),
             // There is one repositories root and no list to choose from, so this is never called.

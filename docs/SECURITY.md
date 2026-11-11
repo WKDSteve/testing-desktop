@@ -27,6 +27,9 @@ a session. This page says what is the testing hub's own.
 | The page's policy | The policy of appkit for every page; nothing of this page breaks it. | the matrix; `e2e/app.spec.ts` (no violation in any test) |
 | Nothing of a result in the browser | The session is in `sessionStorage` of the tab, and `localStorage` stays empty. | `e2e/app.spec.ts` |
 | Accessibility | axe reports nothing on the views in the light and the dark scheme. | `e2e/app.spec.ts` |
+| Phones (testing mobil) | A phone pairs once with a key of its own (appkit's devices), comes through Tailscale Serve (`tailnet_name`) or a tunnel to loopback, and reaches only `fleet`, `repo`, `finding` and `about` (level `read`) and `ci-rerun` (level `trigger`, confirmed on the phone per request); every other route, the five `sheet-step` routes and `events` among them, answers it `not_for_devices`. No route of the hub trusts or releases a commit or runs a command of the request. | `src/phone.rs` tests; `tests/phone.rs` (the matrix with phones, the tailnet, a phone that reads and reruns only confirmed) |
+| `ci-rerun` | Takes the key of a repository of the fleet and nothing else; starts the failed jobs of the run the fleet names for it again with `gh run rerun <id> --failed -R <owner>/<repo>` (an argv, no shell, input closed, 30 s), only when that run failed, was cancelled or found no runner. A run the runner guard refused (`rejected`) is not started again: that is released on the PC. | `src/rerun.rs` tests; `tests/phone.rs` |
+| Notices | While a phone has subscribed (appkit's Web Push), the hub reads the fleet every five minutes and tells it when a repository turns red: the kind and its key, nothing of a case. | `src/alarm.rs` tests |
 
 ## The web variant
 
@@ -49,7 +52,8 @@ That the browser keeps a folder over a restart (the fake folder of the tests doe
   testing.nvim.
 - It does not run the suite of a repository, and it does not write into a repository. A stepped run of a test sheet
   from the page is the one thing it starts: testing.nvim's own command, in a repository of the fleet, under
-  testing.nvim's gates, writing no state.
+  testing.nvim's gates, writing no state. The other is GitHub's: the failed jobs of a red CI run started again
+  (`ci-rerun`), which runs on GitHub's runners or yours under the runner guard, as a rerun from the web page would.
 
 ## The CI of this repository
 

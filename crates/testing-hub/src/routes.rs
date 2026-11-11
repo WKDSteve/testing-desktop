@@ -44,6 +44,7 @@ pub const ROUTES: &[(&str, MakeRoute)] = &[
     ("sheet-step/start", || post(stepping::start)),
     ("sheet-step/command", || post(stepping::command)),
     ("sheet-step/image", || get(stepping::image)),
+    ("ci-rerun", || post(crate::rerun::ci_rerun)),
 ];
 
 /// The router of the app, built from [`ROUTES`] and from nothing else. Invariant: this stays a
@@ -280,6 +281,7 @@ mod tests {
                 "sheet-step/start",
                 "sheet-step/command",
                 "sheet-step/image",
+                "ci-rerun",
             ]
         );
     }

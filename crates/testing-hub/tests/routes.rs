@@ -209,6 +209,8 @@ async fn start_warming(
         step: None,
         ui: testing_hub::ui::UiFiles::none(),
         warm,
+        phone: None,
+        rerun: None,
     })
     .await
     .expect("the hub starts");

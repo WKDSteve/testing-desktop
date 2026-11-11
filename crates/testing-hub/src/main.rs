@@ -24,6 +24,13 @@ const USAGE: &str = "usage:
                                             left for the script
   testing-hub open [--launch]               print a one-time pairing link for the running hub
                                             (--launch also opens it in the default browser)
+  testing-hub phone pair [--tailnet <name> | --tunnel]
+                                            a one-time pairing link for testing mobil, as a
+                                            QR code (the tailnet name of config.json, else the
+                                            loopback port for an SSH tunnel)
+  testing-hub phone list                    the paired phones: id, name, level
+  testing-hub phone level <id> read|trigger let a phone start a red run again (trigger), or not
+  testing-hub phone revoke <id>             forget a phone; its sessions end at once
   testing-hub --version";
 
 fn parse_port(args: &[String]) -> Result<Option<u16>, String> {
@@ -123,6 +130,7 @@ async fn run(args: Vec<String>) -> Result<(), String> {
             println!("{url}");
             app::launch(&url)
         }
+        Some("phone") => app::phone(&args[1..], USAGE).await.map(|t| print!("{t}")),
         Some("--version" | "-V") => {
             println!("{}", testing_hub::version_line());
             Ok(())

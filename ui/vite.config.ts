@@ -48,4 +48,22 @@ const hub = defineConfig({
   test,
 });
 
-export default ({ mode }: { mode: string }) => (mode === 'web' ? web : hub);
+// `vite build --mode mobile` builds the page of testing mobil into `dist-mobile/`, which the Tauri shell (mobile/)
+// bundles: files of its own origin only, no inline script, as under the policy of the shell's WebView.
+const mobile = defineConfig({
+  plugins: [svelte()],
+  base: './',
+  build: {
+    outDir: 'dist-mobile',
+    target: 'es2022',
+    assetsInlineLimit: 0,
+    modulePreload: { polyfill: false },
+    sourcemap: false,
+    rollupOptions: {
+      input: 'index.mobile.html',
+    },
+  },
+  test,
+});
+
+export default ({ mode }: { mode: string }) => (mode === 'web' ? web : mode === 'mobile' ? mobile : hub);

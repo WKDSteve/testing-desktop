@@ -8,6 +8,7 @@
 node_modules/
 dist/
 dist-web/
+dist-mobile/
 
 # Local, per device: never committed (data classes, tokens, paths)
 /hub.json

@@ -18,10 +18,14 @@ describe('the source of the page', () => {
     expect(sources.some((s) => s.path.endsWith('source.ts'))).toBe(true);
   });
 
-  it('uses no Tauri API', () => {
+  it('uses no Tauri API, but for the one bridge of testing mobil to its shell', () => {
     for (const { path, text } of sources) {
-      expect(text, path).not.toMatch(/__TAURI__|@tauri-apps|\binvoke\(/);
+      // The page of testing mobil speaks to its shell through `mobile/shell.ts` and nowhere else; the views it shares
+      // with the hub and the web variant stay free of Tauri.
+      if (path.endsWith('/mobile/shell.ts')) continue;
+      expect(text, path).not.toMatch(/__TAURI|@tauri-apps|\binvoke\(/);
     }
+    expect(sources.some((s) => s.path.endsWith('/mobile/shell.ts'))).toBe(true);
   });
 
   it('makes requests through the source only', () => {

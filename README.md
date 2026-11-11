@@ -19,13 +19,18 @@ a filter for the red ones and a search) and one repository with its red cases, t
 by itself. A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
 there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 
+A phone app, **testing mobil** (Android, Tauri 2), shows the fleet, the red runs and their cases on the way, tells you
+when a main turns red, and starts the failed jobs of a red run again, confirmed by the phone's lock. It never trusts or
+releases a commit. See [docs/MOBILE.md](docs/MOBILE.md).
+
 ## Principles
 
 - **The engine is the only source.** testing.nvim writes every result. The app reads its versioned documents
   (`testing-export/1`) and never parses a state file of its own.
-- **Read only, with one exception.** The hub starts no test run of its own and writes into no repository. What a
+- **Read only, with two exceptions.** The hub starts no test run of its own and writes into no repository. What a
   session may start is a stepped run of a test sheet (testing.nvim's `testing sheets step`), in a repository of the
-  fleet, under testing.nvim's own gates; it writes no state.
+  fleet, under testing.nvim's own gates; it writes no state. And the failed jobs of a red CI run started again on
+  GitHub (`ci-rerun`), the one thing a phone may start, confirmed on the phone.
 - **Loopback only, token always.** Host and Origin are checked, there is no data endpoint without a session.
 - **Data classes fail closed.** The hub reads the export form of the engine: no absolute path, and only the
   repositories the data classes of the device release.
@@ -55,6 +60,8 @@ ui/src/web/           the web variant: the export folder as a source, its check 
 ui/web/               the packing into one file and the tests of the web variant
 ui/e2e/               browser tests (Playwright, axe) against the real binary, the real engine and repositories made for them
 ui/e2e-web/           browser tests of the single file, opened from disk
+ui/src/mobile/        the page of testing mobil (the third entry, `main.mobile.ts`): pairing, the way, reruns, notices
+mobile/               testing mobil, the Tauri 2 shell for Android (its own Cargo project): the way to the hub, the keys
 tools/                checks of the repository (appkit pin, lock age, control characters, colours, temp leftovers)
 scripts/              build and install from a checkout, uninstall, the tests of both
 docs/                 usage, security of the server, releasing

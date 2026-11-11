@@ -11,7 +11,8 @@
     "e2e": "playwright test",
     "web:gen": "node web/gen-validate.mjs",
     "web:build": "vite build --mode web && node web/pack.mjs",
-    "web:e2e": "playwright test -c playwright.web.config.ts"
+    "web:e2e": "playwright test -c playwright.web.config.ts",
+    "mobile:build": "vite build --mode mobile"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

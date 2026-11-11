@@ -147,9 +147,37 @@ pub fn places(file: &FileConfig<TestingSettings>, env: &Env) -> Result<Places, S
     })
 }
 
+/// The `metrics.jsonl` the hub hands the engine with every `repo`: named also while it is not there
+/// yet, so the first heavy run after the start shows without a restart of the hub (the engine reads
+/// a missing file as no runs, the part `metrics` is then null). `None` only when there is no place
+/// for it (`TESTING_METRICS=off`, no data folder).
+#[must_use]
+pub fn metrics_for_engine(places: &Places) -> Option<PathBuf> {
+    places.metrics.as_ref().map(|(p, _)| p.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_metrics_file_is_named_before_the_first_run_writes_it() {
+        let file = FileConfig::<TestingSettings>::default();
+        let local = root().join("local");
+        let env = Env::from_pairs([
+            ("LOCALAPPDATA", local.to_str().unwrap()),
+            ("XDG_DATA_HOME", local.to_str().unwrap()),
+        ]);
+        let got = places(&file, &env).unwrap();
+        let want = local.join("testing").join("metrics.jsonl");
+        assert!(!want.exists(), "a path of no file that exists");
+        assert_eq!(metrics_for_engine(&got), Some(want));
+        let off = Env::from_pairs([
+            ("LOCALAPPDATA", local.to_str().unwrap()),
+            ("TESTING_METRICS", "off"),
+        ]);
+        assert_eq!(metrics_for_engine(&places(&file, &off).unwrap()), None);
+    }
 
     /// A whole path of no folder that exists: the paths are only checked, nothing is made.
     fn root() -> PathBuf {

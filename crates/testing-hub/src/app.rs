@@ -236,12 +236,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
             .as_ref()
             .filter(|(p, _)| p.is_file())
             .map(|(p, _)| p.clone()),
-        // A file that is not there yet (no heavy run recorded) is not named: the part is null.
-        metrics: places
-            .metrics
-            .as_ref()
-            .filter(|(p, _)| p.is_file())
-            .map(|(p, _)| p.clone()),
+        metrics: crate::settings::metrics_for_engine(&places),
         github_token: None,
     };
     let mut origins = Origins {

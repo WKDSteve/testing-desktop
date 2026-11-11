@@ -88,7 +88,7 @@ testing-web no longer says "Not built yet", and the tile of hub-desktop gets its
 After every green `ci` run on `main`, `rolling.yml` builds the program of exactly that commit (the
 interface first, then `cargo build --release --locked`) for Windows and replaces the files of
 the pre-release `latest`. It is for looking at the newest state with a click, not a release: no
-version tag, not signed. `testing-hub --version` names the commit (`testing-hub 0.0.0 (build abc1234)`).
+version tag, not signed. `testing-hub --version` names the commit (`testing-hub 0.1.0 (build abc1234)`).
 Only the tip of `main` is built, and a newer tip replaces a build that is still running (a late CI run
 of an older commit lands in a group of its own and builds nothing). The page of the release says what
 it is: `.github/rolling-notes.md`.

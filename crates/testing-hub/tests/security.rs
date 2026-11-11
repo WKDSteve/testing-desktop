@@ -38,6 +38,7 @@ impl Subject for Testing {
             watch: None,
             step: None,
             ui: testing_hub::ui::UiFiles::none(),
+            warm: false,
         }))
     }
 

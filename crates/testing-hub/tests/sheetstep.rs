@@ -183,6 +183,7 @@ async fn start_hub(fx: &Fixture, program: Option<StepProgram>) -> Hub {
         watch: None,
         step: program,
         ui: testing_hub::ui::UiFiles::none(),
+        warm: false,
     })
     .await
     .expect("the hub starts");

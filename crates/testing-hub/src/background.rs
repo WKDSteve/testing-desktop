@@ -50,7 +50,45 @@ pub fn autostart(what: Autostart) -> Result<String, String> {
 ///
 /// A text for the person at the terminal.
 pub async fn install(opts: InstallOptions) -> Result<String, String> {
-    appkit_hub::background::install(&APP, opts).await
+    let text = appkit_hub::background::install(&APP, opts).await?;
+    let env = appkit_hub::env::Env::from_process();
+    let note = appkit_hub::background::installed_program(&APP, &env)
+        .map(|target| how_to_start(&target, std::env::var_os("PATH").as_deref()))
+        .unwrap_or_default();
+    Ok(format!("{text}{note}"))
+}
+
+/// The last lines of `install`: the whole call that starts the installed program, and whether its
+/// folder is on `PATH` (install does not put it there: a program of the user is not added to the
+/// path of every shell behind their back).
+#[must_use]
+pub fn how_to_start(target: &std::path::Path, path_var: Option<&std::ffi::OsStr>) -> String {
+    let dir = target.parent().unwrap_or(target);
+    let same = |p: &std::path::Path| {
+        if cfg!(windows) {
+            p.to_string_lossy()
+                .trim_end_matches(['\\', '/'])
+                .eq_ignore_ascii_case(dir.to_string_lossy().trim_end_matches(['\\', '/']))
+        } else {
+            p == dir
+        }
+    };
+    let on_path = path_var.is_some_and(|v| std::env::split_paths(v).any(|p| same(&p)));
+    let mut out = format!("start it: \"{}\" start --open\n", target.display());
+    if on_path {
+        out.push_str("its folder is on PATH: `testing-hub start --open` works in any shell\n");
+    } else {
+        out.push_str(&format!(
+            "its folder is not on PATH; add {} to call `testing-hub` by name{}\n",
+            dir.display(),
+            if cfg!(windows) {
+                " (the Start menu entry Testing starts it too)"
+            } else {
+                ""
+            }
+        ));
+    }
+    out
 }
 
 /// Take the integration of the program with the system away.
@@ -63,6 +101,42 @@ pub fn uninstall(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `install` ends with the call that starts the program, and says whether its folder is on PATH.
+    #[test]
+    fn install_names_the_whole_call_and_the_path() {
+        // Whole paths of no folder that exists: only compared, nothing is made.
+        let root = std::path::PathBuf::from(if cfg!(windows) {
+            "C:/testing-hub-test"
+        } else {
+            "/testing-hub-test"
+        });
+        let dir = root.join("bin");
+        let target = dir.join(crate::IDENTITY.program_file());
+        let elsewhere = std::env::join_paths([root.join("elsewhere")]).unwrap();
+        let off = how_to_start(&target, Some(&elsewhere));
+        assert!(
+            off.starts_with(&format!(
+                "start it: \"{}\" start --open\n",
+                target.display()
+            )),
+            "{off}"
+        );
+        assert!(off.contains("not on PATH"), "{off}");
+        assert!(off.contains(&dir.display().to_string()), "{off}");
+        let none = how_to_start(&target, None);
+        assert!(none.contains("not on PATH"), "{none}");
+        let with = std::env::join_paths([root.join("elsewhere"), dir.clone()]).unwrap();
+        let on = how_to_start(&target, Some(&with));
+        assert!(on.contains("is on PATH"), "{on}");
+        assert!(!on.contains("not on PATH"), "{on}");
+        if cfg!(windows) {
+            // Windows does not tell the case of a folder apart, nor a trailing separator.
+            let upper =
+                std::ffi::OsString::from(format!("{}\\", dir.display().to_string().to_uppercase()));
+            assert!(how_to_start(&target, Some(&upper)).contains("is on PATH"));
+        }
+    }
 
     /// `uninstall --purge-settings` removes the kit's files and nothing else.
     #[test]

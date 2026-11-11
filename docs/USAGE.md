@@ -15,7 +15,9 @@ irm https://github.com/WKDSteve/testing-desktop/releases/download/latest/install
 
 The script downloads the program, checks it against `SHA256SUMS` and hands over to `testing-hub install`, which copies
 it to `%LOCALAPPDATA%\testing-desktop\bin`. `-InstallArgs '--autostart','--shortcut'` also registers it with your login
-and adds a link. Without a download, from a checkout: `.\scripts\build-install.ps1` (Rust, Node with pnpm; `-BuildOnly`
+and adds a link. It ends with the whole call that starts it (`start it: "...\bin\testing-hub.exe" start --open`) and says
+whether that folder is on `PATH`: install does not add it there, so `testing-hub` by name works only once you add the
+folder yourself; the Start menu entry **Testing** starts it too. Without a download, from a checkout: `.\scripts\build-install.ps1` (Rust, Node with pnpm; `-BuildOnly`
 only builds).
 
 Remove it with `uninstall.ps1` (`scripts/uninstall.ps1`, or the file of the release). Your settings stay unless you add
@@ -66,7 +68,14 @@ The config folder is `%APPDATA%\testing-desktop` (`TESTING_DESKTOP_CONFIG_DIR` m
 (`TESTING_DESKTOP_PORT`, or `port` in `config.json`). In [hub-desktop](https://github.com/WKDSteve/hub-desktop) the app is
 the tile **Testing**: one click starts it and opens it.
 
+`testing-hub open` without a running hub says so and names `testing-hub start --open`, which starts it and opens the
+page in one go.
+
 ## The page
+
+The hub reads the fleet as soon as it starts, before a page asks: right after a start that read also asks GitHub and
+takes up to a minute, so a hub that starts with your login has it ready long before you open the page. A page that
+comes earlier says that the hub is reading the results, not that it is still connecting.
 
 The first page is the fleet: every repository with its last local run and the CI on each system, the red ones first, a
 filter for the red ones and a search. A click opens one repository with its red cases and their output. A run in a

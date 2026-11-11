@@ -295,6 +295,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         watch: watch.clone(),
         step: state.step.clone(),
         ui: ui.clone(),
+        warm: true,
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server
     // still starts, on another port, and says so.
@@ -347,6 +348,9 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
     Ok(())
 }
 
+/// What `open` says when there is no hub to ask: how to start one and open the page in one go.
+pub const START_HINT: &str = "start it and open the page with `testing-hub start --open`";
+
 /// Ask the running hub for a pairing code and return the link for it.
 ///
 /// # Errors
@@ -357,13 +361,13 @@ pub async fn open() -> Result<String, String> {
     let dir = app_dir(&env)?;
     let record = registry::read_record(&dir)
         .map_err(|e| e.to_string())?
-        .ok_or("no hub is running (no hub.json)")?;
+        .ok_or_else(|| format!("no hub is running (no hub.json); {START_HINT}"))?;
     if record.app != IDENTITY.app {
         return Err("hub.json is not from this app".to_owned());
     }
     let secret = registry::read_secret(&dir)
         .map_err(|e| e.to_string())?
-        .ok_or("no control secret: the hub is not running")?;
+        .ok_or_else(|| format!("no control secret: the hub is not running; {START_HINT}"))?;
 
     // The secret goes only to the process that says it is this hub.
     let hello = client::request(record.port, "GET", &IDENTITY.route("hello"), &[], "")

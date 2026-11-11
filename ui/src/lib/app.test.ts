@@ -295,6 +295,25 @@ describe('the stream', () => {
 });
 
 describe('the session', () => {
+  it('says that the fleet is being read while the first read is under way', async () => {
+    let release: (r: Response) => void = () => {};
+    const { hub } = fakeHub((p) => {
+      if (p === '/api/testing/fleet') {
+        return new Promise<Response>((resolve) => (release = resolve)) as unknown as Response;
+      }
+      return standard(p);
+    });
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    const app = new App({ hub, session, sleep: now });
+    const up = app.start(null);
+    await expect.poll(() => app.phase).toBe('reading');
+    release(json(FLEET, 200, { ETag: '"sha256:e4259770b57246bc"' }));
+    await up;
+    expect(app.phase).toBe('ready');
+    app.stop();
+  });
+
   it('trades the code for a token kept in the tab, then reads the fleet with it', async () => {
     const { hub, seen } = fakeHub(standard);
     const session = new Memory();

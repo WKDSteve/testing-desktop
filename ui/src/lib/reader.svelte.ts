@@ -8,7 +8,7 @@ import type { Fleet, RepoDoc } from './contract';
 import { findingsOf, type Finding } from './model';
 import { ApiError, type About, type TestingSource } from './source';
 
-export type Phase = 'starting' | 'needs_pairing' | 'offline' | 'unavailable' | 'ready' | 'failed';
+export type Phase = 'starting' | 'reading' | 'needs_pairing' | 'offline' | 'unavailable' | 'ready' | 'failed';
 
 /** The short word of a failure, never more of its text than its message. */
 export function messageOf(error: unknown): string {

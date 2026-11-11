@@ -61,7 +61,7 @@ pub fn version() -> &'static str {
 /// workflow of the rolling build through `TESTING_HUB_BUILD`, absent in a release and in a local build.
 pub const BUILD: Option<&str> = option_env!("TESTING_HUB_BUILD");
 
-/// The line `--version` prints: `testing-hub 0.0.0`, and `testing-hub 0.0.0 (build abc1234)` for a
+/// The line `--version` prints: `testing-hub 0.1.0`, and `testing-hub 0.1.0 (build abc1234)` for a
 /// rolling build. A release is exactly the first form (the release workflow compares it with the tag).
 #[must_use]
 pub fn version_line() -> String {
@@ -108,6 +108,10 @@ pub struct Start {
     pub step: Option<sheetstep::StepProgram>,
     /// The files of the page; [`ui::UiFiles::none`] serves the placeholder page of the core.
     pub ui: ui::UiFiles,
+    /// Read the fleet right after the start, before a page asks: the first read asks GitHub and takes
+    /// most of a minute, which the first page would otherwise wait out. The program sets it; a test
+    /// that counts the questions to the engine leaves it off.
+    pub warm: bool,
 }
 
 /// Starts the hub.
@@ -141,6 +145,7 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
                     max_age,
                     watch: s.watch,
                     step: s.step,
+                    warm: s.warm,
                 },
             ),
             // There is one repositories root and no list to choose from, so this is never called.

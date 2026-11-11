@@ -79,6 +79,7 @@ fn open_without_a_running_hub_says_so() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let err = String::from_utf8(out.stderr).unwrap();
     assert!(err.contains("no hub is running"), "{err}");
+    assert!(err.contains("testing-hub start --open"), "{err}");
 }
 
 #[test]

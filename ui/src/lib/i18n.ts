@@ -6,6 +6,7 @@ import { fill, pickLang } from 'appkit-ui/i18n';
 const en = {
   'app.title': 'Testing',
   'phase.starting': 'Connecting to the hub…',
+  'phase.reading': 'The hub is reading the results of the fleet… Right after the hub started this also asks GitHub and can take up to a minute.',
   'phase.needs_pairing': 'This tab is not paired with the hub. Run `testing-hub open` and open the link it prints.',
   'phase.pair_refused': 'The pairing link was used already or is too old. Run `testing-hub open` for a new one.',
   'phase.pair_limited': 'Too many pairing attempts just now. Wait a minute, then run `testing-hub open` for a new link.',
@@ -264,6 +265,7 @@ export type Key = keyof typeof en;
 const de: Record<Key, string> = {
   'app.title': 'Testing',
   'phase.starting': 'Verbinde mit dem Hub…',
+  'phase.reading': 'Der Hub liest die Ergebnisse der Flotte… Kurz nach seinem Start fragt er dabei auch GitHub, das kann bis zu einer Minute dauern.',
   'phase.needs_pairing': 'Dieser Tab ist nicht mit dem Hub gekoppelt. `testing-hub open` ausführen und den Link öffnen.',
   'phase.pair_refused': 'Der Kopplungslink ist verbraucht oder zu alt. `testing-hub open` gibt einen neuen.',
   'phase.pair_limited': 'Gerade zu viele Kopplungsversuche. Eine Minute warten, dann gibt `testing-hub open` einen neuen Link.',

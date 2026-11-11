@@ -129,6 +129,9 @@ export class App extends Reader {
       if (this.stopped) return;
     }
     this.problem = null;
+    // The hub answers and has an engine: what is left is the first read of the fleet, which asks GitHub and can take
+    // most of a minute when the hub has only just started. The page says so instead of "connecting".
+    this.phase = 'reading';
     await this.refresh();
     if (this.stopped || !this.env.hub.hasToken) return;
     void this.readAbout();

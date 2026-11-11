@@ -66,6 +66,8 @@ pub struct Reading {
     pub watch: Option<Watch>,
     /// How a stepped run of a sheet is started; `None`: the page cannot start one.
     pub step: Option<StepProgram>,
+    /// Read the fleet once at the start (`Start::warm`).
+    pub warm: bool,
 }
 
 impl TestingRuntime {
@@ -81,6 +83,7 @@ impl TestingRuntime {
                 max_age: None,
                 watch: None,
                 step: None,
+                warm: false,
             },
         )
     }
@@ -96,6 +99,7 @@ impl TestingRuntime {
             max_age,
             watch,
             step,
+            warm,
         } = reading;
         let store = SnapshotStore::with_params(
             engine.clone(),
@@ -125,6 +129,15 @@ impl TestingRuntime {
                 watch.refresh,
             ));
             hints = Some(tx);
+        }
+        // The first read of the fleet starts with the hub, not with the first page: a page that comes
+        // while it runs waits for the same read (one fetch at a time), one that comes later finds it done.
+        // A failure is not kept: the next request asks again and says what went wrong.
+        if warm && engine.is_some() {
+            let store = Arc::clone(&store);
+            jobs.push(tokio::spawn(async move {
+                let _ = store.current().await;
+            }));
         }
         // Only with an engine: the program of a run is the engine's own.
         let sheet_step = Arc::new(SheetStep::new(step.filter(|_| engine.is_some())));

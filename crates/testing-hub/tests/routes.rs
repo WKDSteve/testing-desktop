@@ -172,6 +172,18 @@ async fn start_asking(
     ask: Ask,
     ci: CiState,
 ) -> Hub {
+    start_warming(engine, limits, watch, ask, ci, false).await
+}
+
+/// [`start_asking`], and with `warm` the hub reads the fleet at once, as the program does.
+async fn start_warming(
+    engine: Option<Arc<FakeEngine>>,
+    limits: Limits,
+    watch: Option<Watch>,
+    ask: Ask,
+    ci: CiState,
+    warm: bool,
+) -> Hub {
     let control = Secret::generate(TOKEN_BYTES).unwrap();
     let has_engine = engine.is_some();
     let server = testing_hub::start(testing_hub::Start {
@@ -196,6 +208,7 @@ async fn start_asking(
         watch,
         step: None,
         ui: testing_hub::ui::UiFiles::none(),
+        warm,
     })
     .await
     .expect("the hub starts");
@@ -514,6 +527,55 @@ async fn pages_that_read_the_fleet_ask_the_engine_once() {
         );
     }
     assert_eq!(engine.asked("fleet").len(), 1);
+}
+
+#[tokio::test]
+async fn the_first_read_of_the_fleet_starts_with_the_hub_not_with_the_first_page() {
+    let engine = FakeEngine::new();
+    let limits = Limits {
+        snapshot_max_age: None,
+        ..Limits::default()
+    };
+    let hub = start_warming(
+        Some(Arc::clone(&engine)),
+        limits,
+        None,
+        ask(),
+        CiState::NoToken,
+        true,
+    )
+    .await;
+    // No page has asked yet: the hub asks by itself.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while engine.asked("fleet").is_empty() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the hub did not read the fleet at its start"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(
+        engine.asked("fleet"),
+        vec![Some(ask().fleet())],
+        "with what every read carries"
+    );
+    // The first page finds it read.
+    for _ in 0..3 {
+        let r = get(&hub.server, &route("fleet"), Some(&hub.token)).await;
+        assert_eq!(r.status, 200, "{r:?}");
+    }
+    assert_eq!(
+        engine.asked("fleet").len(),
+        1,
+        "one read for the start and the pages"
+    );
+}
+
+#[tokio::test]
+async fn a_hub_without_an_engine_warms_nothing() {
+    let hub = start_warming(None, Limits::default(), None, ask(), CiState::NoToken, true).await;
+    let r = get(&hub.server, &route("fleet"), Some(&hub.token)).await;
+    assert_ne!(r.status, 200, "{r:?}");
 }
 
 #[tokio::test]

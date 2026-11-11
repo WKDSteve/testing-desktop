@@ -73,6 +73,8 @@
     <p class="state" role="status">{t('phase.offline')}</p>
   {:else if app.phase === 'unavailable'}
     <p class="state" role="status">{t('phase.unavailable', { problem: app.problem ?? '' })}</p>
+  {:else if app.phase === 'reading'}
+    <p class="state" role="status">{t('phase.reading')}</p>
   {:else if app.phase === 'failed'}
     <p class="state" role="status">{t('phase.failed', { message: app.failure ?? '' })}</p>
   {:else}

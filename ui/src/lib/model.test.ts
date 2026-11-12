@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import fleetJson from '../../../crates/testing-hub/tests/fixtures/golden/fleet.json';
 import repoJson from '../../../crates/testing-hub/tests/fixtures/golden/repo.json';
 import findingsJson from '../../../crates/testing-hub/tests/fixtures/golden/findings.json';
-import type { Case, Fleet, Metrics, RepoDoc, Row } from './contract';
+import type { Case, Fleet, HistoryRun, Metrics, RepoDoc, Row } from './contract';
 import { textsOf } from './i18n';
-import { ageOf, caseTitle, ciTip, findingsOf, greenPercent, localTip, metricsSummary, notesOf, redCases, remoteTone, rowsOf, runLink, runTone, shown, verdictTone, viewOf } from './model';
+import { ageOf, caseTitle, ciTip, csvCell, filterRuns, findingsOf, greenPercent, localTip, metricsSummary, notesOf, redCases, remoteTone, rowsOf, runLink, runsCsv, runsJson, runTone, shown, verdictTone, viewOf } from './model';
 
 const fleet = fleetJson as unknown as Fleet;
 const repo = repoJson as unknown as RepoDoc;
@@ -276,5 +276,77 @@ describe('the sentence of a cell', () => {
     const tip = ciTip(viewOf(row({ name: 'a\u202eb' })), 'ubuntu');
     expect(tip.params['repo']).toBe(shown('a\u202eb'));
     expect(tip.params['repo']).not.toContain('\u202e');
+  });
+});
+
+describe('the list of runs: search, period, export', () => {
+  function run(patch: Partial<HistoryRun>): HistoryRun {
+    return {
+      ts: '2026-11-10T12:00:00Z',
+      run: 'r',
+      kind: 'run',
+      scope: 'full',
+      verdict: 'green',
+      ms: 1000,
+      sha: 'abc1234',
+      dirty: false,
+      profile: null,
+      red: [],
+      red_more: 0,
+      ...patch,
+    };
+  }
+  const log = [
+    run({ ts: '2026-11-10T12:00:00Z', verdict: 'red', red: ['TESTS/a_spec.lua::parses'], sha: 'deadbee' }),
+    run({ ts: '2026-11-09T12:00:00Z', kind: 'ci', profile: 'full' }),
+    run({ ts: '2026-11-01T12:00:00Z', verdict: 'red', sha: 'cafe123' }),
+    run({ ts: '2026-09-01T12:00:00Z' }),
+    run({ ts: 'not a time' }),
+  ];
+
+  it('keeps everything without a filter, in order', () => {
+    expect(filterRuns(log)).toEqual(log);
+  });
+
+  it('cuts the period at the newest run, not at the clock', () => {
+    expect(filterRuns(log, { days: 7 }).map((r) => r.ts)).toEqual(['2026-11-10T12:00:00Z', '2026-11-09T12:00:00Z']);
+    expect(filterRuns(log, { days: 30 })).toHaveLength(3);
+    expect(filterRuns(log, { days: null })).toHaveLength(5);
+  });
+
+  it('finds the query in the commit, the verdict, the kind and the red cases, case-blind', () => {
+    expect(filterRuns(log, { query: 'DEADBEE' }).map((r) => r.sha)).toEqual(['deadbee']);
+    expect(filterRuns(log, { query: 'a_spec.lua::parses' })).toHaveLength(1);
+    expect(filterRuns(log, { query: ' ci ' }).map((r) => r.kind)).toEqual(['ci']);
+    expect(filterRuns(log, { query: 'nothing like it' })).toEqual([]);
+  });
+
+  it('combines only red, query and period', () => {
+    expect(filterRuns(log, { onlyRed: true }).map((r) => r.sha)).toEqual(['deadbee', 'cafe123']);
+    expect(filterRuns(log, { onlyRed: true, days: 7 }).map((r) => r.sha)).toEqual(['deadbee']);
+    expect(filterRuns(log, { onlyRed: true, query: 'cafe' }).map((r) => r.sha)).toEqual(['cafe123']);
+  });
+
+  it('writes CSV a spreadsheet cannot run: a formula is quoted out, separators are quoted', () => {
+    expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
+    expect(csvCell('+1')).toBe("'+1");
+    expect(csvCell('-cmd')).toBe("'-cmd");
+    expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)");
+    expect(csvCell('a,b')).toBe('"a,b"');
+    expect(csvCell('line\nbreak')).toBe('"line\nbreak"');
+    expect(csvCell(-5)).toBe('-5');
+    expect(csvCell(null)).toBe('');
+    expect(csvCell(true)).toBe('true');
+  });
+
+  it('exports the shown runs as CSV and JSON', () => {
+    const shownRuns = filterRuns(log, { onlyRed: true, days: 7 });
+    const csv = runsCsv(shownRuns);
+    expect(csv.split('\r\n')).toEqual([
+      'ts,kind,scope,verdict,ms,sha,dirty,profile,red,red_more',
+      '2026-11-10T12:00:00Z,run,full,red,1000,deadbee,false,,TESTS/a_spec.lua::parses,0',
+      '',
+    ]);
+    expect(JSON.parse(runsJson('alpha.nvim', shownRuns))).toEqual({ repo: 'alpha.nvim', runs: shownRuns });
   });
 });

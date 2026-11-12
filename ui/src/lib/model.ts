@@ -3,7 +3,7 @@
 // hide or reorder what is read made visible (`shown`), and a link is built only to a CI run of GitHub (`runLink`).
 
 import { markHidden } from 'appkit-ui/text';
-import type { Case, Cell, Fleet, Metrics, RemoteState, Row } from './contract';
+import type { Case, Cell, Fleet, HistoryRun, Metrics, RemoteState, Row } from './contract';
 import type { Key } from './i18n';
 
 /** The three systems of the CI, in the order of the columns. */
@@ -225,6 +225,72 @@ export function metricsSummary(m: Metrics): MetricsSummary {
     pushes: m.pushes,
     hitRate: m.cache.hit_rate,
   };
+}
+
+/** The periods the list of runs can be cut to, in days; `null`: all runs of the log. */
+export const RUN_PERIODS = [null, 7, 30, 90] as const;
+export type RunPeriod = (typeof RUN_PERIODS)[number];
+
+/**
+ * The runs of the log the list shows: only red ones, the ones whose text holds the query (time, kind, verdict, commit,
+ * profile, the ids of the red cases; case-blind), within `days` before the newest run of the log. The period ends at the
+ * newest run, not at the clock, like the engine's statistics: an old export shows its last days, not an empty list.
+ */
+export function filterRuns(
+  runs: readonly HistoryRun[],
+  options: { onlyRed?: boolean; query?: string; days?: RunPeriod } = {},
+): HistoryRun[] {
+  const query = (options.query ?? '').trim().toLowerCase();
+  let newest = -Infinity;
+  for (const run of runs) {
+    const at = Date.parse(run.ts);
+    if (!Number.isNaN(at) && at > newest) newest = at;
+  }
+  const from = options.days && Number.isFinite(newest) ? newest - options.days * 86_400_000 : -Infinity;
+  return runs.filter((run) => {
+    if (options.onlyRed && runTone(run.verdict) !== 'red') return false;
+    if (from > -Infinity) {
+      const at = Date.parse(run.ts);
+      // a run whose time is no time cannot be placed in a period: only the whole log shows it
+      if (Number.isNaN(at) || at < from) return false;
+    }
+    if (query === '') return true;
+    const text = [run.ts, run.kind, run.scope, run.verdict, run.sha ?? '', run.profile ?? '', ...run.red]
+      .join(' ')
+      .toLowerCase();
+    return text.includes(query);
+  });
+}
+
+/**
+ * A cell of a CSV file: quoted when it holds a separator, a quote or a line break; a text that a spreadsheet would read
+ * as a formula (`=`, `+`, `-`, `@`, a tab or a carriage return first) gets a `'` in front, so opening the file runs
+ * nothing (the ids of red cases come from the tested code).
+ */
+export function csvCell(value: string | number | boolean | null): string {
+  if (value === null) return '';
+  let text = String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** The runs as CSV, one line per run (the red cases joined by a space), with a header line; lines end in CRLF. */
+export function runsCsv(runs: readonly HistoryRun[]): string {
+  const head = ['ts', 'kind', 'scope', 'verdict', 'ms', 'sha', 'dirty', 'profile', 'red', 'red_more'];
+  const lines = [head.join(',')];
+  for (const r of runs) {
+    lines.push(
+      [r.ts, r.kind, r.scope, r.verdict, r.ms, r.sha, r.dirty, r.profile, r.red.join(' '), r.red_more]
+        .map(csvCell)
+        .join(','),
+    );
+  }
+  return `${lines.join('\r\n')}\r\n`;
+}
+
+/** The runs as JSON: the entries of the log as the engine wrote them, under the repository they belong to. */
+export function runsJson(repo: string, runs: readonly HistoryRun[]): string {
+  return `${JSON.stringify({ repo, runs }, null, 2)}\n`;
 }
 
 /** How long ago a time of a document was, for a page that shows an old state; `null`: it is no time, or in the future. */

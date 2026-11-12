@@ -94,7 +94,7 @@
     {/if}
 
     {#if doc.history}
-      <HistoryView history={doc.history} {t} />
+      <HistoryView history={doc.history} repo={doc.repo.name} {t} />
     {/if}
 
     {#if doc.metrics}

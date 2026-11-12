@@ -3,6 +3,7 @@
   import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { ciTip, localTip, notesOf, rowsOf, shown, SYSTEMS, type Tip as TipWords, type Tone } from '../lib/model';
+  import MetricsView from './Metrics.svelte';
   import Tip from './Tip.svelte';
   import ToneView from './Tone.svelte';
 
@@ -90,6 +91,12 @@
         {/each}
       </tbody>
     </table>
+  {/if}
+
+  <!-- the cost of the heavy runs of all repositories together (`metrics` of the fleet's document, capability
+       fleet_metrics): the trend of the whole fleet; an engine without it, or no run, shows nothing here -->
+  {#if fleet?.metrics}
+    <MetricsView metrics={fleet.metrics} {t} heading="metrics.fleet_heading" id="fleet-metrics-heading" />
   {/if}
 </section>
 

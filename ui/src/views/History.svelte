@@ -1,20 +1,45 @@
 <script lang="ts">
   // The log of the runs of one repository: what can be said about it, the runs per day, and the list of runs. The numbers
   // are the engine's (`history` of the repository's document); the page only shows them, on the hub and from a folder.
+  // The list can be searched and cut to a period, and what it shows can be saved as CSV or JSON: a download of what the
+  // page already holds, nothing is written anywhere else (docs/SECURITY.md).
   import type { History, HistoryRun } from '../lib/contract';
   import type { Key } from '../lib/i18n';
-  import { greenPercent, runTone, shown, type Tone } from '../lib/model';
+  import { filterRuns, greenPercent, RUN_PERIODS, runsCsv, runsJson, runTone, shown, type RunPeriod, type Tone } from '../lib/model';
   import ToneView from './Tone.svelte';
 
-  let { history, t }: { history: History; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+  let {
+    history,
+    repo,
+    t,
+  }: { history: History; repo: string; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
 
   let onlyRed = $state(false);
+  let query = $state('');
+  let period = $state<RunPeriod>(null);
 
   const stats = $derived(history.stats);
   const rate = $derived(greenPercent(stats.green, stats.red));
   const before = $derived(greenPercent(stats.previous.green, stats.previous.red));
   const most = $derived(Math.max(1, ...stats.days.map((d) => d.n)));
-  const runs = $derived(onlyRed ? history.runs.filter((r) => runTone(r.verdict) === 'red') : history.runs);
+  const runs = $derived(filterRuns(history.runs, { onlyRed, query, days: period }));
+
+  /** The file name of a download: the repository's name with what is not safe in a file name replaced. */
+  function fileName(ext: string): string {
+    return `${repo.replace(/[^A-Za-z0-9._-]+/g, '_') || 'runs'}-runs.${ext}`;
+  }
+
+  /** Hand the shown runs to the browser as a file to save. */
+  function save(kind: 'csv' | 'json') {
+    const text = kind === 'csv' ? runsCsv(runs) : runsJson(repo, runs);
+    const blob = new Blob([text], { type: kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName(kind);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   function when(iso: string): string {
     const date = new Date(iso);
@@ -105,6 +130,20 @@
     <div class="runs-head">
       <h3>{t('history.runs')}</h3>
       <label><input type="checkbox" bind:checked={onlyRed} /> {t('history.only_red')}</label>
+      <input class="search" type="search" placeholder={t('history.search')} aria-label={t('history.search')} bind:value={query} />
+      <label>
+        {t('history.period')}
+        <select bind:value={period}>
+          {#each RUN_PERIODS as p (p ?? 'all')}
+            <option value={p}>{p === null ? t('history.period.all') : t('history.period.days', { n: p })}</option>
+          {/each}
+        </select>
+      </label>
+      <span class="muted">{t('history.shown', { shown: runs.length, total: history.runs.length })}</span>
+      <span class="save">
+        <button type="button" onclick={() => save('csv')} disabled={runs.length === 0}>{t('history.save_csv')}</button>
+        <button type="button" onclick={() => save('json')} disabled={runs.length === 0}>{t('history.save_json')}</button>
+      </span>
     </div>
     <div class="scroll">
       <table>
@@ -133,7 +172,7 @@
               <td class="mono">{run.sha ? run.sha.slice(0, 7) : '–'}{#if run.dirty} {t('history.dirty')}{/if}</td>
             </tr>
           {:else}
-            <tr><td colspan="5" class="muted">{t('history.none_red')}</td></tr>
+            <tr><td colspan="5" class="muted">{onlyRed && query === '' && period === null ? t('history.none_red') : t('history.none_match')}</td></tr>
           {/each}
         </tbody>
       </table>
@@ -264,8 +303,34 @@
   }
   .runs-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: 1rem;
+    gap: 0.5rem 1rem;
+  }
+  .runs-head .search {
+    min-width: 12rem;
+  }
+  .runs-head .save {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+  /* the buttons of the page (as the sheets of a repository): its colours, in both schemes */
+  .save button {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.6rem;
+    font: inherit;
+    cursor: pointer;
+  }
+  .save button:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  .save button:disabled {
+    color: var(--muted);
+    cursor: default;
   }
   .scroll {
     overflow-x: auto;

@@ -43,6 +43,7 @@ a session. This page says what is the testing hub's own.
 | Only the export form | A document that is not in the export form (it could hold absolute paths) is refused. | `ui/web/folder-source.test.ts` |
 | One database | Every local file shares the origin `file://`: the page opens only its own database `testing-web`, for the handles of its folders, and never another page's. Nothing of an export is kept in the browser. | `ui/web/web.test.mjs`, `ui/e2e-web/` |
 | Foreign text | As on the hub: text, never markup; a link only to a CI run of GitHub. | `ui/e2e-web/` |
+| A list saved as CSV or JSON | On the hub and in the web variant, the runs a repository's history shows can be saved: a download of what the page already holds, made in the page (no request, no folder written by the page). A cell of the CSV that a spreadsheet would read as a formula (`=`, `+`, `-`, `@` first) gets a `'` in front, since the ids of red cases come from the tested code. | `ui/src/lib/model.test.ts` |
 
 That the browser keeps a folder over a restart (the fake folder of the tests does not clone) is checked by hand.
 

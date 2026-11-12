@@ -135,7 +135,8 @@ impl Calls {
 pub struct Ask {
     pub state_dir: Option<PathBuf>,
     pub areas: Option<PathBuf>,
-    /// The `metrics.jsonl` of the heavy runs; only `repo` takes it (the part `metrics`).
+    /// The `metrics.jsonl` of the heavy runs; `fleet` and `repo` take it (the part `metrics`: all repositories
+    /// together, one repository), `finding` does not.
     pub metrics: Option<PathBuf>,
     pub github_token: Option<GithubToken>,
 }
@@ -146,6 +147,7 @@ impl Ask {
     pub fn fleet(&self) -> Value {
         let mut map = self.base();
         self.ask_github(&mut map);
+        self.ask_metrics(&mut map);
         Value::Object(map)
     }
 
@@ -154,9 +156,7 @@ impl Ask {
     pub fn repo(&self, key: &str) -> Value {
         let mut map = self.base();
         self.ask_github(&mut map);
-        if let Some(file) = &self.metrics {
-            map.insert("metrics".to_owned(), json!(file.display().to_string()));
-        }
+        self.ask_metrics(&mut map);
         map.insert("repo".to_owned(), json!(key));
         Value::Object(map)
     }
@@ -183,6 +183,12 @@ impl Ask {
         map.remove("export");
         map.insert("repo".to_owned(), json!(key));
         Value::Object(map)
+    }
+
+    fn ask_metrics(&self, map: &mut Map<String, Value>) {
+        if let Some(file) = &self.metrics {
+            map.insert("metrics".to_owned(), json!(file.display().to_string()));
+        }
     }
 
     fn ask_github(&self, map: &mut Map<String, Value>) {
@@ -334,6 +340,7 @@ mod tests {
                 "export": true,
                 "state_dir": "/state/nvim",
                 "areas": "/config/tasks-desktop/areas.json",
+                "metrics": "/local/testing/metrics.jsonl",
             })
         );
         assert_eq!(
@@ -341,7 +348,7 @@ mod tests {
             "alpha.nvim-0123456789ab"
         );
         assert_eq!(ask.repo("alpha.nvim-0123456789ab")["export"], true);
-        // Only `repo` names the metrics file: the engine refuses it for `fleet` and `finding`.
+        // `fleet` and `repo` name the metrics file; `finding` does not (the engine refuses it there).
         assert_eq!(
             ask.repo("alpha.nvim-0123456789ab")["metrics"],
             "/local/testing/metrics.jsonl"

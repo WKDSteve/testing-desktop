@@ -138,6 +138,34 @@ test('the history of a repository: the numbers of the engine, a filter, and a re
   await expect(rows.nth(1)).toContainText('a part of the suite');
   await section.getByLabel('Only red').check();
   await expect(rows).toHaveCount(3);
+  await section.getByLabel('Only red').uncheck();
+  // the search: nothing matches, then the list is whole again
+  const search = section.getByLabel('Search runs (commit, result, red case)');
+  await search.fill('no run has this text');
+  await expect(rows).toHaveCount(2);
+  await expect(section).toContainText('No run matches.');
+  await expect(section.getByRole('button', { name: 'Save as CSV' })).toBeDisabled();
+  await search.fill('');
+  await expect(rows).toHaveCount(4);
+  await expect(section).toContainText('3 of 3');
+  // the shown runs as a file: a download made in the page, no request
+  const [download] = await Promise.all([page.waitForEvent('download'), section.getByRole('button', { name: 'Save as CSV' }).click()]);
+  expect(download.suggestedFilename()).toBe('beta.nvim-runs.csv');
+  const csv = readFileSync(await download.path(), 'utf8');
+  const lines = csv.split(String.fromCharCode(13, 10));
+  expect(lines[0]).toBe('ts,kind,scope,verdict,ms,sha,dirty,profile,red,red_more');
+  expect(lines).toHaveLength(5);
+  await clean(page, seen);
+});
+
+test('the cost of the runs of the whole fleet, from the fleet document', async ({ page }) => {
+  const seen = await watchPage(page);
+  await fakePicker(page, exportFiles());
+  await openExport(page);
+  const section = page.getByRole('region', { name: 'Cost of the runs of the whole fleet on this machine' });
+  await expect(section).toBeVisible();
+  const fleet = JSON.parse(exportFiles()['fleet.json'] as string) as { metrics: { runs: number } };
+  await expect(section.getByRole('definition').first()).toHaveText(String(fleet.metrics.runs));
   await clean(page, seen);
 });
 

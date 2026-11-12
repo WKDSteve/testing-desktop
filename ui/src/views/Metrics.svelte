@@ -1,12 +1,23 @@
 <script lang="ts">
   // What the heavy runs of one repository cost on the machine that exported it: runs, machine minutes, runs per push,
   // the cache, the queue, per kind of run and per day. The numbers are the engine's (`metrics` of the repository's
-  // document, `testing stats`); the page only adds them up for the tiles.
+  // document, `testing stats`; for the fleet the same part of the fleet's document, all repositories together); the
+  // page only adds them up for the tiles.
   import type { Metrics } from '../lib/contract';
   import type { Key } from '../lib/i18n';
   import { metricsSummary } from '../lib/model';
 
-  let { metrics, t }: { metrics: Metrics; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+  let {
+    metrics,
+    t,
+    heading = 'metrics.heading',
+    id = 'metrics-heading',
+  }: {
+    metrics: Metrics;
+    t: (key: Key, params?: Record<string, string | number>) => string;
+    heading?: Key;
+    id?: string;
+  } = $props();
 
   const sum = $derived(metricsSummary(metrics));
   const most = $derived(Math.max(1, ...metrics.days.map((d) => d.minutes)));
@@ -25,8 +36,8 @@
   }
 </script>
 
-<section aria-labelledby="metrics-heading">
-  <h2 id="metrics-heading">{t('metrics.heading')}</h2>
+<section aria-labelledby={id}>
+  <h2 {id}>{t(heading)}</h2>
   <p class="muted">{t('metrics.period', { first: day(metrics.first), last: day(metrics.last) })}</p>
   <dl class="tiles">
     <div>

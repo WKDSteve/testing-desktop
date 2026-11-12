@@ -5,6 +5,7 @@
 --   testing sheets step button-looks --headed
 return {
   id = "testing-desktop.button-looks",
+  feature = "testing-desktop.button-states",
   title = "testing-desktop: the filled button of the web way in at rest, under the pointer and with focus, light and dark",
   task = "testing-desktop/live-check-gefuellter-knopf-des-web-einstiegs-hell-und-dunke",
   engine = "browser",

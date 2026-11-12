@@ -28,8 +28,8 @@ const REPO: &str = include_str!("fixtures/golden/repo.json");
 const FINDINGS: &str = include_str!("fixtures/golden/findings.json");
 
 /// The digests of the golden documents: their ETags.
-const FLEET_DIGEST: &str = "sha256:77f42b5087dac86a";
-const REPO_DIGEST: &str = "sha256:39292db45a6226f1";
+const FLEET_DIGEST: &str = "sha256:e38c07f939e30153";
+const REPO_DIGEST: &str = "sha256:961b3b906a1fd972";
 /// The digest of the fleet after a change.
 const NEW_DIGEST: &str = "sha256:7777777777777777";
 /// The key of the repository of the golden `repo` document.

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixture';
 import { expectAccessible, violations, watchViolations } from './a11y';
 import { STATE } from './global';
 import { BETA_SPEC, origin, pairingLink, writeRun } from './hub';

@@ -583,12 +583,28 @@ async fn what_is_not_a_command_of_the_list_never_reaches_the_child() {
 /// The time of the last life sign of the child, and whether it stops.
 async fn heartbeat_stops(alive: &Path) {
     appears(alive).await;
-    // Past the grace the child is killed: its file stops changing.
-    tokio::time::sleep(GRACE + Duration::from_millis(1500)).await;
-    let before = std::fs::read_to_string(alive).unwrap();
-    tokio::time::sleep(Duration::from_millis(700)).await;
-    let after = std::fs::read_to_string(alive).unwrap();
-    assert_eq!(before, after, "the child still writes");
+    goes_quiet(alive, "the child still writes").await;
+}
+
+/// Past the grace the child is killed: its file (rewritten every 100 ms while it lives) stops changing. Not a fixed
+/// wait: a loaded runner kills and reaps later, so this waits for a whole second without a change, up to a deadline
+/// that a child nobody kills never meets.
+async fn goes_quiet(alive: &Path, what: &str) {
+    tokio::time::sleep(GRACE).await;
+    let end = Instant::now() + Duration::from_secs(30);
+    let mut last = std::fs::read_to_string(alive).unwrap();
+    let mut since = Instant::now();
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let now = std::fs::read_to_string(alive).unwrap_or_default();
+        if now != last {
+            last = now;
+            since = Instant::now();
+        } else if since.elapsed() >= Duration::from_secs(1) {
+            return;
+        }
+        assert!(Instant::now() < end, "{what}");
+    }
 }
 
 #[tokio::test]
@@ -611,11 +627,7 @@ async fn a_child_that_ignores_its_stdin_is_killed_on_abort_and_when_the_hub_stop
     assert_eq!(r.status, 200, "{r:?}");
     appears(&fx.left("alive")).await;
     hub.server.shutdown().await;
-    tokio::time::sleep(GRACE + Duration::from_millis(1500)).await;
-    let before = std::fs::read_to_string(fx.left("alive")).unwrap();
-    tokio::time::sleep(Duration::from_millis(700)).await;
-    let after = std::fs::read_to_string(fx.left("alive")).unwrap();
-    assert_eq!(before, after, "the child outlived the hub");
+    goes_quiet(&fx.left("alive"), "the child outlived the hub").await;
 }
 
 #[tokio::test]

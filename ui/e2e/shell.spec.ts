@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixture';
 import { collectShell, diffShell, paletteRecolor, SHELL_PROBES, type ShellSignature } from 'appkit-ui/shell-check';
 import golden from 'appkit-ui/shell.golden.json' with { type: 'json' };
 import { STATE } from './global';

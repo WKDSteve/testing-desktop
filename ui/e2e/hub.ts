@@ -98,7 +98,9 @@ export function writeRun(root: string, name: string, spec: string): void {
   try {
     execFileSync('nvim', ['-n', '-i', 'NONE', '--headless', '-u', 'NONE', '-l', script, 'run', '.', '--state-dir', state], {
       cwd: dir,
-      env: { ...process.env, CI: 'true' },
+      // Not in testing.nvim's queue of heavy runs: a run of one spec file of the tests must not wait behind a whole
+      // suite of another session on this machine (it did, past the time limit of a test).
+      env: { ...process.env, CI: 'true', TESTING_QUEUE: 'off' },
       stdio: 'ignore',
     });
   } catch (error) {

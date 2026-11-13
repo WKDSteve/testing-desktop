@@ -421,3 +421,35 @@ async fn a_request_names_a_key_a_file_or_a_task_and_nothing_else() {
     assert_eq!(r.status, 400, "{r:?}");
     assert_eq!(hub.state().await["available"], false);
 }
+
+#[tokio::test]
+async fn a_process_the_engine_leaves_behind_does_not_hold_the_run() {
+    let Some(program) = program_or_skip() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let hub = start_hub(&fx, Some(program)).await;
+    let r = hub
+        .post("run/start", &json!({ "key": KEY, "file": "orphan" }))
+        .await;
+    assert_eq!(r.status, 202, "{r:?}");
+    // The process it left keeps the pipes for 25 s; the run is over long before.
+    let start = Instant::now();
+    let end = start + Duration::from_secs(15);
+    let state = loop {
+        let state = hub.state().await;
+        if state["run"]["running"] == false {
+            break state;
+        }
+        assert!(
+            Instant::now() < end,
+            "the run is held by what it left: {state}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(state["run"]["verdict"], "green", "{state}");
+    // And the next run may start.
+    let r = hub.post("run/start", &json!({ "key": KEY })).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    hub.ended().await;
+}

@@ -21,7 +21,7 @@
 //! * the hub knows the sheets bound to a task ([`task_sheets`]: the `task = "<id>"` line of a sheet, read as text as
 //!   the engine reads a sheet that does not load) and starts a task's run only when there is one;
 //! * what the child writes is kept as a short tail, with the root taken out, for the PC only;
-//! * the run ends with the hub, and after [`RUN_LIMIT`].
+//! * the run ends with the hub, and after [`RUN_LIMIT`]; a process it leaves behind does not hold it.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -51,6 +51,10 @@ pub const RUN_LIMIT: Duration = Duration::from_secs(5 * 60 * 60);
 
 /// How much of the child's output is kept: the end of it, where the verdict stands.
 const TAIL_BYTES: usize = 16 * 1024;
+
+/// How long the last lines of a run that ended are read. A process it left behind may hold its stdout and stderr for as
+/// long as it lives; that does not hold the run.
+const DRAIN: Duration = Duration::from_secs(2);
 
 /// What runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -389,9 +393,9 @@ impl Launch {
         drop(guard);
         let this = Arc::clone(self);
         tokio::spawn(async move {
-            let read_out = this.read_into(id, stdout);
-            let read_err = this.read_into(id, stderr);
-            let wait = async {
+            let mut read_out = tokio::spawn(Arc::clone(&this).read_into(id, stdout));
+            let mut read_err = tokio::spawn(Arc::clone(&this).read_into(id, stderr));
+            let code = async {
                 tokio::select! {
                     status = child.wait() => status.ok().and_then(|s| s.code()),
                     _ = kill_rx => {
@@ -403,8 +407,17 @@ impl Launch {
                         None
                     }
                 }
-            };
-            let (code, (), ()) = tokio::join!(wait, read_out, read_err);
+            }
+            .await;
+            // The last lines, for a short while: a process the run left behind (a child editor that did not go down)
+            // may hold the pipes for as long as it lives, and it does not hold the run.
+            let _ = tokio::time::timeout(DRAIN, async {
+                let _ = (&mut read_out).await;
+                let _ = (&mut read_err).await;
+            })
+            .await;
+            read_out.abort();
+            read_err.abort();
             {
                 let mut guard = this.lock();
                 if let Some(r) = guard.as_mut().filter(|r| r.id == id) {
@@ -423,7 +436,7 @@ impl Launch {
     }
 
     /// Read a stream of the child into the tail of run `id` until it ends.
-    async fn read_into<R: AsyncRead + Unpin>(&self, id: u64, stream: Option<R>) {
+    async fn read_into<R: AsyncRead + Unpin>(self: Arc<Self>, id: u64, stream: Option<R>) {
         let Some(mut stream) = stream else {
             return;
         };

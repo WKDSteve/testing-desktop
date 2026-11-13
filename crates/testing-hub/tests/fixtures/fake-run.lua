@@ -7,6 +7,7 @@
 --   (suite)         prints a line that names the root, ends green
 --   red             prints a red case, exit 1
 --   slow            waits until it is killed (writes `<root>/slow.started` first)
+--   orphan          leaves a process behind that holds its stdout and stderr for 25 s, and ends green
 --   <task>          exit 0 for the task `alpha.nvim/try-it`, else the refusal of the engine, exit 2
 
 -- luacheck: globals vim
@@ -52,6 +53,20 @@ if file == "red" then
   io.stdout:write(root .. "/TESTS/red_spec.lua:3: expected 1, got 2\n")
   io.stdout:write("RED 1 failed\n")
   os.exit(1)
+elseif file == "orphan" then
+  -- As a child editor that outlives its run does: it inherits the pipes and keeps them for a while.
+  local handle = vim.uv.spawn(vim.v.progpath, {
+    args = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "--cmd", "lua vim.wait(25000)", "--cmd", "qa!" },
+    stdio = { nil, 1, 2 },
+    -- Not in the root: on Windows a folder in use as a working folder cannot be removed by the test.
+    cwd = vim.uv.os_tmpdir(),
+    detached = true,
+  })
+  assert(handle, "fake-run: no process to leave behind")
+  handle:unref()
+  io.stdout:write("GREEN 1 passed\n")
+  io.stdout:flush()
+  os.exit(0)
 elseif file == "slow" then
   local s = assert(io.open(norm .. "/slow.started", "w"))
   s:close()

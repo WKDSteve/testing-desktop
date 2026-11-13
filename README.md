@@ -12,7 +12,7 @@ after that. The sibling of [tasks-desktop](https://github.com/WKDSteve/tasks-des
 them. Its web variant, one HTML file opened from disk, is published to
 [testing-web](https://github.com/WKDSteve/testing-web).
 
-**Status: early development. No release yet.** The hub starts, pairs a browser, passes the security matrix of
+**Status: alpha, early development. No release yet.** The hub starts, pairs a browser, passes the security matrix of
 [appkit](https://github.com/WKDSteve/appkit) and reads the fleet, one repository and its findings from testing.nvim
 (`/api/testing/fleet`, `/api/testing/repo?key=...`, `/api/testing/finding?key=...`, with the digest of the document as
 the ETag). The fleet is a snapshot: a watcher of the state folder renews it, one question to the engine per change, and

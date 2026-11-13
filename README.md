@@ -134,3 +134,19 @@ pinned by its tag in `Cargo.toml`; `Cargo.lock` pins the commit.
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+<!-- connections:begin (written by the app-icons tool of the workshop; change integrations.json there, not this block) -->
+## Connections
+
+![testing-desktop: what it uses and what uses it](assets/graphs/testing-desktop.png)
+
+**Uses**
+
+- [appkit](https://github.com/WKDSteve/appkit): testing-desktop is built on appkit: guard, pairing and install (`appkit-core`, `appkit-hub`) and the page kit (`appkit-ui`, `appkit-web`). ([picture](assets/graphs/pair/testing-desktop--appkit.png))
+- [testing-web](https://github.com/WKDSteve/testing-web): The web workflow of testing-desktop builds the page as one HTML file, tests it and publishes it to the repository testing-web. ([picture](assets/graphs/pair/testing-desktop--testing-web.png))
+- [testing.nvim](https://github.com/WKDSteve/testing.nvim): testing-desktop reads the versioned documents of testing.nvim (`testing-export/1`); the engine, pinned in `engine.lock`, writes every result. ([picture](assets/graphs/pair/testing-desktop--testing.nvim.png))
+
+**Used by**
+
+- [hub-desktop](https://github.com/WKDSteve/hub-desktop): hub-desktop shows testing-desktop as a tile and starts it, native or as a web app. ([picture](assets/graphs/pair/hub-desktop--testing-desktop.png))
+<!-- connections:end -->

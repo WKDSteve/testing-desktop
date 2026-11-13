@@ -15,7 +15,10 @@ export interface Capabilities {
   about: boolean;
   /** It has the findings of a run; an export folder holds none. */
   findings: boolean;
-  /** It can run a test sheet step by step (the hub, with an engine); a folder cannot. */
+  /**
+   * It can start something on the PC: a test sheet step by step, a run of a suite or of spec files through the engine
+   * (the hub, with an engine); a folder and a phone cannot.
+   */
   step: boolean;
 }
 
@@ -108,6 +111,16 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
   /** One command of the list to the run. */
   stepCommand(command: StepCommand): Promise<unknown> {
     return this.postJson<unknown>(this.route('sheet-step/command'), command);
+  }
+
+  /** Where the run through the engine stands (`lib/run.ts` folds it). */
+  runState(): Promise<unknown> {
+    return this.json<unknown>(this.route('run'));
+  }
+
+  /** Start the suite of a repository, or its spec files whose name holds `file`, through the engine. */
+  runStart(key: string, file?: string): Promise<unknown> {
+    return this.postJson<unknown>(this.route('run/start'), file === undefined ? { key } : { key, file });
   }
 
   /** The picture of a step of the run (`image`: the target after the step, `shot`: the file of a `shot` step). */

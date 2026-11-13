@@ -3,6 +3,8 @@
   import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { caseTitle, redCases, shown, viewOf, type Tone } from '../lib/model';
+  import { fileTextProblem, type RunView } from '../lib/run';
+  import { App } from '../lib/app.svelte';
   import HistoryView from './History.svelte';
   import MetricsView from './Metrics.svelte';
   import ToneView from './Tone.svelte';
@@ -16,6 +18,17 @@
 
   function toneWord(tone: Tone): string {
     return t(`tone.${tone}` as Key);
+  }
+
+  // A run through the engine: only the page on the hub (`App`) starts one; a folder and a phone have none.
+  const hub = $derived(app.hasStep && app instanceof App ? app : null);
+  let fileText = $state('');
+  const fileProblem = $derived(fileText.trim() === '' ? null : fileTextProblem(fileText));
+
+  function runWhat(run: RunView): string {
+    if (run.what === 'file') return t('run.what.file', { file: shown(run.file) ?? '' });
+    if (run.what === 'task') return t('run.what.task', { task: shown(run.task) ?? '' });
+    return t(`run.what.${run.what}` as Key);
   }
 </script>
 
@@ -99,6 +112,59 @@
 
     {#if doc.metrics}
       <MetricsView metrics={doc.metrics} {t} />
+    {/if}
+
+    {#if hub}
+      {@const run = hub.run}
+      {@const busy = run?.running === true}
+      <h2>{t('run.heading')}</h2>
+      <p class="muted">{t('run.note')}</p>
+      <div class="run">
+        <button type="button" disabled={busy} onclick={() => void hub.runStart()}>{t('run.suite')}</button>
+        <form
+          class="run-file"
+          onsubmit={(e) => {
+            e.preventDefault();
+            if (fileText.trim() !== '' && fileProblem === null) void hub.runStart(fileText);
+          }}
+        >
+          <label>
+            {t('run.file.label')}
+            <input
+              type="text"
+              bind:value={fileText}
+              maxlength="100"
+              spellcheck="false"
+              autocomplete="off"
+              aria-invalid={fileProblem !== null}
+              aria-describedby={fileProblem ? 'run-file-problem' : undefined}
+            />
+          </label>
+          <button type="submit" disabled={busy || fileText.trim() === '' || fileProblem !== null}>{t('run.file.button')}</button>
+        </form>
+      </div>
+      {#if fileProblem}
+        <p class="bad" id="run-file-problem">{t(fileProblem === 'too_long' ? 'run.file.too_long' : 'run.file.not_plain')}</p>
+      {/if}
+      {#if hub.runFailure}
+        <p class="bad" role="status">{t('run.failed', { message: shown(hub.runFailure) ?? '' })}</p>
+      {/if}
+      {#if run}
+        {#if run.running}
+          <p role="status">{t(run.key === null || run.key === app.openKey ? 'run.running' : 'run.other', { what: runWhat(run) })}</p>
+        {:else if run.key === app.openKey && run.verdict}
+          <p role="status">
+            <ToneView
+              tone={run.verdict === 'green' ? 'green' : 'red'}
+              label={t('run.ended', { what: runWhat(run), verdict: t(`run.verdict.${run.verdict}` as Key) })}
+            />
+          </p>
+          {#if run.output}
+            <p class="label">{t('run.output')}</p>
+            <pre>{shown(run.output)}</pre>
+          {/if}
+        {/if}
+      {/if}
     {/if}
 
     {#if app.hasStep}
@@ -243,6 +309,38 @@
     padding: 0;
     margin: 0;
   }
+  .run {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: end;
+  }
+  .run-file {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: end;
+  }
+  .run-file label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.9em;
+  }
+  .run input {
+    font: inherit;
+    font-family: var(--mono);
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+  }
+  .run button:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
+  .run button,
   .sheets button {
     background: var(--surface);
     color: var(--text);

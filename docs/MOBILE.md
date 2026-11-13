@@ -13,12 +13,16 @@ appkit's mobile basis ([appkit `docs/MOBILE.md`](https://github.com/WKDSteve/app
 | The fleet, a repository, its red cases and findings | read |
 | Start the failed jobs of a red CI run of the default branch again | with the level `trigger` of this phone and a confirmation by its fingerprint or screen lock, each time |
 | A notice when a main turns red | through Tailscale, with a UnifiedPush app on the phone |
-| A test sheet step by step, the event stream | never (they stay on the PC) |
+| Run the test sheets of a task on the PC (from tasks mobil) | with the level `trigger` and a confirmation, each time; only a task a sheet of its repository names |
+| Where a run stands | read; of a run that is not a task's sheets only that one is under way |
+| A test sheet step by step, a run of a whole suite or of a file, the event stream | never (they stay on the PC) |
 | `testing ci trust`, releasing commits of others (`testing ci release`), any command | never: no route of the hub does it, none is released to a phone (tests `phone.rs`, `crates/testing-hub/src/phone.rs`) |
 
 A run the runner guard refused (`rejected`) is not started again from the phone: release it on the PC, where you look
-at the commit. A run of a task's test sheet, started from tasks mobil, is a later step (task
-`testing-mobil-blattlauf-einer-task-aus-tasks-mobil-web-ueber`).
+at the commit. The run of a task's test sheets (`POST /api/testing/run/task`, `{ "task": "<area>/<slug>" }`) is
+testing.nvim's `testing sheets run --task` on the PC, in the repository of the fleet named like the task's area; the
+hub starts it only when a sheet there names the task. tasks mobil calls it; the routes are in
+[USAGE.md](USAGE.md#a-run-through-testingnvim).
 
 ## The three ways
 
@@ -36,7 +40,7 @@ at the commit. A run of a task's test sheet, started from tasks mobil, is a late
 testing-hub phone pair                 a QR code to scan with the app (the tailnet name of config.json)
 testing-hub phone pair --tunnel        the same for a phone behind an SSH tunnel
 testing-hub phone list                 the paired phones: id, name, level
-testing-hub phone level <id> trigger   let this phone start the failed jobs of a red run again
+testing-hub phone level <id> trigger   let this phone start a rerun of a red run, and a task's test sheets
 testing-hub phone level <id> read      no more
 testing-hub phone revoke <id>          forget the phone; its sessions end at once
 ```

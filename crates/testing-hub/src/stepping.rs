@@ -26,7 +26,7 @@ const MAX_BODY: usize = 4096;
 
 /// The root of the repository with this key, as the engine names it in the local form of `repo`. A key the
 /// engine finds no repository for is `404`.
-async fn root_of(st: &Shared, key: &str) -> Result<PathBuf, Box<Response>> {
+pub(crate) async fn root_of(st: &Shared, key: &str) -> Result<PathBuf, Box<Response>> {
     let rt = st.rt();
     let Some(engine) = &rt.engine else {
         return Err(Box::new(engine_unavailable(&rt)));
@@ -68,7 +68,7 @@ fn key_of(query: Option<&str>) -> Result<String, Box<Response>> {
 }
 
 /// The body of a POST as one JSON object; a body that is not is refused before anything is read from it.
-fn object_of(body: &Bytes) -> Result<serde_json::Map<String, Value>, Box<Response>> {
+pub(crate) fn object_of(body: &Bytes) -> Result<serde_json::Map<String, Value>, Box<Response>> {
     if body.len() > MAX_BODY {
         return Err(Box::new(error_body(
             StatusCode::PAYLOAD_TOO_LARGE,

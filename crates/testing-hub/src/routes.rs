@@ -6,9 +6,10 @@
 //! [`ROUTES`] is the one list of them: the router is built from it and the security matrix reads
 //! its names, so a route cannot be served without the matrix trying it without a session.
 //!
-//! The routes of a stepped run of a sheet (`sheet-step`, in `stepping`) are the two POSTs of this
-//! hub: they start the engine's `testing sheets step` in a repository of the fleet and pass it a
-//! command of a closed list.
+//! The routes of a stepped run of a sheet (`sheet-step`, in `stepping`) start the engine's `testing sheets step` in
+//! a repository of the fleet and pass it a command of a closed list; those of a run through the engine (`run/*`, in
+//! `launching`) start its command line for a suite, a file or the sheets of a task; `ci-rerun` starts the failed
+//! jobs of a red CI run again.
 
 use std::sync::Arc;
 
@@ -24,7 +25,7 @@ use serde_json::{json, Value};
 use crate::answer::{engine_failure, engine_unavailable};
 use crate::engine::{is_repo_key, Ask, Calls, EngineError, Method, Reply};
 use crate::runtime::TestingRuntime;
-use crate::{live, stepping, IDENTITY};
+use crate::{launching, live, stepping, IDENTITY};
 
 /// The core of the hub with the runtime of this app.
 pub type Shared = Core<TestingRuntime>;
@@ -45,6 +46,10 @@ pub const ROUTES: &[(&str, MakeRoute)] = &[
     ("sheet-step/command", || post(stepping::command)),
     ("sheet-step/image", || get(stepping::image)),
     ("ci-rerun", || post(crate::rerun::ci_rerun)),
+    ("run", || get(launching::state)),
+    ("run/start", || post(launching::start)),
+    ("run/task-sheets", || get(launching::task_sheets_route)),
+    ("run/task", || post(launching::task)),
 ];
 
 /// The router of the app, built from [`ROUTES`] and from nothing else. Invariant: this stays a
@@ -282,6 +287,10 @@ mod tests {
                 "sheet-step/command",
                 "sheet-step/image",
                 "ci-rerun",
+                "run",
+                "run/start",
+                "run/task-sheets",
+                "run/task",
             ]
         );
     }

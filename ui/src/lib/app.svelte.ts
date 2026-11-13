@@ -6,6 +6,7 @@ import { StreamSession } from 'appkit-ui/session';
 import type { SseMessage } from 'appkit-ui/sse';
 import { messageOf, Reader } from './reader.svelte';
 import { ApiError, type HubSource, type StepCommand } from './source';
+import { fileTextProblem, runFrom, type RunView } from './run';
 import { emptyStep, fromDocument, fromStream, isStale, noteProblem, STREAM_EVENT, type StepState } from './step';
 
 export type { Phase } from './reader.svelte';
@@ -15,6 +16,9 @@ export const TOKEN_KEY = 'testing-desktop.session';
 
 /** How long the page waits before it asks a hub that did not answer, or an engine that was not ready, again. */
 export const RETRY_MS = 3000;
+
+/** How often the page asks where a run through the engine stands while it runs (the hub streams no run). */
+export const RUN_POLL_MS = 2000;
 
 /** How often a pairing code is tried again when the hub says that there were too many attempts. */
 export const EXCHANGE_RETRIES = 3;
@@ -54,6 +58,12 @@ export class App extends Reader {
   stepFailure = $state<string | null>(null);
   /** The step whose tile is shown, chosen in the list; `null`: the last one that did something. */
   stepChosen = $state<number | null>(null);
+
+  /** The run through the engine that is or was last (`lib/run.ts`); `null` before the first. */
+  run = $state<RunView | null>(null);
+  /** Why the last start of a run was refused; `null` once one went through. */
+  runFailure = $state<string | null>(null);
+  private following = false;
 
   /** The event stream of the hub (the kit's `StreamSession`). */
   readonly stream = new StreamSession();
@@ -240,6 +250,62 @@ export class App extends Reader {
     }
   }
 
+  /** Open a repository; the page also learns of a run through the engine under way, and follows it. */
+  override async open(key: string): Promise<void> {
+    // Quietly: a hub without the route, or one that does not answer it now, leaves the page as it is.
+    const read = (this.hasStep ? this.readRun(true) : Promise.resolve()).then(() => {
+      if (this.run?.running) void this.followRun();
+    });
+    await super.open(key);
+    await read;
+  }
+
+  /** Read where the run through the engine stands. A failure leaves what the page holds (and says so, unless quiet). */
+  async readRun(quiet = false): Promise<void> {
+    try {
+      const doc = await this.env.hub.runState();
+      if (this.live) this.run = runFrom(doc).run;
+    } catch (error) {
+      if (this.live && !quiet) this.runFailure = messageOf(error);
+    }
+  }
+
+  /**
+   * Run the suite of the open repository, or its spec files whose name holds `file`, through the engine; the page
+   * follows the run until it ends and then reads the repository again. A file text the hub would refuse is not sent.
+   */
+  async runStart(file?: string): Promise<void> {
+    const key = this.openKey;
+    if (key === null) return;
+    const text = file?.trim();
+    if (text !== undefined && fileTextProblem(text) !== null) return;
+    this.runFailure = null;
+    try {
+      const doc = await this.env.hub.runStart(key, text);
+      if (!this.live) return;
+      this.run = runFrom(doc).run;
+      void this.followRun();
+    } catch (error) {
+      if (this.live) this.runFailure = messageOf(error);
+    }
+  }
+
+  /** Ask where the run stands until it ended; then the repository is read again. One follower at a time. */
+  private async followRun(): Promise<void> {
+    if (this.following) return;
+    this.following = true;
+    try {
+      while (this.live && this.run?.running) {
+        await this.env.sleep(RUN_POLL_MS);
+        if (!this.live) return;
+        await this.readRun();
+      }
+      if (this.live) await this.readAgain();
+    } finally {
+      this.following = false;
+    }
+  }
+
   /** One command to the run; what the hub answers is where the run stands now. */
   async stepCommand(command: StepCommand): Promise<void> {
     this.stepFailure = null;
@@ -319,6 +385,8 @@ export class App extends Reader {
     this.etag = null;
     this.step = emptyStep();
     this.stepFailure = null;
+    this.run = null;
+    this.runFailure = null;
     this.close();
   }
 }

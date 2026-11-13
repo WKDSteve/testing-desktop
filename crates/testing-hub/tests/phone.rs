@@ -214,7 +214,7 @@ async fn send_with(
 }
 
 #[tokio::test]
-async fn a_phone_reads_and_reruns_a_red_run_only_confirmed_and_never_steps_a_sheet() {
+async fn a_phone_reads_reruns_and_runs_a_tasks_sheets_only_confirmed_and_never_steps_a_sheet() {
     let subject = TestingPhone::new(true);
     let (server, control) = start(&subject).await;
     let origin = format!("http://127.0.0.1:{}", server.addr().port());
@@ -243,6 +243,8 @@ async fn a_phone_reads_and_reruns_a_red_run_only_confirmed_and_never_steps_a_she
         ("GET", "sheet-step"),
         ("GET", "sheet-step/sheets"),
         ("GET", "events"),
+        // Nor the run of a whole suite or of a file: a new run from the phone is only that of a task's sheets.
+        ("POST", "run/start"),
     ] {
         let r = send_with(
             &server,
@@ -256,7 +258,14 @@ async fn a_phone_reads_and_reruns_a_red_run_only_confirmed_and_never_steps_a_she
         assert_eq!(r.status, 403, "{method} {name}: {r:?}");
         assert_eq!(r.json()["error"]["code"], "not_for_devices", "{name}");
     }
+    // Where a run stands, cut for a device; there is none yet.
+    let r = get(&server, &route("run"), Some(&token)).await;
+    assert_eq!(r.status, 200, "{r:?}");
+    assert_eq!(r.json()["run"], Value::Null, "{r:?}");
     // A new phone may not start anything.
+    let task = r#"{"task":"alpha.nvim/try-it"}"#;
+    let r = send_with(&server, "POST", &route("run/task"), &token, &[], task).await;
+    assert_eq!(r.json()["error"]["code"], "level_too_low", "{r:?}");
     let red = r#"{"key":"beta.nvim-ac6d3a4ece7f"}"#;
     let r = send_with(&server, "POST", &route("ci-rerun"), &token, &[], red).await;
     assert_eq!(r.json()["error"]["code"], "level_too_low", "{r:?}");
@@ -272,11 +281,13 @@ async fn a_phone_reads_and_reruns_a_red_run_only_confirmed_and_never_steps_a_she
     let r = send_with(&server, "POST", &route("ci-rerun"), &token, &[], red).await;
     assert_eq!(r.json()["error"]["code"], "confirm_required", "{r:?}");
     assert!(subject.reruns.0.lock().unwrap().is_empty());
+    let r = send_with(&server, "POST", &route("run/task"), &token, &[], task).await;
+    assert_eq!(r.json()["error"]["code"], "confirm_required", "{r:?}");
     // Confirmed: the failed jobs of run 22 of fixture-owner/beta.nvim are started again.
-    let confirmed = |body: &'static str| {
+    let confirmed_for = |name: &'static str, body: &'static str| {
         let origin = origin.clone();
         let id = id.clone();
-        let path = route("ci-rerun");
+        let path = route(name);
         let server = &server;
         let confirm = &confirm;
         async move {
@@ -297,6 +308,31 @@ async fn a_phone_reads_and_reruns_a_red_run_only_confirmed_and_never_steps_a_she
             format!("{c}.{}", sign(confirm, &text))
         }
     };
+    let confirmed = |body: &'static str| confirmed_for("ci-rerun", body);
+    // Confirmed, the run of a task's sheets passes the guard and reaches the hub (which has no engine to run here).
+    let header = confirmed_for("run/task", task).await;
+    let r = send_with(
+        &server,
+        "POST",
+        &route("run/task"),
+        &token,
+        &[("x-device-confirm", &header)],
+        task,
+    )
+    .await;
+    assert_eq!(r.json()["error"]["code"], "run_unavailable", "{r:?}");
+    // A confirmation is for that very request: one made for the rerun does not start a run.
+    let header = confirmed(red).await;
+    let r = send_with(
+        &server,
+        "POST",
+        &route("run/task"),
+        &token,
+        &[("x-device-confirm", &header)],
+        task,
+    )
+    .await;
+    assert_eq!(r.json()["error"]["code"], "confirm_required", "{r:?}");
     let header = confirmed(red).await;
     let r = send_with(
         &server,

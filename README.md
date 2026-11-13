@@ -18,7 +18,7 @@ them. Its web variant, one HTML file opened from disk, is published to
 the ETag). The fleet is a snapshot: a watcher of the state folder renews it, one question to the engine per change, and
 `/api/testing/events` tells the page. The page shows the fleet (the last local run and the CI on each system, red first,
 a filter for the red ones and a search) and one repository with its red cases, their output, its findings, the history of its runs (searchable, cut to a period, saved as CSV or JSON), what its heavy runs cost on this machine (runs, machine minutes, runs per push, cache, queue; the `metrics` of `testing stats`, the file handed to the engine as `params.metrics`; for the whole fleet the same under the table) and its test sheets, and follows new results
-by itself. A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
+by itself. The page starts a run of the suite or of spec files of a repository through testing.nvim's command line, and a paired phone the test sheets of a task (`/api/testing/run`, [docs/USAGE.md](docs/USAGE.md#a-run-through-testingnvim)). A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
 there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 
 A phone app, **testing mobil** (Android, Tauri 2), shows the fleet, the red runs and their cases on the way, tells you
@@ -29,10 +29,12 @@ releases a commit. See [docs/MOBILE.md](docs/MOBILE.md).
 
 - **The engine is the only source.** testing.nvim writes every result. The app reads its versioned documents
   (`testing-export/1`) and never parses a state file of its own.
-- **Read only, with two exceptions.** The hub starts no test run of its own and writes into no repository. What a
-  session may start is a stepped run of a test sheet (testing.nvim's `testing sheets step`), in a repository of the
-  fleet, under testing.nvim's own gates; it writes no state. And the failed jobs of a red CI run started again on
-  GitHub (`ci-rerun`), the one thing a phone may start, confirmed on the phone.
+- **Read only, except what testing.nvim runs.** The hub starts no test run of its own and writes into no repository.
+  What a session may start is testing.nvim's own command line, in a repository of the fleet, under testing.nvim's own
+  gates (trust, the workstation, its queue of heavy runs): a stepped run of a test sheet (`testing sheets step`), and a
+  run of the suite, of its spec files of one name or of the test sheets bound to a task (`/api/testing/run`), whose
+  result testing.nvim records where every run of it does. And the failed jobs of a red CI run started again on GitHub
+  (`ci-rerun`). A phone may start that rerun and the run of a task's test sheets, each confirmed on the phone.
 - **Loopback only, token always.** Host and Origin are checked, there is no data endpoint without a session.
 - **Data classes fail closed.** The hub reads the export form of the engine: no absolute path, and only the
   repositories the data classes of the device release.
@@ -48,7 +50,8 @@ releases a commit. See [docs/MOBILE.md](docs/MOBILE.md).
 | release | CI, the rolling build, releases and the install scripts |
 | web | the same interface as `testing.html` for `file://`, reading an export folder: built (`pnpm web:build`), not published yet |
 | sheets | a test sheet step by step from the page (`/api/testing/sheet-step`): the engine's `testing sheets step` as a child of the hub, its events on the stream, the page as its client (the same as the panel in the editor) |
-| later | starting a run through the engine, a panel in the central hub, the stepped run in testing-web over the event stream, an explanation per step (`ai`) |
+| run | a run through the engine from the page and the hub (`/api/testing/run`): the suite of a repository, its spec files of one name, or the test sheets bound to a task (the one a phone may start) |
+| later | a panel in the central hub, the stepped run in testing-web over the event stream, an explanation per step (`ai`) |
 
 The planning notes live outside this repository, in the maintainer's task vault.
 

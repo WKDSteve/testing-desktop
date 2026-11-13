@@ -1,8 +1,10 @@
 //! The hub of testing-desktop, on `appkit-hub`: its names, its settings, the engine seam to
 //! testing.nvim (`testing-export/1`, read only) and the routes a session reads (`fleet`, `repo`,
 //! `finding`, `events`, `about`). The fleet is a snapshot that a watcher of the state folder renews.
-//! The one thing a session may start is a stepped run of a test sheet (`sheet-step`, `sheetstep`):
-//! the engine's `testing sheets step` as a child of the hub, in a repository of the fleet.
+//! A session may start a stepped run of a test sheet (`sheet-step`, `sheetstep`), the engine's `testing sheets
+//! step` as a child of the hub, and a run through the engine (`run/*`, `launch`): the suite of a repository, its spec
+//! files of one name, or the sheets bound to a task, each with the engine's own command line, in a repository of
+//! the fleet.
 //! The commands of the program (`serve`, `start`, `stop`, `open`, `autostart`, `install`,
 //! `uninstall`) are in `app` and `background`.
 
@@ -20,6 +22,8 @@ pub mod app;
 pub mod background;
 pub mod engine;
 pub mod github;
+pub mod launch;
+mod launching;
 mod live;
 pub mod phone;
 pub mod places;

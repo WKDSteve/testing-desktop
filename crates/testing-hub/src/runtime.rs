@@ -32,6 +32,8 @@ pub struct TestingRuntime {
     pub(crate) streams: Arc<StreamCounter>,
     /// The one stepped run of a test sheet, and what the page may ask of it.
     pub(crate) sheet_step: Arc<SheetStep>,
+    /// The one run through the engine (a suite, a file, the sheets of a task).
+    pub(crate) launch: Arc<crate::launch::Launch>,
     /// How a red CI run is started again; `None`: it is not.
     pub(crate) rerun: Option<Arc<dyn crate::rerun::Rerunner>>,
     /// The refresher; ended when the hub stops.
@@ -158,7 +160,13 @@ impl TestingRuntime {
             ));
         }
         // Only with an engine: the program of a run is the engine's own.
-        let sheet_step = Arc::new(SheetStep::new(step.filter(|_| engine.is_some())));
+        let step = step.filter(|_| engine.is_some());
+        let launch = Arc::new(crate::launch::Launch::new(
+            step.clone(),
+            Some(Arc::clone(&store)),
+            ask.state_dir.clone(),
+        ));
+        let sheet_step = Arc::new(SheetStep::new(step));
         Self {
             status,
             engine,
@@ -167,6 +175,7 @@ impl TestingRuntime {
             store,
             streams: Arc::default(),
             sheet_step,
+            launch,
             rerun,
             jobs: Mutex::new(jobs),
             _hints: hints,
@@ -185,6 +194,7 @@ impl Runtime for TestingRuntime {
     fn stop(&self) {
         // A run under way ends with the hub: nothing stays behind.
         self.sheet_step.stop();
+        self.launch.stop();
         let mut jobs = self
             .jobs
             .lock()

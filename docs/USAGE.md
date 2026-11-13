@@ -89,6 +89,28 @@ again when the window gets the focus back. The word in a cell ("green", "3 faile
 for its repository when the pointer rests on it, for example "The last CI run of images.nvim on ubuntu failed."; a
 screen reader reads the sentence after the word.
 
+### A run through testing.nvim
+
+The page of a repository starts a run of testing.nvim, as on the command line: **Run the suite**
+(`testing run --root <repo>`) or **Run these files** with a part of a spec file name (`--file <text>`). One run at a
+time per hub; the page follows it to its verdict (green, red, refused by testing.nvim, could not be made, stopped) and
+shows the end of what testing.nvim wrote, with the folders of the PC taken out. A whole suite is a heavy run: it waits
+for its turn in testing.nvim's queue of heavy runs of this machine, behind a run in a terminal or of another session.
+Its result goes into the state folder the hub reads (`--state-dir`), so the repository shows it as its last local run.
+What testing.nvim refuses (a root that is not trusted, the workstation) is the verdict "refused".
+
+The test sheets bound to a task (a sheet with `task = "<area>/<slug>"`) run the same way through
+`testing sheets run --task`; that is the run a paired phone may start (tasks mobil), confirmed on the phone. The hub
+finds the sheets in the repository of the fleet named like the task's area, and starts nothing for a task no sheet
+names. The routes, for a program that starts a run (the central hub, tasks mobil):
+
+| Route | Body or query | Answer |
+| --- | --- | --- |
+| `GET /api/testing/run` | none | `{ "schema": 1, "kind": "hub.run", "available": bool, "run": null \| { "id", "key", "what": "suite" \| "file" \| "task", "file"?, "task"?, "running", "exit", "verdict", "started", "ended", "output" } }`; a phone sees a task's run without `output`, any other only as `{ "what": "other", "running" }` |
+| `POST /api/testing/run/start` | `{ "key": "<key of the fleet>", "file"?: "<part of a spec file name>" }` | `202` and the state; `409 busy` while a run is under way. The PC only |
+| `GET /api/testing/run/task-sheets` | `?task=<area>/<slug>[&key=<key of the fleet>]` | `{ "schema": 1, "kind": "hub.task-sheets", "task", "key", "sheets": [<name>...] }` |
+| `POST /api/testing/run/task` | `{ "task": "<area>/<slug>", "key"?: "<key of the fleet>" }` | `202` and the state; `404 no_sheet` (no sheet names the task), `404 no_repo`, `409 ambiguous` (name the repository with `key`), `409 busy`. A phone at the level `trigger`, with `x-device-confirm` |
+
 ### A test sheet step by step
 
 A repository lists its test sheets (the files below its `TESTS/sheets`; see `docs/SHEETS.md` of testing.nvim). **Step

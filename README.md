@@ -2,6 +2,8 @@
 
 # testing-desktop
 
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://wkdsteve.github.io/wkd/apps/testing-desktop/)
+
 A local web UI for the test and CI results of the repositories that use
 [testing.nvim](https://github.com/WKDSteve/testing.nvim): every repository at a glance (the last local run, the last CI
 run on each operating system, the red cases with their output), in the browser first and as a small native app

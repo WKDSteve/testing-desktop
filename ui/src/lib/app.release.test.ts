@@ -31,6 +31,8 @@ interface Options {
   release?: { status: number; body: unknown };
   /** What `release/outcome` says once the release ended (after one `pending`); the default is a good release. */
   outcome?: Record<string, unknown>;
+  /** The looks at `release/outcome` the hub does not answer (`500`), by their number from 1; `all`: none is answered. */
+  outcomeFails?: number[] | 'all';
   /** Hold the answer to `release/commits` until this is resolved. */
   holdCommits?: Promise<void>;
 }
@@ -81,6 +83,7 @@ function hub(options: Options = {}) {
     if (path === '/api/testing/release/outcome') {
       if (started === null) return json({ schema: 1, kind: 'hub.release.outcome', state: 'none' });
       outcomeReads += 1;
+      if (options.outcomeFails === 'all' || options.outcomeFails?.includes(outcomeReads)) return json({ error: { code: 'internal', message: 'the hub is busy' } }, 500);
       // It runs for a moment: the first look finds it pending.
       if (outcomeReads === 1) return json({ schema: 1, kind: 'hub.release.outcome', state: 'pending', ...started });
       return json({
@@ -280,11 +283,40 @@ describe('the release assistant on the page', () => {
     expect(failed.release.doneProblem).toBe('engine_timeout: the engine took too long');
     failed.stop();
 
+    expect(failed.release.doneUnknown).toBe(false);
+
     // Another tab released another commit meanwhile: its outcome is not this page's result.
     const other = await walk({ outcome: { sha: S1 } });
-    expect([other.release.stage, other.release.done]).toEqual(['done', null]);
-    expect(other.release.doneProblem).toContain('does not say what became of this release');
+    expect([other.release.stage, other.release.done, other.release.doneUnknown]).toEqual(['done', null, true]);
     other.stop();
+  });
+
+  it('a look at the outcome that fails does not lose a release that went through', async () => {
+    const walk = async (options: Options) => {
+      const s = await started(options);
+      s.app.showRelease(RED);
+      await settled(s.app);
+      await s.app.releaseChooseCommit(S2);
+      s.app.releaseLooked(true);
+      s.app.releaseToConfirm();
+      await s.app.releaseDo();
+      return s;
+    };
+    // Some looks fail (the hub was busy for a moment): the page looks again and shows what became of the release.
+    const shaky = await walk({ outcomeFails: [1, 2, 4] });
+    expect(shaky.app.release.stage).toBe('done');
+    expect(shaky.app.release.done).toMatchObject({ recorded: true });
+    expect([shaky.app.release.doneUnknown, shaky.app.release.failure]).toEqual([false, null]);
+    expect(shaky.posts).toHaveLength(1);
+    shaky.app.stop();
+
+    // No look is answered: the release was started, and the page says that it does not know how it ended. It does
+    // not go back to the question, where a second click would look like a way to try again.
+    const dark = await walk({ outcomeFails: 'all' });
+    expect([dark.app.release.stage, dark.app.release.done, dark.app.release.doneUnknown]).toEqual(['done', null, true]);
+    expect(dark.app.release.doneProblem).toContain('internal');
+    expect(dark.posts).toHaveLength(1);
+    dark.app.stop();
   });
 
   it('goes back one step at a time and forgets what the step left behind chose', async () => {

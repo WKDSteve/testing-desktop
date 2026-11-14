@@ -86,6 +86,11 @@ export interface Wizard {
   done: Done | null;
   /** The engine's `problem` of the release (a re-run that failed, the runs that could not be read). */
   doneProblem: string | null;
+  /**
+   * The release was started, but the page could not learn what became of it (the hub did not answer, or answers for
+   * another release): it may be on the list or not, and the page must not say either.
+   */
+  doneUnknown: boolean;
 }
 
 export function emptyWizard(): Wizard {
@@ -101,6 +106,7 @@ export function emptyWizard(): Wizard {
     looked: false,
     done: null,
     doneProblem: null,
+    doneUnknown: false,
   };
 }
 

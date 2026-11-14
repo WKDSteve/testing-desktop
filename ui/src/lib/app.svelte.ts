@@ -24,6 +24,9 @@ export const RUN_POLL_MS = 2000;
 /** How often the page asks what became of a release while it runs (the hub answers its start at once). */
 export const RELEASE_POLL_MS = 1000;
 
+/** How many looks in a row may fail before the page says that it does not know what became of a release. */
+export const RELEASE_POLL_MISSES = 5;
+
 /** How often a pairing code is tried again when the hub says that there were too many attempts. */
 export const EXCHANGE_RETRIES = 3;
 
@@ -524,23 +527,37 @@ export class App extends Reader {
     await this.releaseStep(
       async () => {
         await this.env.hub.releaseCommit(repo, sha);
-        // The hub started it and answers at once; the release runs on there, whatever becomes of this page.
+        // The hub started it and answers at once; the release runs on there, whatever becomes of this page. A look
+        // that fails does not stop it either: the page looks again, and after some misses says that it does not know.
+        let misses = 0;
         for (;;) {
-          const read = outcomeFrom(await this.env.hub.releaseOutcome());
-          if (read.state !== 'pending') return read;
+          let read: ReturnType<typeof outcomeFrom> | null = null;
+          try {
+            read = outcomeFrom(await this.env.hub.releaseOutcome());
+          } catch (error) {
+            misses += 1;
+            if (misses >= RELEASE_POLL_MISSES || !this.live) return { lost: messageOf(error) };
+          }
+          if (read !== null) {
+            misses = 0;
+            if (read.state !== 'pending') return read;
+          }
           await this.env.sleep(RELEASE_POLL_MS);
-          if (!this.live) return read;
+          if (!this.live) return read ?? { lost: 'the page was left' };
         }
       },
       (answer) => {
-        const read = answer as ReturnType<typeof outcomeFrom>;
+        const lost = (answer as { lost?: string }).lost;
+        const read = lost === undefined ? (answer as ReturnType<typeof outcomeFrom>) : null;
         // Only the outcome of the release this page started: another one's (a second tab) is not this one's result.
-        const mine = read.repo?.toLowerCase() === repo.toLowerCase() && read.sha === sha;
-        if (read.state === 'done' && mine) {
-          this.release = { ...this.release, stage: 'done', done: read.done, doneProblem: App.releaseProblem(read) };
+        const mine = read !== null && read.repo?.toLowerCase() === repo.toLowerCase() && read.sha === sha;
+        if (read !== null && mine && read.state === 'done') {
+          this.release = { ...this.release, stage: 'done', done: read.done, doneProblem: App.releaseProblem(read), doneUnknown: false };
+        } else if (read !== null && mine && read.state === 'failed') {
+          this.release = { ...this.release, stage: 'done', done: null, doneProblem: read.error, doneUnknown: false };
         } else {
-          const why = read.state === 'failed' && mine ? read.error : 'the hub does not say what became of this release';
-          this.release = { ...this.release, stage: 'done', done: null, doneProblem: why };
+          // Started, and what became of it is not known here: not "released", and not "not released".
+          this.release = { ...this.release, stage: 'done', done: null, doneProblem: lost ?? null, doneUnknown: true };
         }
       },
     );

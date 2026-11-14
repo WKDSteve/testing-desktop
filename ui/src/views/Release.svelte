@@ -57,7 +57,7 @@
     {#if w.repos && w.repos.length > 0}
       <p class="muted">{t('release.repo.note')}</p>
       <ul class="choices">
-        {#each w.repos as repo (repo.name)}
+        {#each w.repos as repo, i (i)}
           <li>
             <button type="button" class="choice" disabled={w.busy} onclick={() => void app.releaseChooseRepo(repo.name)}>
               <span class="name">{shown(repo.name)}</span>
@@ -165,11 +165,15 @@
       <span class="mono">{shown(w.repo)} {w.sha ? shortSha(w.sha) : ''}</span>:
       {#if w.done?.recorded}
         <span class="ok">{w.done.already ? t('release.done.already') : t('release.done.recorded')}</span>
+      {:else if w.doneUnknown}
+        <span class="bad">{t('release.done.unknown')}</span>
       {:else}
         <span class="bad">{t('release.done.not_recorded')}</span>
       {/if}
     </p>
-    {#if w.doneProblem}
+    {#if w.doneUnknown}
+      <p class="bad" role="alert">{t('release.done.unknown_note')}{w.doneProblem ? ` (${shown(w.doneProblem)})` : ''}</p>
+    {:else if w.doneProblem}
       <p class="bad" role="alert">{t('release.done.problem', { message: shown(w.doneProblem) ?? '' })}</p>
     {/if}
     {#if w.done}

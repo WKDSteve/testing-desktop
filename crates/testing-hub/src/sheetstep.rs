@@ -84,11 +84,11 @@ const MAX_REPLAY: usize = 20_000;
 /// Windows takes ten seconds to end the child editor of a sheet (measured: an abort then outlives the grace). A
 /// browser or desktop sheet finds its driver through the `TESTING_*` and Playwright variables (without them it is a
 /// reported skip that a terminal would not have), and the program a sheet names may be built with `cargo`. A run
-/// that writes into a task (`--tasks`, `launch`) finds the engine of tasks.nvim through `TASKS_NVIM_DIR` and the
-/// other projects a task's block names below `REPOS_DIR`, as a terminal does.
+/// that writes into a task (`--tasks`, `launch`) finds the engine of tasks.nvim through `TASKS_NVIM_DIR`, as a
+/// terminal does. `REPOS_DIR` is not passed on: the engine and the configs of the child editors read it for much
+/// more than that run (where dependencies and the fleet are), and every child of the hub would get it.
 const PASS_THROUGH: &[&str] = &[
     "TASKS_NVIM_DIR",
-    "REPOS_DIR",
     "TESTING_TRUST_ROOTS",
     "NVIM_MACHINE_ROLE",
     "TESTING_ALLOW_WORKSTATION",
@@ -1030,11 +1030,13 @@ mod tests {
             "CARGO_HOME",
             "RUSTUP_HOME",
             "TASKS_NVIM_DIR",
-            "REPOS_DIR",
         ] {
             assert!(names.contains(&name), "{name} is not passed on");
         }
         assert!(!names.contains(&"A_SECRET_TOKEN"));
+        // Where the person keeps the repositories changes what the engine and a child editor's config find: it
+        // is not handed to every run of the hub for the sake of one option.
+        assert!(!names.contains(&"REPOS_DIR"));
     }
 
     #[test]

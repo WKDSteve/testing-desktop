@@ -151,8 +151,9 @@ ended.
 - The vault is named by you, on this PC: no request can name one, and a suite or a file never gets it. A path that
   is not a folder is said at the start of the hub and not used.
 - testing.nvim finds tasks.nvim as in a terminal: `TASKS_NVIM_DIR`, `<vault>/.deps/tasks.nvim`,
-  `<vault>/../tasks.nvim`, the plugin folder of lazy. A sheet of the task in another project is found below
-  `REPOS_DIR`, else beside the vault. The hub passes both variables on.
+  `<vault>/../tasks.nvim`, the plugin folder of lazy; the hub passes `TASKS_NVIM_DIR` on. Without tasks.nvim the
+  run is not made (the verdict "could not be made", exit 3), before a sheet runs. A sheet of the task in another
+  project is found beside the vault (`<vault>/../<area>`): the hub does not pass `REPOS_DIR` on.
 - `block` of the state says what became of the task: `written` and testing.nvim's word (`changed`, `unchanged`;
   `conflict` when the task was edited in between, `missing` when it is not open). testing.nvim ends with exit 1 for
   a red sheet and for a task it could not write alike, so the verdict is "red" in both cases: `block.written`

@@ -143,3 +143,64 @@ test('a run can be aborted, and a sheet the engine does not know is refused with
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);
 });
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`a step whose status the page does not know reads as unknown, never as passed or skipped (${scheme})`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    const seen = await watch(page);
+    // A status of a newer testing.nvim cannot come from the pinned engine, so the answer of the start is stood in:
+    // a run that ended, whose second step carries a word this page does not know.
+    const SCHEMA = 'testing-sheet-session/1';
+    const ev = (event: string, fields: Record<string, unknown>) => ({ schema: SCHEMA, event, ...fields });
+    await page.route('**/api/testing/sheet-step/start', async (route) => {
+      const body = JSON.parse(route.request().postData() ?? '{}') as { key?: string };
+      await route.fulfill({
+        json: {
+          schema: 1,
+          kind: 'hub.sheet_step',
+          available: true,
+          session: 99,
+          seq: 5,
+          running: false,
+          key: body.key ?? null,
+          sheet: 'smoke',
+          events: [
+            ev('start', {
+              id: 'alpha.smoke',
+              title: 'alpha smoke',
+              engine: 'rpc',
+              sizes: [{ rows: 24, cols: 80 }],
+              steps: [
+                { n: 1, action: 'lua', value: 'vim.g.alpha_smoke = 1', note: 'set the value' },
+                { n: 2, action: 'expect', value: 'vim.g.alpha_smoke == 1', note: 'the value holds' },
+              ],
+              headed: false,
+              delay_ms: 0,
+              breaks: [],
+            }),
+            ev('size', { size: '80x24', state: 'open' }),
+            ev('step-after', { size: '80x24', n: 1, status: 'pass', ms: 3 }),
+            ev('step-after', { size: '80x24', n: 2, status: 'flaky', ms: 4, reason: 'passed on the second try' }),
+            ev('end', { status: 'pass', ok: true, verdict: true, failures: [], snapshots: [], ms: 9 }),
+          ],
+        },
+      });
+    });
+    await openRepository(page);
+    await page.getByRole('button', { name: 'Step through smoke' }).click();
+    await expect(page.getByRole('heading', { name: /alpha smoke/ })).toBeVisible();
+    const steps = page.getByRole('list', { name: 'Steps' }).getByRole('listitem');
+    await expect(steps.nth(0)).toContainText('pass');
+    await expect(steps.nth(1)).toContainText('unknown status (a newer testing.nvim)');
+    await expect(steps.nth(1)).not.toContainText('pass');
+    await expect(steps.nth(1)).not.toContainText('skipped');
+    await steps.nth(1).getByRole('button', { name: /the value holds/ }).click();
+    await expect(page.getByRole('heading', { name: 'Step 2, expect' })).toBeVisible();
+    await expect(page.getByText('passed on the second try')).toBeVisible();
+    await expectAccessible(page, `a step of an unknown status (${scheme})`);
+    await testInfo.attach(`unknown-${scheme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    expect(seen.errors).toEqual([]);
+    expect(seen.foreign).toEqual([]);
+    expect(await violations(page)).toEqual([]);
+  });
+}

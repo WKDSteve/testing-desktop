@@ -62,8 +62,11 @@ export interface SheetDoc {
 
 /** What a step did (`step-after`). */
 export interface Mark {
-  /** `skip`: the step could not be done here (an rpc `shot` without a browser); the sheet ends as a skip. */
-  status: 'pass' | 'fail' | 'skip';
+  /**
+   * `skip`: the step could not be done here (an rpc `shot` without a browser); the sheet ends as a skip.
+   * `unknown`: the engine named a status this page does not know (a newer engine): it is not shown as any other.
+   */
+  status: 'pass' | 'fail' | 'skip' | 'unknown';
   ms: number | null;
   reason: string | null;
   failure: string | null;
@@ -90,8 +93,11 @@ export interface Finished {
   ms: number | null;
 }
 
-/** `skip` is a step that said it could not be done here; `skipped` one the run never reached. */
-export type StepStatus = 'pending' | 'running' | 'next' | 'pass' | 'fail' | 'skip' | 'skipped';
+/**
+ * `skip` is a step that said it could not be done here; `skipped` one the run never reached; `unknown` one whose
+ * status the page does not know.
+ */
+export type StepStatus = 'pending' | 'running' | 'next' | 'pass' | 'fail' | 'skip' | 'unknown' | 'skipped';
 
 export interface StepState {
   /** The run of the hub this state is of; `null` before any. */
@@ -194,10 +200,13 @@ function docOf(e: Record<string, unknown>): SheetDoc {
   };
 }
 
+const MARKS: readonly Mark['status'][] = ['pass', 'fail', 'skip'];
+
 function markOf(e: Record<string, unknown>): Mark {
   return {
-    // A status this reader does not know is of a newer engine: it is not shown as green.
-    status: e['status'] === 'pass' ? 'pass' : e['status'] === 'fail' ? 'fail' : 'skip',
+    // A status this reader does not know is of a newer engine: it is shown as unknown, never as green and never as
+    // one of the others (decided 2026-11-14).
+    status: MARKS.find((m) => m === e['status']) ?? 'unknown',
     ms: num(e['ms']),
     reason: str(e['reason']),
     failure: str(e['failure']),

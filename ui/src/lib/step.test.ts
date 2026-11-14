@@ -61,9 +61,12 @@ describe('the model of a stepped run', () => {
     s = reduce(s, ev('step-after', { size: '80x24', n: 2, status: 'pass', ms: 1 }));
     s = reduce(s, ev('end', { status: 'skip', ok: true, verdict: true, failures: [], snapshots: [], skipped: 'a shot needs a browser', ms: 2 }));
     expect([1, 2, 3].map((n) => statusOf(s, n))).toEqual(['skip', 'pass', 'skipped']);
-    // A status of a newer engine is not read as green.
+    // A status of a newer engine is not read as green, and not as a skip either: it is unknown.
     s = reduce(s, ev('step-after', { size: '80x24', n: 3, status: 'flaky', ms: 1 }));
-    expect(statusOf(s, 3)).toBe('skip');
+    expect(statusOf(s, 3)).toBe('unknown');
+    for (const odd of [undefined, null, 7, '', 'PASS']) {
+      expect(reduce(s, ev('step-after', { size: '80x24', n: 3, status: odd, ms: 1 })).marks['80x24']?.[3]?.status).toBe('unknown');
+    }
   });
 
   it('shows a question until its step is done, and keeps the last error', () => {

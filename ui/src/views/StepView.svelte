@@ -36,7 +36,7 @@
   const tileMark = $derived(tile !== null ? marks[tile] : undefined);
   const tileStepDoc = $derived(doc?.steps.find((s) => s.n === tile) ?? null);
 
-  const ICON: Record<StepStatus, string> = { pass: '✓', fail: '✗', running: '▶', next: '▷', pending: ' ', skip: '⊘', skipped: '–' };
+  const ICON: Record<StepStatus, string> = { pass: '✓', fail: '✗', running: '▶', next: '▷', pending: ' ', skip: '⊘', unknown: '?', skipped: '–' };
 
   function stateWord(status: StepStatus): string {
     return t(`step.state.${status}` as Key);
@@ -163,7 +163,8 @@
   .pass {
     color: var(--ok);
   }
-  .skip {
+  .skip,
+  .unknown {
     color: var(--warn);
   }
   .mono,
@@ -218,7 +219,8 @@
   .steps > li.fail .icon {
     color: var(--bad);
   }
-  .steps > li.skip .icon {
+  .steps > li.skip .icon,
+  .steps > li.unknown .icon {
     color: var(--warn);
   }
   .dot {

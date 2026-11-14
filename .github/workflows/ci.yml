@@ -96,7 +96,13 @@ jobs:
       - name: PSScriptAnalyzer on the scripts
         shell: pwsh
         run: |
-          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope CurrentUser -Force
+          # Only when the version is not there yet: the runners of this machine share the user's module folder, and
+          # `-Force` writes the module again while a job of another runner uses it ("currently in use", then a file
+          # of the module is missing and the step is red; run 43650895614).
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer | Where-Object { $_.Version -eq '1.24.0' })) {
+            Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope CurrentUser -Force
+          }
+          Import-Module PSScriptAnalyzer -RequiredVersion 1.24.0
           $found = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Error, Warning
           $found | Format-Table -AutoSize | Out-String | Write-Output
           if ($found) { exit 1 }

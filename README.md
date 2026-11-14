@@ -54,7 +54,7 @@ releases a commit. See [docs/MOBILE.md](docs/MOBILE.md).
 | sheets | a test sheet step by step from the page (`/api/testing/sheet-step`): the engine's `testing sheets step` as a child of the hub, its events on the stream, the page as its client (the same as the panel in the editor) |
 | run | a run through the engine from the page and the hub (`/api/testing/run`): the suite of a repository, its spec files of one name, or the test sheets bound to a task (the one a phone may start) |
 | release-assistant | the steps of `testing ci release` on the page (`/api/testing/release/*`): repository, commit, what changed, the release and the runs started again; the web variant names the command |
-| ai | under a step of a stepped run, the request an AI would get to explain it (what it does, what to watch out for, what its result means), built by testing.nvim, shown and copied: sending it waits for ai.nvim without an editor |
+| ai | under a step of a stepped run, the request an AI would get to explain it (what it does, what to watch out for, what its result means), built by testing.nvim, shown and copied. A request is built only while the run is paused or waits for an answer, not after its end and not from a recording (decided 2026-11-14). Sending it will go through ai.nvim without an editor, once ai.nvim has that entry |
 | later | a panel in the central hub |
 
 The planning notes live outside this repository, in the maintainer's task vault.

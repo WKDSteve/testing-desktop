@@ -158,7 +158,8 @@ hub.
   the step (the sheet, its steps, what this one did, the screen of the child editor as text, its notes; no picture),
   and the page shows all of it with where it goes. From this page it goes nowhere: the hub cannot send a request yet
   (it will go through ai.nvim, once that can be asked without an editor). **Copy** hands it to the AI you choose. A
-  request is built while the run is paused or waits for an answer, which is where a failed step stops.
+  request is built while the run is paused or waits for an answer, which is where a failed step stops. After the end
+  of a run there is none, and the web variant builds none from a recording.
 
 A failed step pauses so you can look at it; a browser sheet opens its window beside the page. The run writes no state
 and no snapshot. What testing.nvim refuses (the workstation rule, a root that is not trusted), the page shows with the

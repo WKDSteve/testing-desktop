@@ -3,9 +3,10 @@
 "use strict";
 export const validate = validate20;
 export default validate20;
-const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://github.com/WKDSteve/testing.nvim/schemas/testing-sheet-session/1/testing-sheet-session.schema.json","title":"testing-sheet-session/1","description":"One line on stdout of `testing sheets step`: an event of a test sheet run step by step. The commands go the other way, one line each on stdin: `next`, `continue`, `until <n>`, `break <n>`, `clear <n>`, `answer yes|no [text]`, `note <text>`, `abort`; closed stdin is `abort`. A reader ignores unknown events and fields and refuses a higher schema.","type":"object","required":["schema","event"],"properties":{"schema":{"const":"testing-sheet-session/1"},"event":{"type":"string","minLength":1}},"allOf":[{"if":{"properties":{"event":{"const":"start"}}},"then":{"$ref":"#/$defs/start"}},{"if":{"properties":{"event":{"const":"size"}}},"then":{"$ref":"#/$defs/size"}},{"if":{"properties":{"event":{"const":"step-before"}}},"then":{"$ref":"#/$defs/stepBefore"}},{"if":{"properties":{"event":{"const":"step-after"}}},"then":{"$ref":"#/$defs/stepAfter"}},{"if":{"properties":{"event":{"const":"paused"}}},"then":{"$ref":"#/$defs/paused"}},{"if":{"properties":{"event":{"const":"ask"}}},"then":{"$ref":"#/$defs/ask"}},{"if":{"properties":{"event":{"const":"note"}}},"then":{"$ref":"#/$defs/note"}},{"if":{"properties":{"event":{"const":"task"}}},"then":{"$ref":"#/$defs/task"}},{"if":{"properties":{"event":{"const":"error"}}},"then":{"$ref":"#/$defs/error"}},{"if":{"properties":{"event":{"const":"end"}}},"then":{"$ref":"#/$defs/end"}}],"$defs":{"tag":{"description":"A size as a tag: columns x rows (a browser: width x height).","type":"string","pattern":"^[0-9]+x[0-9]+$"},"n":{"description":"The number of a step, from 1.","type":"integer","minimum":1},"value":{"description":"The action's value, as in the sheet.","anyOf":[{"type":"string"},{"type":"number"}]},"strings":{"type":"array","items":{"type":"string"}},"start":{"description":"The first line: the whole sheet, so that a client can draw every step before the first one runs.","type":"object","required":["id","title","engine","root","sizes","steps","headed","delay_ms","breaks"],"properties":{"id":{"type":"string","minLength":1},"title":{"type":"string"},"engine":{"type":"string","minLength":1},"task":{"type":"string"},"app":{"description":"The program of `sheets.apps` the sheet runs against.","type":"string"},"path":{"type":"string"},"root":{"type":"string"},"sizes":{"type":"array","minItems":1,"items":{"type":"object","required":["rows","cols"],"properties":{"rows":{"type":"integer","minimum":1},"cols":{"type":"integer","minimum":1}}}},"steps":{"type":"array","items":{"type":"object","required":["n","action","value"],"properties":{"n":{"$ref":"#/$defs/n"},"action":{"type":"string"},"value":{"$ref":"#/$defs/value"},"note":{"type":"string"}}}},"headed":{"description":"A visible window: asked for with --headed and the engine has one.","type":"boolean"},"delay_ms":{"type":"integer","minimum":0},"breaks":{"type":"array","items":{"$ref":"#/$defs/n"}},"judge":{"$ref":"#/$defs/strings"},"manual":{"$ref":"#/$defs/strings"}}},"size":{"description":"A size's target: started, could not start (`reason` is the failure line), or the sheet is skipped.","type":"object","required":["size","state"],"properties":{"size":{"$ref":"#/$defs/tag"},"state":{"enum":["open","failed","skip"]},"reason":{"type":"string"}}},"stepBefore":{"description":"What the step will do; nothing of it has happened yet.","type":"object","required":["size","n","total","action","value"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"total":{"type":"integer","minimum":1},"action":{"type":"string"},"value":{"$ref":"#/$defs/value"},"note":{"type":"string"}}},"stepAfter":{"description":"What the step did. The first failed step ends its size.","type":"object","required":["size","n","status","ms"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"status":{"description":"skip: the step could not be done here (an rpc `shot` without a browser); the others go on, the sheet ends as a skip.","enum":["pass","fail","skip"]},"ms":{"type":"integer","minimum":0},"reason":{"description":"Why it failed, or why it was skipped.","type":"string"},"failure":{"description":"The failure line as a normal run writes it.","type":"string"},"shot":{"description":"The file of a `shot` step.","type":"string"},"image":{"description":"browser and desktop engine: the picture of the target after this step, in a folder of the run.","type":"string"},"screen":{"description":"rpc engine: the child's screen after the step, one string per row.","$ref":"#/$defs/strings"},"measure":{"description":"A `measure` step: what it measured (also when the value broke its bound); `value` is the median of `values`.","type":"object","required":["name","value","values"],"properties":{"name":{"type":"string"},"value":{"type":"number"},"values":{"type":"array","items":{"type":"number"}},"unit":{"type":"string"},"min":{"type":"number"},"max":{"type":"number"},"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"}}}}},"paused":{"description":"Waiting for a command. `n` is the step about to run; after `failed` the step that failed.","type":"object","required":["size","n","reason"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"reason":{"enum":["start","step","break","until","failed"]}}},"ask":{"description":"A question to a person: the run waits for `answer yes|no [text]`. A no fails the step.","type":"object","required":["size","n","text"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string"}}},"noteItem":{"type":"object","required":["size","n","text","time"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string","minLength":1},"time":{"description":"UTC, YYYY-MM-DDTHH:MM:SSZ.","type":"string"}}},"note":{"description":"A note taken (`note <text>`): it belongs to the step the run stands before, else to the one that ran last. Taken at once, also while a step runs.","$ref":"#/$defs/noteItem"},"task":{"description":"With --tasks: what became of the task's block, after a run that counts as a verdict.","type":"object","required":["id","outcome"],"properties":{"id":{"type":"string"},"outcome":{"type":"string"},"message":{"type":"string"}}},"error":{"description":"A command that could not be done; the run stays paused.","type":"object","required":["message"],"properties":{"message":{"type":"string"}}},"end":{"description":"The last line; the target and everything else of the run is gone by now.","type":"object","required":["status","ok","verdict","failures","snapshots","ms"],"properties":{"status":{"enum":["pass","fail","skip","manual","aborted"]},"ok":{"type":"boolean"},"verdict":{"description":"Whether this run may count as a verdict: it ran to its end, without an abort. The command itself writes nothing.","type":"boolean"},"failures":{"$ref":"#/$defs/strings"},"snapshots":{"$ref":"#/$defs/strings"},"skipped":{"type":"string"},"ms":{"type":"integer","minimum":0},"notes":{"description":"The notes of the run, when there are any.","type":"array","items":{"$ref":"#/$defs/noteItem"}},"answers":{"type":"array","items":{"type":"object","required":["size","n","text","answer"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string"},"answer":{"enum":["yes","no"]},"note":{"type":"string"}}}}}}}};
+const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://github.com/WKDSteve/testing.nvim/schemas/testing-sheet-session/1/testing-sheet-session.schema.json","title":"testing-sheet-session/1","description":"One line on stdout of `testing sheets step`: an event of a test sheet run step by step. The commands go the other way, one line each on stdin: `next`, `continue`, `until <n>`, `break <n>`, `clear <n>`, `answer yes|no [text]`, `note <text>`, `abort`; closed stdin is `abort`. A reader ignores unknown events and fields and refuses a higher schema.","type":"object","required":["schema","event"],"properties":{"schema":{"const":"testing-sheet-session/1"},"event":{"type":"string","minLength":1}},"allOf":[{"if":{"properties":{"event":{"const":"start"}}},"then":{"$ref":"#/$defs/start"}},{"if":{"properties":{"event":{"const":"size"}}},"then":{"$ref":"#/$defs/size"}},{"if":{"properties":{"event":{"const":"step-before"}}},"then":{"$ref":"#/$defs/stepBefore"}},{"if":{"properties":{"event":{"const":"step-after"}}},"then":{"$ref":"#/$defs/stepAfter"}},{"if":{"properties":{"event":{"const":"paused"}}},"then":{"$ref":"#/$defs/paused"}},{"if":{"properties":{"event":{"const":"ask"}}},"then":{"$ref":"#/$defs/ask"}},{"if":{"properties":{"event":{"const":"note"}}},"then":{"$ref":"#/$defs/note"}},{"if":{"properties":{"event":{"const":"task"}}},"then":{"$ref":"#/$defs/task"}},{"if":{"properties":{"event":{"const":"error"}}},"then":{"$ref":"#/$defs/error"}},{"if":{"properties":{"event":{"const":"explain"}}},"then":{"$ref":"#/$defs/explain"}},{"if":{"properties":{"event":{"const":"end"}}},"then":{"$ref":"#/$defs/end"}}],"$defs":{"tag":{"description":"A size as a tag: columns x rows (a browser: width x height).","type":"string","pattern":"^[0-9]+x[0-9]+$"},"n":{"description":"The number of a step, from 1.","type":"integer","minimum":1},"value":{"description":"The action's value, as in the sheet.","anyOf":[{"type":"string"},{"type":"number"}]},"strings":{"type":"array","items":{"type":"string"}},"start":{"description":"The first line: the whole sheet, so that a client can draw every step before the first one runs.","type":"object","required":["id","title","engine","root","sizes","steps","headed","delay_ms","breaks"],"properties":{"id":{"type":"string","minLength":1},"title":{"type":"string"},"engine":{"type":"string","minLength":1},"task":{"type":"string"},"app":{"description":"The program of `sheets.apps` the sheet runs against.","type":"string"},"path":{"type":"string"},"root":{"type":"string"},"sizes":{"type":"array","minItems":1,"items":{"type":"object","required":["rows","cols"],"properties":{"rows":{"type":"integer","minimum":1},"cols":{"type":"integer","minimum":1}}}},"steps":{"type":"array","items":{"type":"object","required":["n","action","value"],"properties":{"n":{"$ref":"#/$defs/n"},"action":{"type":"string"},"value":{"$ref":"#/$defs/value"},"note":{"type":"string"}}}},"headed":{"description":"A visible window: asked for with --headed and the engine has one.","type":"boolean"},"delay_ms":{"type":"integer","minimum":0},"breaks":{"type":"array","items":{"$ref":"#/$defs/n"}},"judge":{"$ref":"#/$defs/strings"},"manual":{"$ref":"#/$defs/strings"}}},"size":{"description":"A size's target: started, could not start (`reason` is the failure line), or the sheet is skipped.","type":"object","required":["size","state"],"properties":{"size":{"$ref":"#/$defs/tag"},"state":{"enum":["open","failed","skip"]},"reason":{"type":"string"}}},"stepBefore":{"description":"What the step will do; nothing of it has happened yet.","type":"object","required":["size","n","total","action","value"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"total":{"type":"integer","minimum":1},"action":{"type":"string"},"value":{"$ref":"#/$defs/value"},"note":{"type":"string"}}},"stepAfter":{"description":"What the step did. The first failed step ends its size.","type":"object","required":["size","n","status","ms"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"status":{"description":"skip: the step could not be done here (an rpc `shot` without a browser); the others go on, the sheet ends as a skip.","enum":["pass","fail","skip"]},"ms":{"type":"integer","minimum":0},"reason":{"description":"Why it failed, or why it was skipped.","type":"string"},"failure":{"description":"The failure line as a normal run writes it.","type":"string"},"shot":{"description":"The file of a `shot` step.","type":"string"},"image":{"description":"browser and desktop engine: the picture of the target after this step, in a folder of the run.","type":"string"},"screen":{"description":"rpc engine: the child's screen after the step, one string per row.","$ref":"#/$defs/strings"},"measure":{"description":"A `measure` step: what it measured (also when the value broke its bound); `value` is the median of `values`.","type":"object","required":["name","value","values"],"properties":{"name":{"type":"string"},"value":{"type":"number"},"values":{"type":"array","items":{"type":"number"}},"unit":{"type":"string"},"min":{"type":"number"},"max":{"type":"number"},"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"}}}}},"paused":{"description":"Waiting for a command. `n` is the step about to run; after `failed` the step that failed.","type":"object","required":["size","n","reason"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"reason":{"enum":["start","step","break","until","failed"]}}},"ask":{"description":"A question to a person: the run waits for `answer yes|no [text]`. A no fails the step.","type":"object","required":["size","n","text"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string"}}},"noteItem":{"type":"object","required":["size","n","text","time"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string","minLength":1},"time":{"description":"UTC, YYYY-MM-DDTHH:MM:SSZ.","type":"string"}}},"note":{"description":"A note taken (`note <text>`): it belongs to the step the run stands before, else to the one that ran last. Taken at once, also while a step runs.","$ref":"#/$defs/noteItem"},"task":{"description":"With --tasks: what became of the task's block, after a run that counts as a verdict.","type":"object","required":["id","outcome"],"properties":{"id":{"type":"string"},"outcome":{"type":"string"},"message":{"type":"string"}}},"explain":{"description":"The answer to `explain <n> <kind>`: the request an AI would get about a step, for the client to show. Nothing was sent; the run stays where it is. Not part of the recording of a run.","type":"object","required":["size","n","kind","system","prompt"],"properties":{"size":{"type":"string"},"n":{"type":"integer","minimum":1},"kind":{"enum":["what","watch","result"]},"system":{"type":"string","minLength":1},"prompt":{"type":"string","minLength":1}}},"error":{"description":"A command that could not be done; the run stays paused.","type":"object","required":["message"],"properties":{"message":{"type":"string"}}},"end":{"description":"The last line; the target and everything else of the run is gone by now.","type":"object","required":["status","ok","verdict","failures","snapshots","ms"],"properties":{"status":{"enum":["pass","fail","skip","manual","aborted"]},"ok":{"type":"boolean"},"verdict":{"description":"Whether this run may count as a verdict: it ran to its end, without an abort. The command itself writes nothing.","type":"boolean"},"failures":{"$ref":"#/$defs/strings"},"snapshots":{"$ref":"#/$defs/strings"},"skipped":{"type":"string"},"ms":{"type":"integer","minimum":0},"notes":{"description":"The notes of the run, when there are any.","type":"array","items":{"$ref":"#/$defs/noteItem"}},"answers":{"type":"array","items":{"type":"object","required":["size","n","text","answer"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string"},"answer":{"enum":["yes","no"]},"note":{"type":"string"}}}}}}}};
 const schema59 = {"description":"With --tasks: what became of the task's block, after a run that counts as a verdict.","type":"object","required":["id","outcome"],"properties":{"id":{"type":"string"},"outcome":{"type":"string"},"message":{"type":"string"}}};
 const schema60 = {"description":"A command that could not be done; the run stays paused.","type":"object","required":["message"],"properties":{"message":{"type":"string"}}};
+const schema61 = {"description":"The answer to `explain <n> <kind>`: the request an AI would get about a step, for the client to show. Nothing was sent; the run stays where it is. Not part of the recording of a run.","type":"object","required":["size","n","kind","system","prompt"],"properties":{"size":{"type":"string"},"n":{"type":"integer","minimum":1},"kind":{"enum":["what","watch","result"]},"system":{"type":"string","minLength":1},"prompt":{"type":"string","minLength":1}}};
 const schema32 = {"description":"The first line: the whole sheet, so that a client can draw every step before the first one runs.","type":"object","required":["id","title","engine","root","sizes","steps","headed","delay_ms","breaks"],"properties":{"id":{"type":"string","minLength":1},"title":{"type":"string"},"engine":{"type":"string","minLength":1},"task":{"type":"string"},"app":{"description":"The program of `sheets.apps` the sheet runs against.","type":"string"},"path":{"type":"string"},"root":{"type":"string"},"sizes":{"type":"array","minItems":1,"items":{"type":"object","required":["rows","cols"],"properties":{"rows":{"type":"integer","minimum":1},"cols":{"type":"integer","minimum":1}}}},"steps":{"type":"array","items":{"type":"object","required":["n","action","value"],"properties":{"n":{"$ref":"#/$defs/n"},"action":{"type":"string"},"value":{"$ref":"#/$defs/value"},"note":{"type":"string"}}}},"headed":{"description":"A visible window: asked for with --headed and the engine has one.","type":"boolean"},"delay_ms":{"type":"integer","minimum":0},"breaks":{"type":"array","items":{"$ref":"#/$defs/n"}},"judge":{"$ref":"#/$defs/strings"},"manual":{"$ref":"#/$defs/strings"}}};
 const schema33 = {"description":"The number of a step, from 1.","type":"integer","minimum":1};
 const schema34 = {"description":"The action's value, as in the sheet.","anyOf":[{"type":"string"},{"type":"number"}]};
@@ -1452,7 +1453,7 @@ return errors === 0;
 }
 validate33.evaluated = {"props":{"size":true,"n":true,"text":true,"time":true},"dynamicProps":false,"dynamicItems":false};
 
-const schema61 = {"description":"The last line; the target and everything else of the run is gone by now.","type":"object","required":["status","ok","verdict","failures","snapshots","ms"],"properties":{"status":{"enum":["pass","fail","skip","manual","aborted"]},"ok":{"type":"boolean"},"verdict":{"description":"Whether this run may count as a verdict: it ran to its end, without an abort. The command itself writes nothing.","type":"boolean"},"failures":{"$ref":"#/$defs/strings"},"snapshots":{"$ref":"#/$defs/strings"},"skipped":{"type":"string"},"ms":{"type":"integer","minimum":0},"notes":{"description":"The notes of the run, when there are any.","type":"array","items":{"$ref":"#/$defs/noteItem"}},"answers":{"type":"array","items":{"type":"object","required":["size","n","text","answer"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string"},"answer":{"enum":["yes","no"]},"note":{"type":"string"}}}}}};
+const schema62 = {"description":"The last line; the target and everything else of the run is gone by now.","type":"object","required":["status","ok","verdict","failures","snapshots","ms"],"properties":{"status":{"enum":["pass","fail","skip","manual","aborted"]},"ok":{"type":"boolean"},"verdict":{"description":"Whether this run may count as a verdict: it ran to its end, without an abort. The command itself writes nothing.","type":"boolean"},"failures":{"$ref":"#/$defs/strings"},"snapshots":{"$ref":"#/$defs/strings"},"skipped":{"type":"string"},"ms":{"type":"integer","minimum":0},"notes":{"description":"The notes of the run, when there are any.","type":"array","items":{"$ref":"#/$defs/noteItem"}},"answers":{"type":"array","items":{"type":"object","required":["size","n","text","answer"],"properties":{"size":{"$ref":"#/$defs/tag"},"n":{"$ref":"#/$defs/n"},"text":{"type":"string"},"answer":{"enum":["yes","no"]},"note":{"type":"string"}}}}}};
 
 function validate36(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
@@ -1586,7 +1587,7 @@ if(data.status !== undefined){
 let data0 = data.status;
 const _errs1 = errors;
 if(!(((((data0 === "pass") || (data0 === "fail")) || (data0 === "skip")) || (data0 === "manual")) || (data0 === "aborted"))){
-validate35.errors = [{instancePath:instancePath+"/status",schemaPath:"#/properties/status/enum",keyword:"enum",params:{allowedValues: schema61.properties.status.enum},message:"must be equal to one of the allowed values"}];
+validate35.errors = [{instancePath:instancePath+"/status",schemaPath:"#/properties/status/enum",keyword:"enum",params:{allowedValues: schema62.properties.status.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 var valid0 = _errs1 === errors;
@@ -1822,7 +1823,7 @@ if(data12.answer !== undefined){
 let data16 = data12.answer;
 const _errs35 = errors;
 if(!((data16 === "yes") || (data16 === "no"))){
-validate35.errors = [{instancePath:instancePath+"/answers/" + i3+"/answer",schemaPath:"#/properties/answers/items/properties/answer/enum",keyword:"enum",params:{allowedValues: schema61.properties.answers.items.properties.answer.enum},message:"must be equal to one of the allowed values"}];
+validate35.errors = [{instancePath:instancePath+"/answers/" + i3+"/answer",schemaPath:"#/properties/answers/items/properties/answer/enum",keyword:"enum",params:{allowedValues: schema62.properties.answers.items.properties.answer.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 var valid7 = _errs35 === errors;
@@ -2588,7 +2589,7 @@ let valid23 = true;
 const _errs60 = errors;
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.event !== undefined){
-if("end" !== data.event){
+if("explain" !== data.event){
 const err18 = {};
 if(vErrors === null){
 vErrors = [err18];
@@ -2612,23 +2613,122 @@ vErrors = null;
 }
 if(_valid9){
 const _errs62 = errors;
-if(!(validate35(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate35.errors : vErrors.concat(validate35.errors);
-errors = vErrors.length;
+const _errs63 = errors;
+if(errors === _errs63){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing2;
+if((((((data.size === undefined) && (missing2 = "size")) || ((data.n === undefined) && (missing2 = "n"))) || ((data.kind === undefined) && (missing2 = "kind"))) || ((data.system === undefined) && (missing2 = "system"))) || ((data.prompt === undefined) && (missing2 = "prompt"))){
+validate20.errors = [{instancePath,schemaPath:"#/$defs/explain/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
+return false;
+}
+else {
+if(data.size !== undefined){
+const _errs65 = errors;
+if(typeof data.size !== "string"){
+validate20.errors = [{instancePath:instancePath+"/size",schemaPath:"#/$defs/explain/properties/size/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+var valid26 = _errs65 === errors;
+}
+else {
+var valid26 = true;
+}
+if(valid26){
+if(data.n !== undefined){
+let data15 = data.n;
+const _errs67 = errors;
+if(!(((typeof data15 == "number") && (!(data15 % 1) && !isNaN(data15))) && (isFinite(data15)))){
+validate20.errors = [{instancePath:instancePath+"/n",schemaPath:"#/$defs/explain/properties/n/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+return false;
+}
+if(errors === _errs67){
+if((typeof data15 == "number") && (isFinite(data15))){
+if(data15 < 1 || isNaN(data15)){
+validate20.errors = [{instancePath:instancePath+"/n",schemaPath:"#/$defs/explain/properties/n/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+return false;
+}
+}
+}
+var valid26 = _errs67 === errors;
+}
+else {
+var valid26 = true;
+}
+if(valid26){
+if(data.kind !== undefined){
+let data16 = data.kind;
+const _errs69 = errors;
+if(!(((data16 === "what") || (data16 === "watch")) || (data16 === "result"))){
+validate20.errors = [{instancePath:instancePath+"/kind",schemaPath:"#/$defs/explain/properties/kind/enum",keyword:"enum",params:{allowedValues: schema61.properties.kind.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+var valid26 = _errs69 === errors;
+}
+else {
+var valid26 = true;
+}
+if(valid26){
+if(data.system !== undefined){
+let data17 = data.system;
+const _errs70 = errors;
+if(errors === _errs70){
+if(typeof data17 === "string"){
+if(data17.length < 1){
+validate20.errors = [{instancePath:instancePath+"/system",schemaPath:"#/$defs/explain/properties/system/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/system",schemaPath:"#/$defs/explain/properties/system/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid26 = _errs70 === errors;
+}
+else {
+var valid26 = true;
+}
+if(valid26){
+if(data.prompt !== undefined){
+let data18 = data.prompt;
+const _errs72 = errors;
+if(errors === _errs72){
+if(typeof data18 === "string"){
+if(data18.length < 1){
+validate20.errors = [{instancePath:instancePath+"/prompt",schemaPath:"#/$defs/explain/properties/prompt/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
+return false;
+}
+}
+else {
+validate20.errors = [{instancePath:instancePath+"/prompt",schemaPath:"#/$defs/explain/properties/prompt/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+}
+var valid26 = _errs72 === errors;
+}
+else {
+var valid26 = true;
+}
+}
+}
+}
+}
+}
+}
+else {
+validate20.errors = [{instancePath,schemaPath:"#/$defs/explain/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
 }
 var _valid9 = _errs62 === errors;
 valid23 = _valid9;
 if(valid23){
 var props9 = {};
-props9.status = true;
-props9.ok = true;
-props9.verdict = true;
-props9.failures = true;
-props9.snapshots = true;
-props9.skipped = true;
-props9.ms = true;
-props9.notes = true;
-props9.answers = true;
+props9.size = true;
+props9.n = true;
+props9.kind = true;
+props9.system = true;
+props9.prompt = true;
 props9.event = true;
 }
 }
@@ -2655,6 +2755,80 @@ props0 = props0 || {};
 Object.assign(props0, props9);
 }
 }
+const _errs74 = errors;
+const _errs75 = errors;
+let valid27 = true;
+const _errs76 = errors;
+if(data && typeof data == "object" && !Array.isArray(data)){
+if(data.event !== undefined){
+if("end" !== data.event){
+const err20 = {};
+if(vErrors === null){
+vErrors = [err20];
+}
+else {
+vErrors.push(err20);
+}
+errors++;
+}
+}
+}
+var _valid10 = _errs76 === errors;
+errors = _errs75;
+if(vErrors !== null){
+if(_errs75){
+vErrors.length = _errs75;
+}
+else {
+vErrors = null;
+}
+}
+if(_valid10){
+const _errs78 = errors;
+if(!(validate35(data, {instancePath,parentData,parentDataProperty,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate35.errors : vErrors.concat(validate35.errors);
+errors = vErrors.length;
+}
+var _valid10 = _errs78 === errors;
+valid27 = _valid10;
+if(valid27){
+var props10 = {};
+props10.status = true;
+props10.ok = true;
+props10.verdict = true;
+props10.failures = true;
+props10.snapshots = true;
+props10.skipped = true;
+props10.ms = true;
+props10.notes = true;
+props10.answers = true;
+props10.event = true;
+}
+}
+if(!valid27){
+const err21 = {instancePath,schemaPath:"#/allOf/10/if",keyword:"if",params:{failingKeyword: "then"},message:"must match \"then\" schema"};
+if(vErrors === null){
+vErrors = [err21];
+}
+else {
+vErrors.push(err21);
+}
+errors++;
+validate20.errors = vErrors;
+return false;
+}
+var valid0 = _errs74 === errors;
+if(valid0){
+if(props0 !== true && props10 !== undefined){
+if(props10 === true){
+props0 = true;
+}
+else {
+props0 = props0 || {};
+Object.assign(props0, props10);
+}
+}
+}
 }
 }
 }
@@ -2667,9 +2841,9 @@ Object.assign(props0, props9);
 }
 if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
-let missing2;
-if(((data.schema === undefined) && (missing2 = "schema")) || ((data.event === undefined) && (missing2 = "event"))){
-validate20.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
+let missing3;
+if(((data.schema === undefined) && (missing3 = "schema")) || ((data.event === undefined) && (missing3 = "event"))){
+validate20.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
 return false;
 }
 else {
@@ -2679,23 +2853,23 @@ props0.schema = true;
 props0.event = true;
 }
 if(data.schema !== undefined){
-const _errs63 = errors;
+const _errs79 = errors;
 if("testing-sheet-session/1" !== data.schema){
 validate20.errors = [{instancePath:instancePath+"/schema",schemaPath:"#/properties/schema/const",keyword:"const",params:{allowedValue: "testing-sheet-session/1"},message:"must be equal to constant"}];
 return false;
 }
-var valid25 = _errs63 === errors;
+var valid29 = _errs79 === errors;
 }
 else {
-var valid25 = true;
+var valid29 = true;
 }
-if(valid25){
+if(valid29){
 if(data.event !== undefined){
-let data15 = data.event;
-const _errs64 = errors;
-if(errors === _errs64){
-if(typeof data15 === "string"){
-if(data15.length < 1){
+let data21 = data.event;
+const _errs80 = errors;
+if(errors === _errs80){
+if(typeof data21 === "string"){
+if(data21.length < 1){
 validate20.errors = [{instancePath:instancePath+"/event",schemaPath:"#/properties/event/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"}];
 return false;
 }
@@ -2705,10 +2879,10 @@ validate20.errors = [{instancePath:instancePath+"/event",schemaPath:"#/propertie
 return false;
 }
 }
-var valid25 = _errs64 === errors;
+var valid29 = _errs80 === errors;
 }
 else {
-var valid25 = true;
+var valid29 = true;
 }
 }
 }

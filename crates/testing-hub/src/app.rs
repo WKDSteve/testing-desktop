@@ -45,24 +45,36 @@ pub async fn phone(args: &[String], usage: &str) -> Result<String, String> {
     let dir = app_dir(&env)?;
     match args {
         [cmd, rest @ ..] if cmd == "pair" => {
-            let way = match rest {
+            // `--no-window`: the code in the terminal only, not also as a picture in a window.
+            let window = !rest.iter().any(|arg| arg == "--no-window");
+            let rest: Vec<&str> = rest
+                .iter()
+                .map(String::as_str)
+                .filter(|arg| *arg != "--no-window")
+                .collect();
+            let way = match rest.as_slice() {
                 [] => {
                     // The tailnet name the hub serves (the variable, else the settings), else the tunnel.
                     let file: FileConfig<TestingSettings> =
                         appkit_hub::config::load_file(&dir).map_err(|e| e.to_string())?;
                     tailnet_name(&file.app, &env)?.map_or(PhoneWay::Tunnel, PhoneWay::Tailnet)
                 }
-                [flag] if flag == "--tunnel" => PhoneWay::Tunnel,
-                [flag, name] if flag == "--tailnet" && crate::phone::plain_tailnet_name(name) => {
-                    PhoneWay::Tailnet(name.clone())
+                ["--tunnel"] => PhoneWay::Tunnel,
+                ["--tailnet", name] if crate::phone::plain_tailnet_name(name) => {
+                    PhoneWay::Tailnet((*name).to_owned())
                 }
                 _ => return Err(usage.to_owned()),
             };
             let link = phone::pairing_link(&dir, &IDENTITY, &way).await?;
-            let qr = phone::qr_text(&link)?;
-            Ok(format!(
-                "{qr}\n{link}\n\nScan the code with testing mobil (or paste the link) within 60 seconds.\n"
-            ))
+            phone::present_pairing(
+                &dir,
+                &link,
+                "Pair a phone with testing",
+                "Scan the code with testing mobil (or paste the link) within 60 seconds.",
+                window,
+            )
+            .await?;
+            Ok(String::new())
         }
         [cmd] if cmd == "list" => phone::device_lines(&dir, &IDENTITY).await,
         [cmd, id, level] if cmd == "level" => phone::set_level(&dir, &IDENTITY, id, level)

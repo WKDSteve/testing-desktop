@@ -49,6 +49,10 @@ testing-hub phone level <id> read      no more
 testing-hub phone revoke <id>          forget the phone; its sessions end at once
 ```
 
+`phone pair` shows the code in the terminal, black on white whatever the theme, and in a terminal also as a picture in
+a window (the one to scan when the terminal's font leaves gaps); the command ends when the code is over, after 60 s,
+and removes that page. `--no-window` leaves the window out.
+
 A new phone reads (`create`, the kit's default; this app has nothing to create). The app keeps two keys in the Android
 Keystore: one to log in, and one that signs a rerun only after your fingerprint or screen lock. A phone without a screen
 lock pairs and reads, and cannot start anything.

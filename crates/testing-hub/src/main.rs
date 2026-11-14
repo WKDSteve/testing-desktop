@@ -24,11 +24,12 @@ const USAGE: &str = "usage:
                                             left for the script
   testing-hub open [--launch]               print a one-time pairing link for the running hub
                                             (--launch also opens it in the default browser)
-  testing-hub phone pair [--tailnet <name> | --tunnel]
+  testing-hub phone pair [--tailnet <name> | --tunnel] [--no-window]
                                             a one-time pairing link for testing mobil, as a
                                             QR code (TESTING_DESKTOP_TAILNET, else the tailnet
                                             name of config.json, else the loopback port for an
-                                            SSH tunnel)
+                                            SSH tunnel); in a terminal the code is also
+                                            opened as a picture, not with --no-window
   testing-hub phone list                    the paired phones: id, name, level
   testing-hub phone level <id> read|trigger let a phone start a red run again (trigger), or not
   testing-hub phone revoke <id>             forget a phone; its sessions end at once

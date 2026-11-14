@@ -51,6 +51,12 @@
             kind: 'info',
             label: t('about.reads', { state: shown(app.about.reads.stateDir) ?? '?', areas: shown(app.about.reads.areas) ?? '?' }),
           },
+          {
+            kind: 'info',
+            label: app.about.reads.tasksVault
+              ? t('about.tasks_vault', { origin: shown(app.about.reads.tasksVault) ?? '?' })
+              : t('about.no_tasks_vault'),
+          },
           ...(ciWord(app.about.ci) ? [{ kind: 'info' as const, label: t(ciWord(app.about.ci) as Key) }] : []),
         ]
       : [],

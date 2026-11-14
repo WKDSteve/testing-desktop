@@ -158,7 +158,7 @@ test('hostile output of a test is shown as text: no markup runs, reordering char
   expect(await violations(page)).toEqual([]);
 });
 
-test('the palette opens a repository by its name and filters the red ones', async ({ page }) => {
+test('the palette opens a repository by its name and filters the red ones', async ({ page }, testInfo) => {
   const seen = await watch(page);
   await openPaired(page);
   await page.keyboard.press('Control+k');
@@ -179,6 +179,10 @@ test('the palette opens a repository by its name and filters the red ones', asyn
   await expect(page.getByRole('menu')).toContainText('testing.nvim');
   // And why the CI columns say "not asked": this hub is told not to ask (`ask_github`).
   await expect(page.getByRole('menu')).toContainText('not asked, switched off');
+  // And that a run of a task's sheets writes into no task here: this hub was given no vault of the tasks.
+  await expect(page.getByRole('menu')).toContainText('write into no task');
+  await expectAccessible(page, 'the help menu');
+  await testInfo.attach('help', { body: await page.screenshot(), contentType: 'image/png' });
   expect(seen.errors).toEqual([]);
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);

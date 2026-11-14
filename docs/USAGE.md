@@ -148,6 +148,7 @@ the sheets into the generated block of that task through tasks.nvim, exactly as 
 mobil and tasks-web then show it in the task. A program that started the run reads the task again when the run has
 ended.
 
+- Help says whether a vault is named, and where (`setting`, `environment`), never its path.
 - The vault is named by you, on this PC: no request can name one, and a suite or a file never gets it. A path that
   is not a folder is said at the start of the hub and not used.
 - testing.nvim finds tasks.nvim as in a terminal: `TASKS_NVIM_DIR`, `<vault>/.deps/tasks.nvim`,

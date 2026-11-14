@@ -128,6 +128,12 @@ describe('about', () => {
     await expect.poll(() => said.about?.engine?.git).toBe('abc');
     expect(said.about?.reads.stateDir).toBe('default');
     expect(said.about?.ci).toBe('no_token');
+    // No vault of the tasks is named: the page knows that, it does not guess one.
+    expect(said.about?.reads.tasksVault).toBeNull();
     said.stop();
+
+    const named = await started(json({ app: 'testing-desktop', version: '1', engine: null, reads: { state_dir: 'default', areas: 'default', tasks_vault: 'setting' }, ci: 'off' }));
+    await expect.poll(() => named.about?.reads.tasksVault).toBe('setting');
+    named.stop();
   });
 });

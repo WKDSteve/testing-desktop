@@ -31,7 +31,8 @@ export interface About {
   version: string;
   engine: { version: string | null; git: string | null; nvim: string | null } | null;
   engineProblem: string | null;
-  reads: { stateDir: string | null; areas: string | null };
+  /** `tasksVault`: where the vault of the tasks was named (`environment`, `setting`), `null`: none is. */
+  reads: { stateDir: string | null; areas: string | null; tasksVault: string | null };
   /** Whether the hub asks GitHub, and why not: `file`, `gh`, `no_token`, `engine_too_old`, `no_engine`, `off`. */
   ci: string | null;
 }
@@ -180,7 +181,7 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
           ? { version: field(engine, 'version'), git: field(engine, 'git'), nvim: field(engine, 'nvim') }
           : null,
       engineProblem: textOf(doc['engine_problem']),
-      reads: { stateDir: field(reads, 'state_dir'), areas: field(reads, 'areas') },
+      reads: { stateDir: field(reads, 'state_dir'), areas: field(reads, 'areas'), tasksVault: field(reads, 'tasks_vault') },
       ci: textOf(doc['ci']),
     };
   }

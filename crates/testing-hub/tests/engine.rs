@@ -25,7 +25,7 @@ use testing_hub::{Origins, Watch};
 
 mod common;
 
-use common::{get, session, Stream};
+use common::{get, post, session, Stream};
 
 /// The repositories of the root, with the class each has in the data classes of the test.
 const REPOS: [(&str, &str); 3] = [
@@ -787,6 +787,84 @@ async fn the_real_engine_lists_the_repositories_of_the_runner_guard_for_the_rele
     .await;
     assert_eq!(r.status, 404, "{r:?}");
     assert_eq!(std::fs::read(&reviewed).unwrap(), before);
+    server.shutdown().await;
+    drop(fx);
+}
+
+/// A sheet of the fixture's `alpha.nvim` that names a task; its second step holds or not.
+fn task_sheet(id: &str, task: &str, holds: bool) -> String {
+    let want = if holds { 1 } else { 2 };
+    format!(
+        r#"return {{
+  id = "{id}",
+  title = "{id}",
+  task = "{task}",
+  engine = "rpc",
+  steps = {{
+    {{ lua = "vim.g.alpha_task = 1", note = "set the value" }},
+    {{ expect = "vim.g.alpha_task == {want}", note = "the value holds" }},
+  }},
+}}
+"#
+    )
+}
+
+/// The state of a run through the engine once it ended, within a patience.
+async fn launch_ended(server: &appkit_hub::RunningServer, token: &str) -> Value {
+    let end = std::time::Instant::now() + Duration::from_secs(120);
+    loop {
+        let state = get(server, &route_of("run"), Some(token)).await.json();
+        if state["run"]["running"] == false {
+            return state;
+        }
+        assert!(
+            std::time::Instant::now() < end,
+            "the run did not end: {state}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// The sheets of a task run through the hub by the real `testing sheets run --task ... --result`: the engine knows
+/// the flag (it would refuse the run otherwise), and the hub reads from its document whether a sheet is red. No
+/// vault is named here, so nothing is written and the state has no block.
+#[tokio::test]
+async fn the_real_engine_says_in_its_document_how_the_sheets_of_a_task_ended() {
+    let fx = Fixture::new();
+    let _one_at_a_time = STEPPING.lock().await;
+    let Some((server, token)) = hub_stepping(&fx, true).await else {
+        return;
+    };
+    let sheets = fx.root().join("alpha.nvim").join("TESTS").join("sheets");
+    std::fs::write(
+        sheets.join("holds.sheet.lua"),
+        task_sheet("alpha.holds", "alpha.nvim/holds", true),
+    )
+    .unwrap();
+    std::fs::write(
+        sheets.join("breaks.sheet.lua"),
+        task_sheet("alpha.breaks", "alpha.nvim/breaks", false),
+    )
+    .unwrap();
+    for (task, exit, verdict, red) in [
+        ("alpha.nvim/holds", 0, "green", false),
+        ("alpha.nvim/breaks", 1, "red", true),
+    ] {
+        let body = serde_json::json!({ "task": task }).to_string();
+        let r = post(&server, &route_of("run/task"), Some(&token), &body).await;
+        assert_eq!(r.status, 202, "{task}: {r:?}");
+        let state = launch_ended(&server, &token).await;
+        let run = &state["run"];
+        assert_eq!(run["exit"], exit, "{task}: {state}");
+        assert_eq!(run["verdict"], verdict, "{task}: {state}");
+        // From the engine's document, not from the exit code: without one it would be null.
+        assert_eq!(run["sheets_red"], red, "{task}: {state}");
+        assert_eq!(run["block"], Value::Null, "{task}: {state}");
+        // The document is the hub's to read; what the page shows are the lines for a person.
+        let output = run["output"].as_str().unwrap();
+        assert!(output.contains("sheet alpha."), "{task}: {output}");
+        assert!(!output.contains("testing-sheet-run"), "{task}: {output}");
+    }
     server.shutdown().await;
     drop(fx);
 }

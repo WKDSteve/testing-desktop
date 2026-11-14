@@ -80,11 +80,12 @@ test("a run of a task's sheets says under its verdict what became of the task's 
           task: 'alpha.nvim/try-it',
           running: false,
           exit: 1,
-          verdict: 'red',
+          verdict: 'not_written',
           started: 1,
           ended: 2,
-          output: 'sheet try-it: pass\ntesting sheets: task alpha.nvim/try-it conflict',
-          block: { written: false, outcome: 'conflict' },
+          output: 'sheet try-it: pass\ntesting sheets: task alpha.nvim/try-it failed: conflict: stale',
+          block: { written: false, outcome: 'failed' },
+          sheets_red: false,
         },
       },
     });
@@ -92,8 +93,8 @@ test("a run of a task's sheets says under its verdict what became of the task's 
   await page.addInitScript((t) => sessionStorage.setItem('testing-desktop.session', t), state().token);
   await page.goto('/');
   await page.getByRole('button', { name: 'alpha.nvim' }).click();
-  await expect(page.getByText('Last run, the test sheets of alpha.nvim/try-it: red.')).toBeVisible();
-  await expect(page.getByText('The result is not in the task: testing.nvim could not write it (conflict).', { exact: false })).toBeVisible();
+  await expect(page.getByText('Last run, the test sheets of alpha.nvim/try-it: the sheets are green, but the task was not written.')).toBeVisible();
+  await expect(page.getByText('The result is not in the task: testing.nvim could not write it (failed).')).toBeVisible();
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     await expectAccessible(page, `task block (${colorScheme})`);

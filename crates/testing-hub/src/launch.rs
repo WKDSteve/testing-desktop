@@ -5,7 +5,8 @@
 //! * the suite: `testing run --root <root>` (a heavy run: it takes its turn in the engine's queue of heavy runs, the
 //!   machine-wide run lock, across every session of the person);
 //! * a file: `testing run --root <root> --file <text>` (a selected run, which the engine never queues);
-//! * the sheets of a task: `testing sheets run --task <area/slug> --root <root>` (only sheets that name the task run),
+//! * the sheets of a task: `testing sheets run --task <area/slug> --root <root> --result` (only sheets that name the
+//!   task run; `--result` makes the engine say in a document of `testing-sheet-run/1` what ran and what was written),
 //!   with `--tasks <vault>` when the person named a vault for this hub (`tasks_vault`): the engine then writes the
 //!   result into the task's block, as `:Tasks sheet-run` does.
 //!
@@ -114,6 +115,8 @@ impl What {
                 task.into(),
                 "--root".into(),
                 root.into(),
+                // The last line of the engine's stdout is then its own document of the run ([`sheet_result`]).
+                "--result".into(),
             ]),
         }
         if let (Self::Suite | Self::File(_), Some(dir)) = (self, state_dir) {
@@ -236,22 +239,52 @@ pub fn verdict(code: Option<i32>) -> &'static str {
     }
 }
 
-/// The outcomes of a task's block that mean it stands as the run left it (`testing.sheet.tasks` of the engine).
-const BLOCK_WRITTEN: [&str; 3] = ["changed", "unchanged", "would_change"];
+/// The schema of the document `testing sheets run --result` prints as its last line.
+pub const SHEET_RUN_SCHEMA: &str = "testing-sheet-run/1";
 
-/// What became of the block of `task`, as the engine said it in the last line of its kind
-/// (`testing sheets: task <id> <outcome>[: <message>]`): the outcome, a plain word. `None`: it said nothing (no
-/// `--tasks`, the run did not get that far, or the line is not in the tail any more).
+/// What the engine said of a run of sheets: the document of [`SHEET_RUN_SCHEMA`] in the last line of its kind of the
+/// output. `None`: it printed none (the run was refused or did not start, an engine that does not know `--result`),
+/// or a higher schema this hub does not read.
 #[must_use]
-pub fn block_outcome(output: &str, task: &str) -> Option<String> {
-    let prefix = format!("testing sheets: task {task} ");
+pub fn sheet_result(output: &str) -> Option<Value> {
     output.lines().rev().find_map(|line| {
-        let rest = line.trim().strip_prefix(&prefix)?;
-        let word = rest.split([':', ' ']).next().unwrap_or_default();
-        let plain = (1..=32).contains(&word.len())
-            && word.bytes().all(|b| b.is_ascii_lowercase() || b == b'_');
-        plain.then(|| word.to_owned())
+        let line = line.trim();
+        if !line.starts_with('{') {
+            return None;
+        }
+        let doc: Value = serde_json::from_str(line).ok()?;
+        (doc["schema"] == SHEET_RUN_SCHEMA).then_some(doc)
     })
+}
+
+/// The verdict of a run: that of its exit code, read with the engine's document where there is one. The engine ends
+/// with exit 1 for a red sheet and for a task it could not write alike; when it says no sheet is red and the task was
+/// not written, the verdict is `not_written`, not `red`.
+#[must_use]
+pub fn verdict_of(code: Option<i32>, result: Option<&Value>) -> &'static str {
+    match (code, result) {
+        (Some(1), Some(doc)) if doc["red"] == false && doc["written"] == false => "not_written",
+        _ => verdict(code),
+    }
+}
+
+/// What became of the block of `task`, from the engine's document: whether it stands as the run left it and the
+/// engine's word for it (a plain word; `unreachable` when tasks.nvim did not answer). `None`: nothing was to be
+/// written (no vault), or there is no document.
+#[must_use]
+pub fn block_of(result: Option<&Value>, task: &str) -> Option<Value> {
+    let doc = result?;
+    let written = doc["written"].as_bool()?;
+    let said = doc["tasks"]
+        .as_array()
+        .and_then(|tasks| tasks.iter().find(|t| t["id"] == task))
+        .and_then(|t| t["outcome"].as_str())
+        .filter(|word| {
+            (1..=32).contains(&word.len())
+                && word.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+        });
+    let outcome = said.unwrap_or(if written { "unchanged" } else { "unreachable" });
+    Some(json!({ "written": written, "outcome": outcome }))
 }
 
 /// Everything a run started, to end it whole: on Windows a job object the engine is put into right after its start
@@ -375,13 +408,18 @@ impl Launch {
     pub fn state(&self) -> Value {
         let guard = self.lock();
         let run = guard.as_ref().map(|r| {
+            // What the engine said of a task's sheets, once they ended.
+            let result = match &r.what {
+                What::Task(_) if !r.running => sheet_result(&String::from_utf8_lossy(&r.output)),
+                _ => None,
+            };
             let mut v = json!({
                 "id": r.id,
                 "key": r.key,
                 "what": r.what.word(),
                 "running": r.running,
                 "exit": r.exit,
-                "verdict": (!r.running).then(|| verdict(r.exit)),
+                "verdict": (!r.running).then(|| verdict_of(r.exit, result.as_ref())),
                 "started": r.started,
                 "ended": r.ended,
                 "output": scrub_tail(&r.output, &r.root, self.tasks_vault.as_deref()),
@@ -390,15 +428,12 @@ impl Launch {
                 What::File(text) => v["file"] = json!(text),
                 What::Task(task) => {
                     v["task"] = json!(task);
-                    // What became of the task's block, when the engine said it: a word of the engine, and whether
-                    // the block stands as the run left it. An exit 1 with a block that was not written need not
-                    // be a red sheet.
-                    let block = (!r.running)
-                        .then(|| block_outcome(&String::from_utf8_lossy(&r.output), task))
-                        .flatten();
-                    v["block"] = block.map_or(Value::Null, |outcome| {
-                        json!({ "written": BLOCK_WRITTEN.contains(&outcome.as_str()), "outcome": outcome })
-                    });
+                    // What became of the task's block and whether a sheet is red, as the engine said it. A
+                    // device hears both: words of the engine, no text and no path.
+                    v["block"] = block_of(result.as_ref(), task).unwrap_or(Value::Null);
+                    v["sheets_red"] = result
+                        .as_ref()
+                        .map_or(Value::Null, |doc| doc["red"].clone());
                 }
                 What::Suite => {}
             }
@@ -579,9 +614,18 @@ impl Launch {
 }
 
 /// The tail of the output as text for the page: the root and the vault of the tasks taken out, nothing unprintable,
-/// the last lines.
+/// the last lines. The engine's document of a run of sheets is not among them: it is for the hub, not for a person,
+/// and as JSON it would name the folders of this PC in a spelling the scrub does not know.
 fn scrub_tail(output: &[u8], root: &Path, vault: Option<&Path>) -> String {
     let text = String::from_utf8_lossy(output);
+    let text: String = text
+        .lines()
+        .filter(|line| !line.contains(SHEET_RUN_SCHEMA))
+        .collect::<Vec<_>>()
+        .join(
+            "
+",
+        );
     // `scrub` keeps the first 600 characters; the verdict is at the end, so the end is given to it.
     let chars: Vec<char> = text.chars().collect();
     let start = chars.len().saturating_sub(2000);
@@ -619,7 +663,8 @@ mod tests {
                 "--task",
                 "alpha.nvim/try-it",
                 "--root",
-                "/repos/alpha.nvim"
+                "/repos/alpha.nvim",
+                "--result"
             ]
         );
         // The result of specs goes where the hub reads; sheets keep theirs where `sheets report` reads them.
@@ -645,7 +690,7 @@ mod tests {
                 .collect()
         };
         assert_eq!(
-            with_vault(What::Task("a/b".into()))[6..],
+            with_vault(What::Task("a/b".into()))[7..],
             ["--tasks", "/vaults/tasks"]
         );
         for what in [What::Suite, What::File("x".into())] {
@@ -799,28 +844,96 @@ mod tests {
         assert_eq!(verdict(None), "stopped");
     }
 
+    /// A line of the engine as `sheets run --result` prints it.
+    fn result_line(red: bool, written: Value, tasks: Value) -> String {
+        json!({ "schema": SHEET_RUN_SCHEMA, "exit": 1, "task": "a/b", "sheets": [], "red": red,
+                "tasks": tasks, "written": written })
+        .to_string()
+    }
+
     #[test]
-    fn the_outcome_of_a_tasks_block_is_the_engines_last_word_on_that_task() {
-        let out = "sheet try: pass\ntesting sheets: task a/b conflict: edited in between\n";
-        assert_eq!(block_outcome(out, "a/b").as_deref(), Some("conflict"));
-        assert_eq!(
-            block_outcome("testing sheets: task a/b changed\r\n", "a/b").as_deref(),
-            Some("changed")
+    fn the_engines_document_of_a_run_is_its_last_line_of_that_schema() {
+        let line = result_line(
+            false,
+            json!(true),
+            json!([{ "id": "a/b", "outcome": "changed" }]),
         );
-        // Another task's line, a line that only looks alike, a word that is none.
+        let out = format!("sheet try: pass\ntesting sheets: task a/b changed\n{line}\r\n");
+        assert_eq!(sheet_result(&out).unwrap()["written"], true);
+        // A line of stderr after it does not hide it; the last document counts.
+        let later = result_line(true, json!(null), json!([]));
+        let two = format!("{line}\n{later}\nnote: a line of stderr\n");
+        assert_eq!(sheet_result(&two).unwrap()["red"], true);
+        // No document: lines for a person, JSON of another schema, a higher schema, what is no JSON.
         for no in [
             "",
-            "sheet try: pass",
-            "testing sheets: task a/bc changed",
-            "testing sheets: task a/b ",
-            "testing sheets: task a/b <b>x</b>",
-            "x testing sheets: task a/b changed",
+            "testing sheets: task a/b changed",
+            r#"{"schema":"testing-sheet-run/2","red":false,"written":false}"#,
+            r#"{"schema":"testing-export/1"}"#,
+            r#"{"schema":"testing-sheet-run/1""#,
+            r#"x {"schema":"testing-sheet-run/1"}"#,
         ] {
-            assert_eq!(block_outcome(no, "a/b"), None, "{no}");
+            assert_eq!(sheet_result(no), None, "{no}");
         }
-        // The last one counts.
-        let twice = "testing sheets: task a/b conflict\ntesting sheets: task a/b changed";
-        assert_eq!(block_outcome(twice, "a/b").as_deref(), Some("changed"));
+    }
+
+    #[test]
+    fn a_task_that_was_not_written_is_not_a_red_sheet() {
+        let doc = |red: bool, written: Value| -> Value {
+            serde_json::from_str(&result_line(red, written, json!([]))).unwrap()
+        };
+        // Exit 1 is both; the engine's document tells them apart.
+        assert_eq!(
+            verdict_of(Some(1), Some(&doc(false, json!(false)))),
+            "not_written"
+        );
+        assert_eq!(verdict_of(Some(1), Some(&doc(true, json!(false)))), "red");
+        assert_eq!(verdict_of(Some(1), Some(&doc(true, json!(true)))), "red");
+        // Without a document, or with one that does not say: the exit code alone, as before.
+        assert_eq!(verdict_of(Some(1), None), "red");
+        assert_eq!(verdict_of(Some(1), Some(&doc(false, json!(null)))), "red");
+        assert_eq!(
+            verdict_of(Some(1), Some(&json!({ "schema": SHEET_RUN_SCHEMA }))),
+            "red"
+        );
+        // No document turns another exit code into this verdict.
+        let unwritten = doc(false, json!(false));
+        assert_eq!(verdict_of(Some(0), Some(&unwritten)), "green");
+        assert_eq!(verdict_of(Some(3), Some(&unwritten)), "failed");
+        assert_eq!(verdict_of(None, Some(&unwritten)), "stopped");
+    }
+
+    #[test]
+    fn the_block_of_a_task_is_what_the_engine_said_of_that_task() {
+        let doc = |written: Value, tasks: Value| -> Value {
+            serde_json::from_str(&result_line(false, written, tasks)).unwrap()
+        };
+        let failed = doc(
+            json!(false),
+            json!([{ "id": "x/y", "outcome": "changed" },
+                   { "id": "a/b", "outcome": "failed", "message": "conflict: C:/vault/x.md" }]),
+        );
+        assert_eq!(
+            block_of(Some(&failed), "a/b"),
+            Some(json!({ "written": false, "outcome": "failed" }))
+        );
+        // Nothing was to be written, or no document: no block.
+        assert_eq!(block_of(Some(&doc(json!(null), json!([]))), "a/b"), None);
+        assert_eq!(block_of(None, "a/b"), None);
+        // tasks.nvim did not answer: not written, with a word of the hub's own.
+        assert_eq!(
+            block_of(Some(&doc(json!(false), json!([]))), "a/b"),
+            Some(json!({ "written": false, "outcome": "unreachable" }))
+        );
+        // A word that is none is not passed on.
+        let odd = doc(
+            json!(false),
+            json!([{ "id": "a/b", "outcome": "<b>x</b>" }]),
+        );
+        assert_eq!(
+            block_of(Some(&odd), "a/b"),
+            Some(json!({ "written": false, "outcome": "unreachable" }))
+        );
     }
 
     #[test]
@@ -856,11 +969,26 @@ mod tests {
         assert!(device["run"].get("output").is_none(), "{device}");
         // The engine said nothing of the task's block: the state says so, a device hears the same.
         assert_eq!(device["run"]["block"], Value::Null);
-        launch.lock().as_mut().unwrap().output =
-            b"sheet try: pass\ntesting sheets: task alpha.nvim/try conflict: /vault/x.md".to_vec();
+        assert_eq!(device["run"]["sheets_red"], Value::Null);
+        // A line for a person is not read any more: only the engine's document counts.
+        let person =
+            "sheet try: pass\ntesting sheets: task alpha.nvim/try failed: conflict: /vault/x.md\n";
+        launch.lock().as_mut().unwrap().output = person.as_bytes().to_vec();
+        assert_eq!(launch.state_for_device()["run"]["block"], Value::Null);
+        assert_eq!(launch.state_for_device()["run"]["verdict"], "red");
+        // The document: green sheets, the task not written. The verdict says so, and no text of the engine
+        // (its message may name a file of the vault) reaches a device.
+        let doc = json!({ "schema": SHEET_RUN_SCHEMA, "exit": 1, "task": "alpha.nvim/try", "red": false,
+            "sheets": [{ "id": "try", "status": "pass" }], "written": false,
+            "tasks": [{ "id": "alpha.nvim/try", "outcome": "failed", "message": "conflict: /vault/x.md" }] });
+        launch.lock().as_mut().unwrap().output = format!("{person}{doc}\n").into_bytes();
+        let device = launch.state_for_device();
+        assert_eq!(device["run"]["verdict"], "not_written", "{device}");
         assert_eq!(
-            launch.state_for_device()["run"]["block"],
-            json!({ "written": false, "outcome": "conflict" })
+            device["run"]["block"],
+            json!({ "written": false, "outcome": "failed" })
         );
+        assert_eq!(device["run"]["sheets_red"], false);
+        assert!(!device.to_string().contains("/vault"), "{device}");
     }
 }

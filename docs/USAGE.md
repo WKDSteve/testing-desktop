@@ -128,15 +128,15 @@ names. The routes, for a program that starts a run (the central hub, tasks mobil
 
 | Route | Body or query | Answer |
 | --- | --- | --- |
-| `GET /api/testing/run` | none | `{ "schema": 1, "kind": "hub.run", "available": bool, "run": null \| { "id", "key", "what": "suite" \| "file" \| "task", "file"?, "task"?, "running", "exit", "verdict", "started", "ended", "output", "block"? } }` (`block` of a task's run that ended: `null` or `{ "written": bool, "outcome": "<word of testing.nvim>" }`); a phone sees a task's run without `output`, any other only as `{ "what": "other", "running" }` |
+| `GET /api/testing/run` | none | `{ "schema": 1, "kind": "hub.run", "available": bool, "run": null \| { "id", "key", "what": "suite" \| "file" \| "task", "file"?, "task"?, "running", "exit", "verdict", "started", "ended", "output", "block"?, "sheets_red"? } }` (of a task's run that ended: `block` is `null` or `{ "written": bool, "outcome": "<word of testing.nvim>" }`, `sheets_red` is `null` or whether a sheet is red; `verdict` is `green`, `red`, `not_written`, `refused`, `failed` or `stopped`); a phone sees a task's run without `output`, any other only as `{ "what": "other", "running" }` |
 | `POST /api/testing/run/start` | `{ "key": "<key of the fleet>", "file"?: "<part of a spec file name>" }` | `202` and the state; `409 busy` while a run is under way. The PC only |
 | `POST /api/testing/run/abort` | `{}` | `202` and the state (the run may still be on its way down; `run` says when it ended, with the verdict `stopped`); `409 not_running`. The PC only |
 | `GET /api/testing/run/task-sheets` | `?task=<area>/<slug>[&key=<key of the fleet>]` | `{ "schema": 1, "kind": "hub.task-sheets", "task", "key", "sheets": [<name>...] }` |
 | `POST /api/testing/run/task` | `{ "task": "<area>/<slug>", "key"?: "<key of the fleet>" }` | `202` and the state (with a [vault of the tasks](#the-result-of-a-tasks-sheets-in-the-task) the run also writes into the task); `404 no_sheet` (no sheet names the task), `404 no_repo`, `409 ambiguous` (name the repository with `key`), `409 busy`. A phone at the level `trigger`, with `x-device-confirm` |
 
 **Abort the run** shows while a run is under way and ends it: the hub ends testing.nvim and every process the run
-started (its child editors, what those started), and the run reads as "stopped". Nothing is asked first, and there
-is no gentle end to wait for: `testing run` takes no command while it runs. The same happens when the hub stops and
+started (its child editors, what those started), and the run reads as "stopped". Nothing is asked first (decided
+2026-11-14, as the abort of a stepped run), and there is no gentle end to wait for: `testing run` takes no command while it runs. The same happens when the hub stops and
 after five hours. What a run that ended by itself left behind is left alone.
 
 ### The result of a task's sheets in the task
@@ -154,12 +154,18 @@ ended.
 - testing.nvim finds tasks.nvim as in a terminal: `TASKS_NVIM_DIR`, `<vault>/.deps/tasks.nvim`,
   `<vault>/../tasks.nvim`, the plugin folder of lazy; the hub passes `TASKS_NVIM_DIR` on. Without tasks.nvim the
   run is not made (the verdict "could not be made", exit 3), before a sheet runs. A sheet of the task in another
-  project is found beside the vault (`<vault>/../<area>`): the hub does not pass `REPOS_DIR` on.
-- `block` of the state says what became of the task: `written` and testing.nvim's word (`changed`, `unchanged`;
-  `conflict` when the task was edited in between, `missing` when it is not open). testing.nvim ends with exit 1 for
-  a red sheet and for a task it could not write alike, so the verdict is "red" in both cases: `block.written`
-  false tells them apart as far as testing.nvim says it, and the page says so under the verdict. `block` is `null`
-  when testing.nvim said nothing of the task (no vault, or the run did not get that far).
+  project is found beside the vault (`<vault>/../<area>`): the hub does not pass `REPOS_DIR` on (decided
+  2026-11-14: the variable changes what the engine and the child editors find in every run of the hub).
+- The hub starts the sheets of a task with `--result` and reads testing.nvim's own document of the run
+  (`testing-sheet-run/1`, its last line; it is not part of the output the page shows). `block` of the state says
+  what became of the task: `written` and testing.nvim's word (`changed`, `unchanged`; `failed` for a conflict or a
+  refusal, `missing` when the task is not open, `truncated`; `unreachable` when tasks.nvim did not answer).
+  `sheets_red` says whether a sheet is red. `block` is `null` when nothing was to be written (no vault) or the run
+  did not get that far.
+- testing.nvim ends with exit 1 for a red sheet and for a task it could not write alike. The hub tells them apart
+  by the document: no red sheet and a task that was not written is the verdict `not_written` ("the sheets are green,
+  but the task was not written"), a red sheet is `red` whatever became of the task. Without a document (an older
+  testing.nvim) the verdict is that of the exit code.
 
 ### A test sheet step by step
 

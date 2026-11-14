@@ -10,7 +10,10 @@
 --   tree            starts a process of its own that writes into `<root>/beat.txt` while it lives, then waits
 --                   until it is killed
 --   orphan          leaves a process behind that holds its stdout and stderr for 25 s, and ends green
---   <task>          exit 0 for the task `alpha.nvim/try-it`, else the refusal of the engine, exit 2
+--   <task>          exit 0 for the task `alpha.nvim/try-it`, else the refusal of the engine, exit 2; with `--tasks`
+--                   the task `alpha.nvim/other` has green sheets and is not written, `alpha.nvim/red` a red sheet
+--                   and is written (both exit 1). With `--result` the last line is the engine's document of
+--                   the run (`testing-sheet-run/1`), as the real command prints it
 
 -- luacheck: globals vim
 
@@ -41,20 +44,42 @@ end
 
 if argv[1] == "sheets" then
   assert(argv[2] == "run", "fake-run: sheets run")
-  local vault = value("--tasks")
-  if value("--task") == "alpha.nvim/try-it" then
-    io.stdout:write("sheet try-it: green\n")
-    if vault then
-      io.stdout:write("testing sheets: task alpha.nvim/try-it changed\n")
+  local vault, task = value("--tasks"), value("--task")
+  local wants_result = vim.list_contains(argv, "--result")
+  ---The lines of the real command, then (with `--result`) its document, then the exit code.
+  local function done(exit, sheet, status, outcome, message)
+    io.stdout:write(("sheet %s: %s\n"):format(sheet, status))
+    if outcome then
+      io.stdout:write(("testing sheets: task %s %s%s\n"):format(task, outcome, message and (": " .. message) or ""))
     end
-    os.exit(0)
+    if wants_result then
+      local written = vim.NIL
+      if outcome then
+        written = outcome == "changed"
+      end
+      io.stdout:write(vim.json.encode({
+        schema = "testing-sheet-run/1",
+        exit = exit,
+        task = task,
+        sheets = { { id = sheet, status = status } },
+        red = status == "fail",
+        tasks = outcome and { { id = task, outcome = outcome, message = message } } or {},
+        written = written,
+      }) .. "\n")
+    end
+    os.exit(exit)
   end
-  if vault and value("--task") == "alpha.nvim/other" then
+  if task == "alpha.nvim/try-it" then
+    done(0, "try-it", "pass", vault and "changed")
+  end
+  if vault and task == "alpha.nvim/other" then
     -- Green sheets, and a task edited in between: the engine's exit 1 that is not a red sheet. The message names the
     -- vault, as a line of the engine may.
-    io.stdout:write("sheet other: pass\n")
-    io.stdout:write("testing sheets: task alpha.nvim/other conflict: " .. vault .. "/x.md changed\n")
-    os.exit(1)
+    done(1, "other", "pass", "failed", "conflict: " .. vault .. "/x.md changed")
+  end
+  if vault and task == "alpha.nvim/red" then
+    -- The other exit 1: a red sheet, and the task says so.
+    done(1, "red", "fail", "changed")
   end
   io.stderr:write("testing sheets run: no sheet names the task\n")
   os.exit(2)

@@ -180,7 +180,9 @@ describe('the state of a run', () => {
     expect(s.run).toEqual({ id: 2, key: 'k', what: 'other', file: null, task: null, running: false, verdict: 'green', exit: 0, output: '', block: null });
     // What became of the task's block: the engine's word and whether it stands; nothing that is not a plain word.
     const block = (b: unknown, running = false) => runFrom({ run: { what: 'task', running, block: b } }).run?.block;
-    expect(block({ outcome: 'conflict', written: false })).toEqual({ outcome: 'conflict', written: false });
+    expect(block({ outcome: 'failed', written: false })).toEqual({ outcome: 'failed', written: false });
+    // Green sheets and a task that was not written is a verdict of its own, not red.
+    expect(runFrom({ run: { what: 'task', running: false, exit: 1, verdict: 'not_written' } }).run?.verdict).toBe('not_written');
     expect(block({ outcome: 'changed', written: true })).toEqual({ outcome: 'changed', written: true });
     expect(block({ outcome: 'changed', written: 'yes' })).toEqual({ outcome: 'changed', written: false });
     for (const bad of [null, 'changed', [], { outcome: '<b>' }, { outcome: 7 }, { written: true }]) expect(block(bad)).toBeNull();

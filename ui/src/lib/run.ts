@@ -5,8 +5,11 @@
 /** The kind of a run; `other` is what a paired device is told of a run it may not see. */
 export type RunWhat = 'suite' | 'file' | 'task' | 'other';
 
-/** The verdict of an ended run, from the engine's exit code. */
-export type RunVerdict = 'green' | 'red' | 'refused' | 'failed' | 'stopped';
+/**
+ * The verdict of an ended run, from the engine's exit code; `not_written` from its document of a task's sheets too:
+ * no sheet is red, but the task could not be written (the engine's exit code is that of a red sheet).
+ */
+export type RunVerdict = 'green' | 'red' | 'not_written' | 'refused' | 'failed' | 'stopped';
 
 export interface RunView {
   id: number | null;
@@ -21,8 +24,7 @@ export interface RunView {
   output: string;
   /**
    * What became of the task's block, when the hub has a vault of the tasks and the engine said it: its word
-   * (`changed`, `unchanged`, `conflict`, ...) and whether the block stands as the run left it. A red verdict with a
-   * block that was not written need not be a red sheet.
+   * (`changed`, `unchanged`, `failed`, `missing`, ...) and whether the block stands as the run left it.
    */
   block: { outcome: string; written: boolean } | null;
 }
@@ -35,7 +37,7 @@ export interface RunState {
 }
 
 const WHATS: readonly RunWhat[] = ['suite', 'file', 'task', 'other'];
-const VERDICTS: readonly RunVerdict[] = ['green', 'red', 'refused', 'failed', 'stopped'];
+const VERDICTS: readonly RunVerdict[] = ['green', 'red', 'not_written', 'refused', 'failed', 'stopped'];
 
 const text = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const int = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null);

@@ -171,7 +171,7 @@
         {:else if run.key === app.openKey && run.verdict}
           <p role="status">
             <ToneView
-              tone={run.verdict === 'green' ? 'green' : 'red'}
+              tone={run.verdict === 'green' ? 'green' : run.verdict === 'not_written' ? 'waiting' : 'red'}
               label={t('run.ended', { what: runWhat(run), verdict: t(`run.verdict.${run.verdict}` as Key) })}
             />
           </p>

@@ -50,6 +50,11 @@ impl Fixture {
             "return {\n  task = \"alpha.nvim/other\",\n}\n",
         )
         .unwrap();
+        std::fs::write(
+            sheets.join("red.sheet.lua"),
+            "return {\n  task = \"alpha.nvim/red\",\n}\n",
+        )
+        .unwrap();
         Self { dir }
     }
 
@@ -382,9 +387,19 @@ async fn the_hub_knows_the_sheets_of_a_task_and_runs_only_those() {
     assert_eq!(state["run"]["verdict"], "green", "{state}");
     let root = fx.root().display().to_string();
     assert_eq!(
-        fx.argv()[..6],
-        ["sheets", "run", "--task", TASK, "--root", root.as_str()]
+        fx.argv()[..7],
+        [
+            "sheets",
+            "run",
+            "--task",
+            TASK,
+            "--root",
+            root.as_str(),
+            "--result"
+        ]
     );
+    // What the engine said of the sheets is read from its document of the run.
+    assert_eq!(state["run"]["sheets_red"], false, "{state}");
     // No vault was named for this hub: the run writes into no task, and the state says nothing of a block.
     assert!(
         !fx.argv().contains(&"--tasks".to_owned()),
@@ -426,7 +441,7 @@ async fn with_a_vault_the_sheets_of_a_task_write_into_it_and_no_other_run_does()
     let state = hub.ended().await;
     assert_eq!(state["run"]["verdict"], "green", "{state}");
     assert_eq!(
-        fx.argv()[..8],
+        fx.argv()[..9],
         [
             "sheets",
             "run",
@@ -434,6 +449,7 @@ async fn with_a_vault_the_sheets_of_a_task_write_into_it_and_no_other_run_does()
             TASK,
             "--root",
             root.as_str(),
+            "--result",
             "--tasks",
             named.as_str()
         ]
@@ -450,14 +466,30 @@ async fn with_a_vault_the_sheets_of_a_task_write_into_it_and_no_other_run_does()
     assert_eq!(r.status, 202, "{r:?}");
     let state = hub.ended().await;
     assert_eq!(state["run"]["exit"], 1, "{state}");
-    assert_eq!(state["run"]["verdict"], "red");
+    assert_eq!(state["run"]["verdict"], "not_written");
+    assert_eq!(state["run"]["sheets_red"], false);
     assert_eq!(
         state["run"]["block"],
-        json!({ "written": false, "outcome": "conflict" })
+        json!({ "written": false, "outcome": "failed" })
     );
     let output = state["run"]["output"].as_str().unwrap();
     assert!(output.contains("conflict: <path>/x.md changed"), "{output}");
     assert!(!state.to_string().contains("tasks-vault"), "{state}");
+    // The engine's document is the hub's to read, not a line for the person.
+    assert!(!output.contains("testing-sheet-run"), "{output}");
+    // The other exit 1: a sheet is red and the task says so. That is the verdict red.
+    let r = hub
+        .post("run/task", &json!({ "task": "alpha.nvim/red" }))
+        .await;
+    assert_eq!(r.status, 202, "{r:?}");
+    let state = hub.ended().await;
+    assert_eq!(state["run"]["exit"], 1, "{state}");
+    assert_eq!(state["run"]["verdict"], "red");
+    assert_eq!(state["run"]["sheets_red"], true);
+    assert_eq!(
+        state["run"]["block"],
+        json!({ "written": true, "outcome": "changed" })
+    );
     // A run of the suite or of a file never gets the vault.
     let r = hub.post("run/start", &json!({ "key": KEY })).await;
     assert_eq!(r.status, 202, "{r:?}");

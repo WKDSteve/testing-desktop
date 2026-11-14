@@ -335,6 +335,9 @@ fn a_red_run(fx: &Fixture, repo: &str, nvim: &Path, script: &Path) {
         .current_dir(&dir)
         // `CI` trusts the root in the temp dir.
         .env("CI", "true")
+        // A run of a fixture is not a heavy run of the person: it does not wait in the machine's queue behind the
+        // suites of other sessions (it did, for more than ten minutes), as the fixture runs of `ui/e2e/hub.ts`.
+        .env("TESTING_QUEUE", "off")
         .status()
         .expect("nvim runs");
     assert_eq!(status.code(), Some(1), "a red run ends with exit 1");

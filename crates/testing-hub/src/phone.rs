@@ -72,23 +72,13 @@ pub fn guard_rules(phone: Option<&Phone>) -> GuardRules {
 }
 
 /// Is `name` a plain tailnet name of a PC (`pc.example.ts.net`): lower-case labels of letters, digits and `-`, at
-/// least two, the last not all digits? What `with_tailnet_name` takes, checked when the settings are read so that a
-/// typo stops the start with a word instead of a panic.
+/// least two, the last not all digits, with an optional `:<port>` other than 443 when Tailscale Serve forwards another
+/// HTTPS port to this hub (`pc.example.ts.net:8443`, so that a second hub of the PC has 443)? What
+/// `with_tailnet_name` takes (appkit's own rule), checked when the settings are read so that a typo stops the start
+/// with a word instead of a panic.
 #[must_use]
 pub fn plain_tailnet_name(name: &str) -> bool {
-    let labels: Vec<&str> = name.split('.').collect();
-    name.len() <= 253
-        && labels.len() >= 2
-        && labels.iter().all(|l| {
-            (1..=63).contains(&l.len())
-                && !l.starts_with('-')
-                && !l.ends_with('-')
-                && l.bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-        })
-        && labels
-            .last()
-            .is_some_and(|tld| tld.bytes().any(|b| b.is_ascii_lowercase()))
+    appkit_core::authn::tailnet_name_ok(name)
 }
 
 #[cfg(test)]
@@ -176,11 +166,14 @@ mod tests {
     #[test]
     fn a_tailnet_name_is_a_plain_host_name() {
         assert!(plain_tailnet_name("pc.example.ts.net"));
+        assert!(plain_tailnet_name("pc.example.ts.net:8443"));
         for bad in [
             "",
             "pc",
             "PC.ts.net",
             "pc.ts.net:443",
+            "pc.ts.net:0",
+            "pc.ts.net:",
             "https://pc.ts.net",
             "10.0.0.1",
             "pc..ts.net",

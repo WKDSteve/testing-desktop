@@ -28,7 +28,9 @@ hub starts it only when a sheet there names the task. tasks mobil calls it; the 
 
 - **Tailscale Serve** (recommended): on the PC, `tailscale serve --bg --https=443 http://127.0.0.1:17618`, and the
   name of the PC in the tailnet in `config.json` (`"tailnet_name": "pc.example.ts.net"`, or `TESTING_DESKTOP_TAILNET`).
-  Through it only a paired phone gets a session. Never `tailscale funnel`.
+  Through it only a paired phone gets a session. Never `tailscale funnel`. When another hub of the PC (tasks-desktop)
+  already has 443: `tailscale serve --bg --https=8443 http://127.0.0.1:17618` and the name with that port,
+  `pc.example.ts.net:8443` (never `:443`); the pairing link and the app carry the port.
 - **SSH tunnel**: an SSH client on the phone (Termux, ConnectBot) forwards `127.0.0.1:17618` on the phone to the same
   port on the PC. `adb reverse tcp:17618 tcp:17618` does the same over USB (or adb over Tailscale) for a test.
 - **An export on the phone**: clone a repository that holds an export of `testing export` with Git (MGit, Termux), then

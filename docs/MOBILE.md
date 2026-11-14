@@ -16,10 +16,10 @@ appkit's mobile basis ([appkit `docs/MOBILE.md`](https://github.com/WKDSteve/app
 | Run the test sheets of a task on the PC (from tasks mobil) | with the level `trigger` and a confirmation, each time; only a task a sheet of its repository names |
 | Where a run stands | read; of a run that is not a task's sheets only that one is under way |
 | A test sheet step by step, a run of a whole suite or of a file, the event stream | never (they stay on the PC) |
-| `testing ci trust`, releasing commits of others (`testing ci release`), any command | never: no route of the hub does it, none is released to a phone (tests `phone.rs`, `crates/testing-hub/src/phone.rs`) |
+| Releasing a commit for the self-hosted runner (`testing ci release`), trusting a root, any command | never: the release assistant is for a session of the PC and no route of it is released to a phone; no route of the hub trusts a root or runs a command (tests `phone.rs`, `crates/testing-hub/src/phone.rs`) |
 
-A run the runner guard refused (`rejected`) is not started again from the phone: release it on the PC, where you look
-at the commit. The run of a task's test sheets (`POST /api/testing/run/task`, `{ "task": "<area>/<slug>" }`) is
+A job the runner guard refused is not released from the phone: release its commit on the PC, where you look at what
+it changes (`USAGE.md`, *Releasing a commit for the runner*). The run of a task's test sheets (`POST /api/testing/run/task`, `{ "task": "<area>/<slug>" }`) is
 testing.nvim's `testing sheets run --task` on the PC, in the repository of the fleet named like the task's area; the
 hub starts it only when a sheet there names the task. tasks mobil calls it; the routes are in
 [USAGE.md](USAGE.md#a-run-through-testingnvim).

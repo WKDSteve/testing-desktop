@@ -37,6 +37,8 @@ export class Reader {
   sheetsFailure = $state<string | null>(null);
   /** The page shows the stepped run instead of the fleet or a repository (the hub only). */
   stepView = $state(false);
+  /** The page shows the release assistant for the runner guard instead (the hub only). */
+  releaseView = $state(false);
 
   /** What this build and its engine are (the help menu); `null` until read, and when the source does not say. */
   about = $state<About | null>(null);
@@ -64,6 +66,14 @@ export class Reader {
   /** Leave the stepped run for the fleet or the open repository; the run goes on. */
   hideStep(): void {
     this.stepView = false;
+  }
+
+  /** Show the release assistant for the runner guard (`App` has one; a folder has none, so this does nothing). */
+  showRelease(_repo?: string): void {}
+
+  /** Leave the release assistant for the fleet or the open repository. */
+  hideRelease(): void {
+    this.releaseView = false;
   }
 
   /** Run a sheet of the open repository step by step (`App`); a folder cannot. */
@@ -195,6 +205,7 @@ export class Reader {
     this.sheets = null;
     this.sheetsFailure = null;
     this.stepView = false;
+    this.releaseView = false;
   }
 
   openPalette(): void {

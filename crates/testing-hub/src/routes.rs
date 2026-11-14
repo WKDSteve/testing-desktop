@@ -9,7 +9,8 @@
 //! The routes of a stepped run of a sheet (`sheet-step`, in `stepping`) start the engine's `testing sheets step` in
 //! a repository of the fleet and pass it a command of a closed list; those of a run through the engine (`run/*`, in
 //! `launching`) start its command line for a suite, a file or the sheets of a task; `ci-rerun` starts the failed
-//! jobs of a red CI run again.
+//! jobs of a red CI run again; the routes of the release assistant (`release/*`, in `releasing`) ask the steps of
+//! the engine's `testing ci release`.
 
 use std::sync::Arc;
 
@@ -25,7 +26,7 @@ use serde_json::{json, Value};
 use crate::answer::{engine_failure, engine_unavailable};
 use crate::engine::{is_repo_key, Ask, Calls, EngineError, Method, Reply};
 use crate::runtime::TestingRuntime;
-use crate::{launching, live, stepping, IDENTITY};
+use crate::{launching, live, releasing, stepping, IDENTITY};
 
 /// The core of the hub with the runtime of this app.
 pub type Shared = Core<TestingRuntime>;
@@ -50,6 +51,11 @@ pub const ROUTES: &[(&str, MakeRoute)] = &[
     ("run/start", || post(launching::start)),
     ("run/task-sheets", || get(launching::task_sheets_route)),
     ("run/task", || post(launching::task)),
+    ("release", || post(releasing::release)),
+    ("release/repos", || get(releasing::repos)),
+    ("release/commits", || get(releasing::commits)),
+    ("release/show", || get(releasing::show)),
+    ("release/outcome", || get(releasing::outcome)),
 ];
 
 /// The router of the app, built from [`ROUTES`] and from nothing else. Invariant: this stays a
@@ -291,6 +297,11 @@ mod tests {
                 "run/start",
                 "run/task-sheets",
                 "run/task",
+                "release",
+                "release/repos",
+                "release/commits",
+                "release/show",
+                "release/outcome",
             ]
         );
     }

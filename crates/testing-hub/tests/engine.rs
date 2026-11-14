@@ -471,6 +471,16 @@ static STEPPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// The hub with the real engine and its `testing sheets step`, started with this environment: the trust of the
 /// root (or none) goes to the child as from a terminal.
 async fn hub_stepping(fx: &Fixture, trust: bool) -> Option<(appkit_hub::RunningServer, String)> {
+    hub_with_children(fx, trust, Vec::new()).await
+}
+
+/// [`hub_stepping`], with more variables for the children the hub starts (a release step reads where the list of
+/// reviewed commits is).
+async fn hub_with_children(
+    fx: &Fixture,
+    trust: bool,
+    more: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+) -> Option<(appkit_hub::RunningServer, String)> {
     let repo = fx.root().join("alpha.nvim");
     std::fs::create_dir_all(repo.join("TESTS").join("sheets")).unwrap();
     std::fs::write(
@@ -501,7 +511,8 @@ async fn hub_stepping(fx: &Fixture, trust: bool) -> Option<(appkit_hub::RunningS
     let setup = discover(&DISCOVERY, &file, AppInputs::default(), &env)
         .await
         .expect("the engine was found a moment ago");
-    let step = testing_hub::sheetstep::StepProgram::from_setup(&setup, &env);
+    let mut step = testing_hub::sheetstep::StepProgram::from_setup(&setup, &env);
+    step.env.extend(more);
     let engine = CliEngine::new(cli_config(&setup, env));
     let info = probe(&engine).await.expect("hello");
     let control = Secret::generate(TOKEN_BYTES).unwrap();
@@ -724,4 +735,55 @@ async fn an_abort_from_the_page_ends_the_real_engine_with_its_own_end() {
         since.elapsed()
     );
     server.shutdown().await;
+}
+
+/// The first step of the release assistant through the real engine: `testing ci release --repos --json` reads the
+/// list of reviewed commits where the runner guard keeps it, and the hub hands its repositories on. Nothing asks
+/// GitHub here, and nothing is released.
+#[tokio::test]
+async fn the_real_engine_lists_the_repositories_of_the_runner_guard_for_the_release_assistant() {
+    let _one = STEPPING.lock().await;
+    let fx = Fixture::new();
+    let runners = fx.root().join("runners");
+    std::fs::create_dir_all(&runners).unwrap();
+    let list = serde_json::json!({
+        "v": 1,
+        "repos": { "fixture-owner/alpha.nvim": { "mode": "auto", "shas": [
+            { "sha": "1".repeat(40), "at": 1 }, { "sha": "2".repeat(40), "at": 2 },
+        ] } },
+    });
+    let reviewed = runners.join("reviewed.json");
+    std::fs::write(&reviewed, list.to_string()).unwrap();
+    let before = std::fs::read(&reviewed).unwrap();
+    let Some((server, token)) = hub_with_children(
+        &fx,
+        true,
+        vec![("TESTING_RUNNER_ROOT".into(), runners.clone().into())],
+    )
+    .await
+    else {
+        return;
+    };
+    let r = get(&server, &route_of("release/repos"), Some(&token)).await;
+    assert_eq!(r.status, 200, "{r:?}");
+    let doc = r.json();
+    assert_eq!(doc["kind"], "hub.release.repos", "{doc}");
+    assert_eq!(doc["exit"], 0, "{doc}");
+    assert_eq!(
+        doc["repos"],
+        serde_json::json!([{ "name": "fixture-owner/alpha.nvim", "listed": true, "mode": "auto",
+                             "reviewed": 2, "ci": null, "red": false }]),
+        "{doc}"
+    );
+    // A repository the engine did not name cannot be asked about, and reading changed nothing of the list.
+    let r = get(
+        &server,
+        &route_of("release/commits?repo=someone/else"),
+        Some(&token),
+    )
+    .await;
+    assert_eq!(r.status, 404, "{r:?}");
+    assert_eq!(std::fs::read(&reviewed).unwrap(), before);
+    server.shutdown().await;
+    drop(fx);
 }

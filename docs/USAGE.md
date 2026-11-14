@@ -39,7 +39,8 @@ The same page plays back a test sheet that ran step by step (`testing sheets ste
 through** on the hub's page). testing.nvim records every such run beside its pictures: the folder
 `testing/sheet-evidence/<sheet id>` below the cache folder of Neovim (`%TEMP%\nvim` on Windows, `~/.cache/nvim`
 elsewhere; `:echo stdpath('cache')` says where), with `events.jsonl` and the pictures of the steps. Copy that
-folder to where the browser may read it (Chrome and Edge refuse folders below `AppData`) or to another machine, and
+folder to where the browser may read it (a browser may refuse a system folder such as `AppData`, where the cache
+folder is on Windows) or to another machine, and
 choose it with **Choose folder**: a folder with `events.jsonl` and no export in it is a recording.
 
 It opens at the end of the run, with the view of the hub's "Step by step" page: the steps with their state, and the
@@ -157,5 +158,45 @@ and no snapshot. What testing.nvim refuses (the workstation rule, a root that is
 reason: trust comes from `TESTING_TRUST_ROOTS` of the hub's environment, as in a terminal. Leaving the page (the menu
 **View › All repositories**) does not end the run; **View › Step by step** comes back to it, and the hub's own stop
 ends it.
+
+### Releasing a commit for the runner
+
+The runner guard of testing.nvim keeps foreign code off a self-hosted runner: a job of a public repository runs only
+for a commit you released (`docs/RUNNER-GUARD.md` of testing.nvim). A job it refused shows as a red CI run. **View ›
+Release a commit for the runner…** (or **Release a commit…** on the page of a repository whose CI run failed) walks
+through the steps of `testing ci release`, the same as in a terminal:
+
+1. **Repository**: the repositories of the fleet that GitHub knows and those on the guard's list, a red CI first.
+2. **Commit**: the last commits of the default branch, each with whether it is released.
+3. **What changed**: since the last released commit: the commits, the files, and marked those that decide what the
+   runner executes (the workflow, scripts, lock files); a warning when nothing was released before, when the history
+   was rewritten, or when the changes could not be read. Tick **I looked at these changes** to go on.
+4. **Release**: one question, with the full commit id.
+5. **Result**: the commit is on the list, and its failed runs were started again (or what went wrong). The hub
+   releases in the background: closing the page meanwhile does not stop it.
+
+testing.nvim does every step (`testing ci release ... --json`): it asks GitHub through `gh` with your own login of
+`gh`, keeps the list (`reviewed.json` below `TESTING_RUNNER_ROOT`, else `~/actions-runners`), and releases. The page
+only shows what it says. A release takes the full commit id of the review aid you were shown, within fifteen minutes;
+`testing ci trust --revoke <owner/repo> <sha>` in a terminal takes an entry back. It needs a testing.nvim that has the
+steps as documents (`testing-ci-release/1`); an older one makes the page say so. A phone never reaches the assistant.
+
+The web variant has no assistant: for a red CI run of an export it names the command, `testing ci release
+<owner/repo> <sha>`, to copy into a terminal on the PC.
+
+The routes, for a program on the PC:
+
+| Route | Query or body | Answer |
+| --- | --- | --- |
+| `GET /api/testing/release/repos` | none | `{ "schema": 1, "kind": "hub.release.repos", "exit", "problem", "repos": [{ "name", "listed", "mode", "reviewed", "ci", "red" }] }` |
+| `GET /api/testing/release/commits` | `?repo=<owner/name>` | `{ ..., "kind": "hub.release.commits", "repo", "commits": [{ "sha", "title", "author", "date", "released" }] }` |
+| `GET /api/testing/release/show` | `?repo=<owner/name>&sha=<40 hex>` | `{ ..., "kind": "hub.release.show", "repo", "sha", "show": null \| { "already", "prev", "compared", "problem", "status", "total_commits", "commits", "files": [{ "path", "previous", "status", "flag" }], "files_total", "truncated" } }` |
+| `POST /api/testing/release` | `{ "repo": "<owner/name>", "sha": "<40 hex>" }` | `202` and `{ "schema": 1, "kind": "hub.release.started", "repo", "sha" }`: the release runs in the background, to its end whatever becomes of the page; `409 not_shown` without the review aid of that commit read just before, `404 unknown_repo` for a repository `release/repos` did not name, `409 busy` |
+| `GET /api/testing/release/outcome` | none | `{ "schema": 1, "kind": "hub.release.outcome", "state": "none" \| "pending" \| "done" \| "failed", "repo", "sha", ... }`: for `done` the engine's `exit`, `problem` and `"release": null \| { "already", "recorded", "reruns": [{ "id", "name", "was", "ok", "problem" }] }`, for `failed` `"error": { "code", "message" }` (the step gave no document) |
+
+`exit` and `problem` are the engine's: `0` done, `2` it refused the arguments, `3` GitHub or the list failed. A reading
+step answers within 25 seconds or says that GitHub took too long. The release is not tied to its request (the hub
+gives a request 30 seconds, a release that starts many runs again takes longer): while it runs every other step is
+`409 busy`, and the page asks `release/outcome` until it is over.
 
 More on the security of the server: [SECURITY.md](SECURITY.md). On releases: [RELEASING.md](RELEASING.md).

@@ -162,6 +162,9 @@ export function env(config: string): NodeJS.ProcessEnv {
     TESTING_DESKTOP_CONFIG_DIR: config,
     TESTING_DESKTOP_PORT: String(port()),
     TESTING_TRUST_ROOTS: join(dirname(config), 'repos'),
+    // The list of reviewed commits of the runner guard, for the release assistant: a folder of the tests (it is not
+    // there, so the list is empty), never the list of whoever runs them.
+    TESTING_RUNNER_ROOT: join(dirname(config), 'runners'),
   };
   // The places of the settings file, not those of whoever runs the tests.
   delete out['TESTING_DESKTOP_STATE_DIR'];

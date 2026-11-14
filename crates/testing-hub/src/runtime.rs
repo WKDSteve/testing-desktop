@@ -36,6 +36,8 @@ pub struct TestingRuntime {
     pub(crate) launch: Arc<crate::launch::Launch>,
     /// How a red CI run is started again; `None`: it is not.
     pub(crate) rerun: Option<Arc<dyn crate::rerun::Rerunner>>,
+    /// The steps of the release assistant (`testing ci release`), and which commit a release may name.
+    pub(crate) release: Arc<crate::release::Release>,
     /// The refresher; ended when the hub stops.
     jobs: Mutex<Vec<JoinHandle<()>>>,
     // Kept alive: the refresher ends when every sender of hints is gone.
@@ -166,6 +168,12 @@ impl TestingRuntime {
             Some(Arc::clone(&store)),
             ask.state_dir.clone(),
         ));
+        // The steps of a release are the engine's command line too, with where the list of reviewed commits is and
+        // where `gh` keeps its login, from the hub's own environment.
+        let release = Arc::new(crate::release::Release::new(
+            step.clone(),
+            crate::release::extra_env(|name| std::env::var_os(name)),
+        ));
         let sheet_step = Arc::new(SheetStep::new(step));
         Self {
             status,
@@ -177,6 +185,7 @@ impl TestingRuntime {
             sheet_step,
             launch,
             rerun,
+            release,
             jobs: Mutex::new(jobs),
             _hints: hints,
             _watcher: watcher,

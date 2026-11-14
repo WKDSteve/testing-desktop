@@ -6,6 +6,7 @@ import { StreamSession } from 'appkit-ui/session';
 import type { SseMessage } from 'appkit-ui/sse';
 import { messageOf, Reader } from './reader.svelte';
 import { ApiError, type HubSource, type StepCommand } from './source';
+import { commitsFrom, emptyWizard, isFullSha, outcomeFrom, reposFrom, reviewFrom, type Wizard } from './release';
 import { fileTextProblem, runFrom, type RunView } from './run';
 import { emptyStep, fromDocument, fromStream, isStale, noteProblem, STREAM_EVENT, type StepState } from './step';
 
@@ -19,6 +20,9 @@ export const RETRY_MS = 3000;
 
 /** How often the page asks where a run through the engine stands while it runs (the hub streams no run). */
 export const RUN_POLL_MS = 2000;
+
+/** How often the page asks what became of a release while it runs (the hub answers its start at once). */
+export const RELEASE_POLL_MS = 1000;
 
 /** How often a pairing code is tried again when the hub says that there were too many attempts. */
 export const EXCHANGE_RETRIES = 3;
@@ -64,6 +68,11 @@ export class App extends Reader {
   /** Why the last start of a run was refused; `null` once one went through. */
   runFailure = $state<string | null>(null);
   private following = false;
+
+  /** The release assistant for the runner guard (`lib/release.ts`): where a person stands in its steps. */
+  release = $state<Wizard>(emptyWizard());
+  // The step asked last: an answer to an earlier one (the person went on or back meanwhile) is dropped.
+  private releaseAsked = 0;
 
   /** The event stream of the hub (the kit's `StreamSession`). */
   readonly stream = new StreamSession();
@@ -231,6 +240,7 @@ export class App extends Reader {
 
   override showStep(): void {
     this.stepView = true;
+    this.releaseView = false;
     this.paletteOpen = false;
     if (this.step.session === null) void this.readStep();
   }
@@ -239,6 +249,7 @@ export class App extends Reader {
   override async stepSheet(name: string): Promise<void> {
     const key = this.openKey;
     if (key === null) return;
+    this.releaseView = false;
     this.stepView = true;
     this.stepFailure = null;
     this.stepChosen = null;
@@ -373,6 +384,133 @@ export class App extends Reader {
     return this.env.hub.stepImage(size, n, kind, signal);
   }
 
+  /**
+   * Open the release assistant at its first step; with `repo` (the repository of a red CI run) at its commits, when
+   * the assistant offers that repository.
+   */
+  override showRelease(repo?: string): void {
+    this.releaseView = true;
+    this.stepView = false;
+    this.paletteOpen = false;
+    this.release = emptyWizard();
+    void this.releaseStart(repo);
+  }
+
+  /** One step of the assistant: `ask` asks the hub, `take` folds a good answer into the state. */
+  private async releaseStep(ask: () => Promise<unknown>, take: (doc: unknown) => void): Promise<void> {
+    const mine = ++this.releaseAsked;
+    this.release = { ...this.release, busy: true, failure: null };
+    try {
+      const doc = await ask();
+      if (!this.live || mine !== this.releaseAsked) return;
+      this.release = { ...this.release, busy: false };
+      take(doc);
+    } catch (error) {
+      if (!this.live || mine !== this.releaseAsked) return;
+      this.release = { ...this.release, busy: false, failure: messageOf(error) };
+    }
+  }
+
+  /** What the engine says when a step did not go through; `null` when it did. */
+  private static releaseProblem(read: { exit: number | null; problem: string | null }): string | null {
+    return read.exit === 0 ? null : (read.problem ?? `exit ${read.exit ?? '?'}`);
+  }
+
+  private async releaseStart(repo?: string): Promise<void> {
+    await this.releaseStep(
+      () => this.env.hub.releaseRepos(),
+      (doc) => {
+        const read = reposFrom(doc);
+        this.release = { ...this.release, repos: read.repos, failure: App.releaseProblem(read) };
+      },
+    );
+    const wanted = repo?.toLowerCase();
+    const offered = wanted ? this.release.repos?.find((r) => r.name.toLowerCase() === wanted) : undefined;
+    if (offered && this.release.stage === 'repo') await this.releaseChooseRepo(offered.name);
+  }
+
+  /** Step 1 is done: this repository. Its commits are read. */
+  async releaseChooseRepo(name: string): Promise<void> {
+    if (this.release.busy || !this.release.repos?.some((r) => r.name === name)) return;
+    this.release = { ...this.release, stage: 'commit', repo: name, commits: null, sha: null, review: null, looked: false, done: null, doneProblem: null };
+    await this.releaseStep(
+      () => this.env.hub.releaseCommits(name),
+      (doc) => {
+        const read = commitsFrom(doc);
+        this.release = { ...this.release, commits: read.commits, failure: App.releaseProblem(read) };
+      },
+    );
+  }
+
+  /** Step 2 is done: this commit, by its full id. Its review aid is read; only what the hub answers for it counts. */
+  async releaseChooseCommit(sha: string): Promise<void> {
+    const repo = this.release.repo;
+    if (this.release.busy || repo === null || !isFullSha(sha)) return;
+    this.release = { ...this.release, stage: 'review', sha, review: null, looked: false, done: null, doneProblem: null };
+    await this.releaseStep(
+      () => this.env.hub.releaseShow(repo, sha),
+      (doc) => {
+        const read = reviewFrom(doc);
+        const review = read.review?.sha === sha ? read.review : null;
+        this.release = { ...this.release, review, failure: review ? null : (App.releaseProblem(read) ?? 'the hub gave no review aid for this commit') };
+      },
+    );
+  }
+
+  /** The person says whether they looked at what the commit changes. */
+  releaseLooked(looked: boolean): void {
+    if (this.release.stage === 'review' && this.release.review !== null) this.release = { ...this.release, looked };
+  }
+
+  /** Step 3 is done: on to the question, only with a review aid that was looked at. */
+  releaseToConfirm(): void {
+    const w = this.release;
+    if (w.busy || w.stage !== 'review' || w.review === null || !w.looked) return;
+    this.release = { ...w, stage: 'confirm', failure: null };
+  }
+
+  /** One step back; what was chosen in the step that is left is forgotten. */
+  releaseBack(): void {
+    const w = this.release;
+    if (w.busy) return;
+    if (w.stage === 'commit') this.release = { ...w, stage: 'repo', repo: null, commits: null, failure: null };
+    else if (w.stage === 'review') this.release = { ...w, stage: 'commit', sha: null, review: null, looked: false, failure: null };
+    else if (w.stage === 'confirm') this.release = { ...w, stage: 'review', failure: null };
+  }
+
+  /**
+   * The release: the commit of the review aid on the page, after the question. The hub hands it to the engine only
+   * when it handed out that aid last; what the engine did is the last step.
+   */
+  async releaseDo(): Promise<void> {
+    const w = this.release;
+    if (w.busy || w.stage !== 'confirm' || w.repo === null || w.sha === null || w.review === null || w.review.sha !== w.sha || !w.looked) return;
+    const { repo, sha } = w;
+    await this.releaseStep(
+      async () => {
+        await this.env.hub.releaseCommit(repo, sha);
+        // The hub started it and answers at once; the release runs on there, whatever becomes of this page.
+        for (;;) {
+          const read = outcomeFrom(await this.env.hub.releaseOutcome());
+          if (read.state !== 'pending') return read;
+          await this.env.sleep(RELEASE_POLL_MS);
+          if (!this.live) return read;
+        }
+      },
+      (answer) => {
+        const read = answer as ReturnType<typeof outcomeFrom>;
+        // Only the outcome of the release this page started: another one's (a second tab) is not this one's result.
+        const mine = read.repo?.toLowerCase() === repo.toLowerCase() && read.sha === sha;
+        if (read.state === 'done' && mine) {
+          this.release = { ...this.release, stage: 'done', done: read.done, doneProblem: App.releaseProblem(read) };
+        } else {
+          const why = read.state === 'failed' && mine ? read.error : 'the hub does not say what became of this release';
+          this.release = { ...this.release, stage: 'done', done: null, doneProblem: why };
+        }
+      },
+    );
+  }
+
   private lostSession(): void {
     safe(() => this.env.session.removeItem(TOKEN_KEY));
     this.env.hub.setToken(null);
@@ -387,6 +525,8 @@ export class App extends Reader {
     this.stepFailure = null;
     this.run = null;
     this.runFailure = null;
+    this.release = emptyWizard();
+    this.releaseAsked += 1;
     this.close();
   }
 }

@@ -19,6 +19,7 @@ export function paletteActions(app: Reader, t: Say): PaletteAction[] {
     },
   });
   if (app.hasStep && !app.stepView) out.push({ key: 'go.step', label: t('menu.step'), hint: '', run: () => app.showStep() });
+  if (app.hasStep && !app.releaseView) out.push({ key: 'go.release', label: t('menu.release'), hint: '', run: () => app.showRelease() });
   out.push({ key: 'reload', label: t('menu.reload'), hint: '', run: () => app.reload() });
   return out;
 }

@@ -117,6 +117,30 @@ test('a folder that is no good export stays on the way in and says why', async (
   expect(seen.requests).toEqual([]);
 });
 
+test('a red CI run names the command that releases its commit, to copy; the page itself releases nothing', async ({ page }) => {
+  const seen = await watchPage(page);
+  await fakePicker(page, exportFiles());
+  await openExport(page);
+  await page.getByRole('button', { name: 'beta.nvim' }).click();
+  await expect(page.getByRole('heading', { name: 'Refused by the runner guard?' })).toBeVisible();
+  // The repository and the full commit id of the export, as the command of a terminal.
+  await expect(page.getByLabel('The command that releases this commit')).toHaveText(`testing ci release fixture-owner/beta.nvim ${'e'.repeat(40)}`);
+  // The button copies, or says that the browser did not let it: either way the text stays to be selected.
+  await page.getByRole('button', { name: 'Copy' }).click();
+  await expect(page.getByText(/^(Copied\.|The browser did not allow the clipboard)/)).toBeVisible();
+  // No assistant and no release from a page without a hub.
+  await expect(page.getByRole('button', { name: /Release/ })).toHaveCount(0);
+  await page.getByRole('menubar').getByRole('menuitem', { name: 'View' }).click();
+  await expect(page.getByRole('menu').getByRole('menuitemradio', { name: /Release a commit/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  // A repository whose CI is green names none.
+  await page.getByRole('button', { name: /All repositories/ }).click();
+  await page.getByRole('button', { name: 'alpha.nvim' }).click();
+  await expect(page.getByRole('heading', { name: 'alpha.nvim' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Refused by the runner guard?' })).toHaveCount(0);
+  await clean(page, seen);
+});
+
 test('the history of a repository: the numbers of the engine, a filter, and a red case as text', async ({ page }) => {
   const seen = await watchPage(page);
   const hostile = '<img src=x onerror=window.__xss=2>';

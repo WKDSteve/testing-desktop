@@ -7,9 +7,10 @@
 //! only in the context of a task, run on the PC), which the hub starts only when a sheet of the task's repository
 //! names the task. It reads where a run stands (`run`, cut for a device) and which sheets a task has
 //! (`run/task-sheets`). Everything else stays on the PC: a stepped run of a test sheet, a run of a whole suite or of
-//! a file (`run/start`), the event stream, and above all `testing ci trust`, releasing commits of others, and any
-//! command of the person's choice. No route of this hub does those last three, and none is released to a phone: the
-//! tests hold [`DEVICE_ROUTES`] to that.
+//! a file (`run/start`), the event stream, and above all the release of a commit for the self-hosted runner (the
+//! assistant of `release/*`, the engine's `testing ci release`: a person looks at what a commit changes, on the PC)
+//! and any command of the person's choice. No route of this hub runs such a command or trusts a root, and none of
+//! the release assistant is released to a phone: the tests hold [`DEVICE_ROUTES`] to that.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -122,12 +123,25 @@ mod tests {
                 "{name}: only the rerun and a task's sheets trigger"
             );
         }
-        // And the hub has no route of that kind at all, released or not.
+        // The hub has no route that trusts a root or runs a command at all, released or not.
         for name in &served {
-            for word in ["trust", "release", "approve", "exec", "shell"] {
+            for word in ["trust", "approve", "exec", "shell"] {
                 assert!(!name.contains(word), "{name}");
             }
         }
+        // The release of a commit for the runner is the assistant's, on the PC: every route of it is served, and a
+        // phone reaches none.
+        let assistant: Vec<&&str> = served.iter().filter(|n| n.contains("release")).collect();
+        assert_eq!(
+            assistant,
+            [
+                &"release",
+                &"release/repos",
+                &"release/commits",
+                &"release/show",
+                &"release/outcome"
+            ]
+        );
         let names: Vec<&str> = DEVICE_ROUTES.iter().map(|(n, _)| *n).collect();
         assert_eq!(
             names,
@@ -148,6 +162,11 @@ mod tests {
             "sheet-step/start",
             "sheet-step/command",
             "events",
+            "release",
+            "release/repos",
+            "release/commits",
+            "release/show",
+            "release/outcome",
         ] {
             assert!(served.contains(&pc_only), "{pc_only}");
             assert!(!names.contains(&pc_only), "{pc_only}");

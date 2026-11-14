@@ -3,8 +3,10 @@
   import type { Reader } from '../lib/reader.svelte';
   import type { Key } from '../lib/i18n';
   import { caseTitle, redCases, shown, viewOf, type Tone } from '../lib/model';
+  import { mayNeedRelease, releaseCommand } from '../lib/release';
   import { fileTextProblem, type RunView } from '../lib/run';
   import { App } from '../lib/app.svelte';
+  import CopyText from './CopyText.svelte';
   import HistoryView from './History.svelte';
   import MetricsView from './Metrics.svelte';
   import ToneView from './Tone.svelte';
@@ -22,6 +24,10 @@
 
   // A run through the engine: only the page on the hub (`App`) starts one; a folder and a phone have none.
   const hub = $derived(app.hasStep && app instanceof App ? app : null);
+  // A red CI run can be a job the runner guard refused: the command that releases its commit, for a terminal. Only
+  // the page on the hub can also walk through the release itself; a folder (the web variant) only names the command.
+  const remote = $derived(doc?.repo.ci_remote ?? null);
+  const release = $derived(remote && mayNeedRelease(remote.state) ? releaseCommand(remote.repo, remote.sha) : null);
   let fileText = $state('');
   const fileProblem = $derived(fileText.trim() === '' ? null : fileTextProblem(fileText));
 
@@ -112,6 +118,15 @@
 
     {#if doc.metrics}
       <MetricsView metrics={doc.metrics} {t} />
+    {/if}
+
+    {#if release}
+      <h2>{t('release.detail.heading')}</h2>
+      <p class="muted">{t('release.detail.note')}</p>
+      <CopyText text={release} label={t('release.command.label')} {t} />
+      {#if hub}
+        <p class="run"><button type="button" onclick={() => hub.showRelease(remote?.repo ?? undefined)}>{t('release.detail.open')}</button></p>
+      {/if}
     {/if}
 
     {#if hub}

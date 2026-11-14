@@ -10,6 +10,7 @@
   import Detail from './views/Detail.svelte';
   import Frame from './views/Frame.svelte';
   import Overview from './views/Overview.svelte';
+  import Release from './views/Release.svelte';
   import Step from './views/Step.svelte';
 
   let { app, code, languages }: { app: App; code: string | null; languages: readonly string[] } = $props();
@@ -60,7 +61,9 @@
 
 <Frame {app} {t} {logo} {help}>
   {#if app.phase === 'ready'}
-    {#if app.stepView}
+    {#if app.releaseView}
+      <Release {app} {t} />
+    {:else if app.stepView}
       <Step {app} {t} />
     {:else if app.openKey}
       <Detail {app} {t} />

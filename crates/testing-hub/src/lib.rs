@@ -4,7 +4,8 @@
 //! A session may start a stepped run of a test sheet (`sheet-step`, `sheetstep`), the engine's `testing sheets
 //! step` as a child of the hub, and a run through the engine (`run/*`, `launch`): the suite of a repository, its spec
 //! files of one name, or the sheets bound to a task, each with the engine's own command line, in a repository of
-//! the fleet.
+//! the fleet. And it may ask the steps of the engine's `testing ci release` (`release/*`, `release`): the assistant
+//! that releases a commit for the self-hosted runner, where the engine alone keeps the list and decides.
 //! The commands of the program (`serve`, `start`, `stop`, `open`, `autostart`, `install`,
 //! `uninstall`) are in `app` and `background`.
 
@@ -27,6 +28,8 @@ mod launching;
 mod live;
 pub mod phone;
 pub mod places;
+pub mod release;
+mod releasing;
 pub mod rerun;
 mod routes;
 mod runtime;

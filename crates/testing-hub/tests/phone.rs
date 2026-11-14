@@ -245,6 +245,12 @@ async fn a_phone_reads_reruns_and_runs_a_tasks_sheets_only_confirmed_and_never_s
         ("GET", "events"),
         // Nor the run of a whole suite or of a file: a new run from the phone is only that of a task's sheets.
         ("POST", "run/start"),
+        // Never the release of a commit for the runner, nor a step of its assistant.
+        ("POST", "release"),
+        ("GET", "release/repos"),
+        ("GET", "release/commits"),
+        ("GET", "release/show"),
+        ("GET", "release/outcome"),
     ] {
         let r = send_with(
             &server,

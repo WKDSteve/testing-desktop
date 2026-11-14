@@ -936,7 +936,7 @@ fn hide_in_text(text: &str, root: &Path) -> String {
 
 /// `root` becomes `<path>` in every text of a value: the lines of the engine (a failure, a snapshot, a reason) may
 /// name a file of the run in their wording.
-fn hide_root(value: &mut Value, root: &Path) {
+pub(crate) fn hide_root(value: &mut Value, root: &Path) {
     match value {
         Value::String(text) => {
             let hidden = hide_in_text(text, root);

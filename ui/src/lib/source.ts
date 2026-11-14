@@ -123,6 +123,34 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
     return this.postJson<unknown>(this.route('run/start'), file === undefined ? { key } : { key, file });
   }
 
+  /** The release assistant: the repositories a commit can be released of (`lib/release.ts` folds the answers). */
+  releaseRepos(): Promise<unknown> {
+    return this.json<unknown>(this.route('release/repos'));
+  }
+
+  /** The last commits of the default branch of a repository, each with whether it is released. */
+  releaseCommits(repo: string): Promise<unknown> {
+    return this.json<unknown>(`${this.route('release/commits')}?repo=${encodeURIComponent(repo)}`);
+  }
+
+  /** The review aid of one commit: reading it is what allows its release, for a while. */
+  releaseShow(repo: string, sha: string): Promise<unknown> {
+    return this.json<unknown>(`${this.route('release/show')}?repo=${encodeURIComponent(repo)}&sha=${encodeURIComponent(sha)}`);
+  }
+
+  /**
+   * Start the release of that commit for the self-hosted runner and the re-run of its failed runs (the engine's
+   * `testing ci release`). The hub answers at once; `releaseOutcome` says what became of it.
+   */
+  releaseCommit(repo: string, sha: string): Promise<unknown> {
+    return this.postJson<unknown>(this.route('release'), { repo, sha });
+  }
+
+  /** Where the release that was started last stands, and what it did. */
+  releaseOutcome(): Promise<unknown> {
+    return this.json<unknown>(this.route('release/outcome'));
+  }
+
   /** The picture of a step of the run (`image`: the target after the step, `shot`: the file of a `shot` step). */
   async stepImage(size: string, n: number, kind: 'image' | 'shot', signal?: AbortSignal): Promise<Blob> {
     const path = `${this.route('sheet-step/image')}?size=${encodeURIComponent(size)}&n=${n}&kind=${kind}`;

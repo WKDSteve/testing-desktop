@@ -160,7 +160,8 @@ through** runs one the way a debugger runs a program: the hub starts testing.nvi
 and the page is its client, the same as `:Testing sheet step` in the editor, with the same words. One run at a time per
 hub.
 
-- Left: the steps of the size that runs, each with its state (not yet, next, runs, pass, fail, not run), its number,
+- Left: the steps of the size that runs, each with its state (not yet, next, runs, pass, fail, skipped here: a step that could not be done on this
+  machine, such as a `shot` without a browser; not run), its number,
   its action and its note, and a breakpoint dot in front of it. A click on a step chooses it.
 - Right: the tile of the chosen step (else of the last one that did something or got a note): what it does, how long
   it took, its notes, the reason of a failure, for a Neovim sheet the screen of the child editor as text, for a browser or desktop sheet the

@@ -118,6 +118,33 @@ test('the recording is walked with the buttons and the keys, and a click on a st
   await clean(page, seen);
 });
 
+test('a step that was skipped here reads as skipped, not as passed, in the list and in its tile', async ({ page }, testInfo) => {
+  const seen = await watchPage(page);
+  const events = changedRecording(
+    (e) => e['event'] === 'step-after' && e['n'] === 1,
+    (e) => {
+      e['status'] = 'skip';
+      e['reason'] = 'a shot needs a browser';
+    },
+  );
+  await openRecording(page, { 'events.jsonl': events });
+  const first = page.getByRole('list', { name: 'Steps' }).getByRole('listitem').nth(0);
+  await expect(first).toContainText('skipped here');
+  await expect(first).not.toContainText('pass');
+  await expect(first).toHaveClass(/(^| )skip( |$)/);
+  await expect(page.getByRole('list', { name: 'Steps' }).getByRole('listitem').nth(1)).toContainText('pass');
+  await first.getByRole('button').click();
+  await expect(page.getByRole('heading', { name: 'Step 1, lua' })).toBeVisible();
+  await expect(page.getByText('skipped here', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('a shot needs a browser')).toBeVisible();
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    expect(await new AxeBuilder({ page }).analyze().then((r) => r.violations)).toEqual([]);
+    await testInfo.attach(`skip-${colorScheme}`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  await clean(page, seen);
+});
+
 test('a picture of a step is read from the folder when its tile shows, and only a file the recording named', async ({ page }) => {
   const seen = await watchPage(page);
   const events = changedRecording(

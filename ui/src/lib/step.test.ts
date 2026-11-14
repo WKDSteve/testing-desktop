@@ -51,6 +51,21 @@ describe('the model of a stepped run', () => {
     expect(statusLine(s)).toEqual({ kind: 'finished', status: 'fail', ms: 40, skipped: null });
   });
 
+  it('keeps a step that was skipped here apart from one that passed', () => {
+    let s = reduce(emptyStep(), start);
+    s = reduce(s, ev('size', { size: '80x24', state: 'open' }));
+    s = reduce(s, ev('step-after', { size: '80x24', n: 1, status: 'skip', ms: 0, reason: 'a shot needs a browser' }));
+    expect(statusOf(s, 1)).toBe('skip');
+    expect(s.marks['80x24']?.[1]).toMatchObject({ status: 'skip', reason: 'a shot needs a browser' });
+    // The others go on, and the sheet ends as a skip.
+    s = reduce(s, ev('step-after', { size: '80x24', n: 2, status: 'pass', ms: 1 }));
+    s = reduce(s, ev('end', { status: 'skip', ok: true, verdict: true, failures: [], snapshots: [], skipped: 'a shot needs a browser', ms: 2 }));
+    expect([1, 2, 3].map((n) => statusOf(s, n))).toEqual(['skip', 'pass', 'skipped']);
+    // A status of a newer engine is not read as green.
+    s = reduce(s, ev('step-after', { size: '80x24', n: 3, status: 'flaky', ms: 1 }));
+    expect(statusOf(s, 3)).toBe('skip');
+  });
+
   it('shows a question until its step is done, and keeps the last error', () => {
     let s = reduce(emptyStep(), start);
     s = reduce(s, ev('size', { size: '80x24', state: 'open' }));

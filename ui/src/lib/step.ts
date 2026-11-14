@@ -62,7 +62,8 @@ export interface SheetDoc {
 
 /** What a step did (`step-after`). */
 export interface Mark {
-  status: 'pass' | 'fail';
+  /** `skip`: the step could not be done here (an rpc `shot` without a browser); the sheet ends as a skip. */
+  status: 'pass' | 'fail' | 'skip';
   ms: number | null;
   reason: string | null;
   failure: string | null;
@@ -89,7 +90,8 @@ export interface Finished {
   ms: number | null;
 }
 
-export type StepStatus = 'pending' | 'running' | 'next' | 'pass' | 'fail' | 'skipped';
+/** `skip` is a step that said it could not be done here; `skipped` one the run never reached. */
+export type StepStatus = 'pending' | 'running' | 'next' | 'pass' | 'fail' | 'skip' | 'skipped';
 
 export interface StepState {
   /** The run of the hub this state is of; `null` before any. */
@@ -194,7 +196,8 @@ function docOf(e: Record<string, unknown>): SheetDoc {
 
 function markOf(e: Record<string, unknown>): Mark {
   return {
-    status: e['status'] === 'fail' ? 'fail' : 'pass',
+    // A status this reader does not know is of a newer engine: it is not shown as green.
+    status: e['status'] === 'pass' ? 'pass' : e['status'] === 'fail' ? 'fail' : 'skip',
     ms: num(e['ms']),
     reason: str(e['reason']),
     failure: str(e['failure']),

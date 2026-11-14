@@ -85,9 +85,17 @@ async fn engine(root: &Path) -> Result<CliEngine, String> {
         vault: Some(root.to_path_buf()),
         ..FileConfig::default()
     };
-    let setup = discover(&DISCOVERY, &file, AppInputs::default(), &env)
-        .await
-        .map_err(|p| p.to_string())?;
+    // The search starts Neovim once to ask its version, under a limit of 10 s. A machine that is busy for a moment
+    // is not a machine without Neovim: the search is tried again, a real lack of it says the same every time.
+    let mut tries = 0;
+    let setup = loop {
+        tries += 1;
+        match discover(&DISCOVERY, &file, AppInputs::default(), &env).await {
+            Ok(setup) => break setup,
+            Err(problem) if tries < 3 && problem.to_string().contains("ran longer than") => {}
+            Err(problem) => return Err(problem.to_string()),
+        }
+    };
     Ok(CliEngine::new(cli_config(&setup, env)))
 }
 
@@ -115,6 +123,7 @@ fn json(text: &str) -> Value {
 #[tokio::test]
 async fn the_real_engine_takes_a_token_in_the_request_and_writes_it_nowhere() {
     const TOKEN: &str = "github_pat_spy0123456789abcdefABCDEF";
+    let _one_at_a_time = STEPPING.lock().await;
     let fx = Fixture::new();
     let Some(engine) = engine_or_skip(&fx.root()).await else {
         return;
@@ -164,6 +173,7 @@ async fn the_real_engine_takes_a_token_in_the_request_and_writes_it_nowhere() {
 /// `.testing.lua`. That file is Lua: it must not run in the child of the hub, whatever a repository put there.
 #[tokio::test]
 async fn a_request_with_a_token_runs_no_code_of_a_repository() {
+    let _one_at_a_time = STEPPING.lock().await;
     let fx = Fixture::new();
     let Some(engine) = engine_or_skip(&fx.root()).await else {
         return;
@@ -190,6 +200,7 @@ async fn a_request_with_a_token_runs_no_code_of_a_repository() {
 
 #[tokio::test]
 async fn the_real_engine_answers_hello_and_the_fleet_of_the_root_in_the_export_form() {
+    let _one_at_a_time = STEPPING.lock().await;
     let fx = Fixture::new();
     let Some(engine) = engine_or_skip(&fx.root()).await else {
         return;
@@ -244,6 +255,7 @@ async fn the_real_engine_answers_hello_and_the_fleet_of_the_root_in_the_export_f
 
 #[tokio::test]
 async fn the_real_engine_answers_a_repository_by_its_key_and_refuses_a_key_it_has_not() {
+    let _one_at_a_time = STEPPING.lock().await;
     let fx = Fixture::new();
     let Some(engine) = engine_or_skip(&fx.root()).await else {
         return;
@@ -274,6 +286,7 @@ async fn the_real_engine_answers_a_repository_by_its_key_and_refuses_a_key_it_ha
 
 #[tokio::test]
 async fn the_hub_serves_the_fleet_of_the_real_engine() {
+    let _one_at_a_time = STEPPING.lock().await;
     let fx = Fixture::new();
     let Some(engine) = engine_or_skip(&fx.root()).await else {
         return;
@@ -345,6 +358,7 @@ fn a_red_run(fx: &Fixture, repo: &str, nvim: &Path, script: &Path) {
 
 #[tokio::test]
 async fn a_real_run_is_seen_by_the_watcher_and_its_findings_are_one_document() {
+    let _one_at_a_time = STEPPING.lock().await;
     let fx = Fixture::new();
     let env = Env::from_process();
     let file = FileConfig::<TestingSettings> {
@@ -469,8 +483,10 @@ const SMOKE_SHEET: &str = r#"return {
 }
 "#;
 
-/// The tests of a stepped run, one at a time: each starts a hub, the engine, `sheets step` and its child editor,
-/// and three at once beside the other tests of this file are more Neovims than a loaded machine answers in time.
+/// The tests of this file, one at a time: each starts the engine (a Neovim), most a hub and some `sheets step` with
+/// its child editor. Eleven at once are more Neovims than a loaded machine answers in time: on the runner, beside
+/// the builds of other sessions, the probe of Neovim ran into its 10 s and requests into the hub's 30 s (CI run
+/// 43642618230, twice). One after the other they take about as long as the slowest ones took together.
 static STEPPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// The hub with the real engine and its `testing sheets step`, started with this environment: the trust of the

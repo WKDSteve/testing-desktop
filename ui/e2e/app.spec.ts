@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from './fixture';
+import AxeBuilder from '@axe-core/playwright';
 import { expectAccessible, violations, watchViolations } from './a11y';
 import { STATE } from './global';
 import { BETA_SPEC, origin, pairingLink, writeRun } from './hub';
@@ -183,6 +184,10 @@ test('the palette opens a repository by its name and filters the red ones', asyn
   await expect(page.getByRole('menu')).toContainText('write into no task');
   await expectAccessible(page, 'the help menu');
   await testInfo.attach('help', { body: await page.screenshot(), contentType: 'image/png' });
+  // The same in dark: the menu is open and nothing has the focus that would be caught mid-change.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(async () => (await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await testInfo.attach('help-dark', { body: await page.screenshot(), contentType: 'image/png' });
   expect(seen.errors).toEqual([]);
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);

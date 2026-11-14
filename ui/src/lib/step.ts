@@ -388,3 +388,10 @@ export function statusLine(state: StepState): StatusLine {
   if (state.session === null) return { kind: 'none' };
   return { kind: 'starting' };
 }
+
+/** The heading of a run: the title of the sheet with its engine and app; `null` before the sheet is known. */
+export function sheetTitle(doc: SheetDoc | null): string | null {
+  if (!doc) return null;
+  const app = doc.app ? `, ${oneLine(doc.app, 40)}` : '';
+  return `${oneLine(doc.title, 80)}  [${oneLine(doc.engine, 20)}${app}]`;
+}

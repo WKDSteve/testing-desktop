@@ -6,6 +6,7 @@ import { oneLine, pickerSupport, type DirHandle, type DirHandleLike, type Picker
 import { inputFolderSupport, pickFolderByInput, type InputDocument } from 'appkit-web/folder-input';
 import { grantAccess, permissionOf, pickFolder } from './folder';
 import { ExportError, type ExportProblem, type Snapshot } from './folder-source';
+import { RecordingError, type Recording, type RecordingProblem } from './recording';
 
 export type Access = 'granted' | 'prompt' | 'denied' | 'gone';
 
@@ -17,7 +18,7 @@ export interface RecentView {
 
 /** Why the last attempt did not lead into an export. `detail` is a path, a word of the contract or a line of the browser. */
 export interface Notice {
-  code: 'cancelled' | 'empty' | 'no_paths' | 'blocked' | 'failed' | 'denied' | 'gone' | ExportProblem;
+  code: 'cancelled' | 'empty' | 'no_paths' | 'blocked' | 'failed' | 'denied' | 'gone' | ExportProblem | RecordingProblem;
   detail?: string;
 }
 
@@ -27,12 +28,16 @@ export type EntryState =
   /** `readOnce`: this browser has no folder picker (Firefox, Safari), the folder comes through an input and cannot be looked at again. */
   | { step: 'choose'; recent: RecentView[]; notice: Notice | null; readOnce: boolean }
   | { step: 'opening'; name: string }
-  | { step: 'open'; name: string; handle: DirHandleLike; snapshot: Snapshot; readOnce: boolean };
+  | { step: 'open'; name: string; handle: DirHandleLike; snapshot: Snapshot; readOnce: boolean }
+  /** The folder is the recording of a stepped run (`events.jsonl`): it is played back, read once. */
+  | { step: 'replay'; name: string; recording: Recording };
 
 export interface EntryDeps {
   win: PickerWindow;
   recent: RecentFolders;
   read(handle: DirHandleLike): Promise<Snapshot>;
+  /** The recording of a stepped run in the folder; `null`: the folder is none (it is read as an export). */
+  recording?(handle: DirHandleLike): Promise<Recording | null>;
   now(): number;
 }
 
@@ -130,7 +135,8 @@ export class Entry {
   private async enter(handle: DirHandleLike): Promise<void> {
     this.set({ step: 'opening', name: handle.name });
     try {
-      const snapshot = await this.deps.read(handle);
+      const recording = this.deps.recording ? await this.deps.recording(handle) : null;
+      const snapshot = recording === null ? await this.deps.read(handle) : null;
       if (!this.readOnce) {
         // The list of folders is a convenience: a browser that cannot keep it must not keep the person out of an export.
         try {
@@ -139,7 +145,8 @@ export class Entry {
           // the next start simply does not list this folder
         }
       }
-      this.set({ step: 'open', name: handle.name, handle, snapshot, readOnce: this.readOnce });
+      if (recording !== null) this.set({ step: 'replay', name: handle.name, recording });
+      else if (snapshot !== null) this.set({ step: 'open', name: handle.name, handle, snapshot, readOnce: this.readOnce });
     } catch (error) {
       return this.start(noticeOf(error));
     }
@@ -148,7 +155,7 @@ export class Entry {
 
 /** What a failed read of a folder says. */
 export function noticeOf(error: unknown): Notice {
-  if (error instanceof ExportError) return { code: error.code, detail: error.detail };
+  if (error instanceof ExportError || error instanceof RecordingError) return { code: error.code, detail: error.detail };
   const name = typeof error === 'object' && error !== null ? (error as { name?: unknown }).name : undefined;
   if (name === 'NotFoundError') return { code: 'gone' };
   if (name === 'NotAllowedError' || name === 'SecurityError') return { code: 'denied' };

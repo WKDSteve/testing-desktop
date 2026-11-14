@@ -1,20 +1,25 @@
+<script lang="ts" module>
+  /** Reads the picture of a step: from the hub with the session, or from the folder of a recording. */
+  export type LoadPicture = (size: string, n: number, kind: 'image' | 'shot', signal?: AbortSignal) => Promise<Blob>;
+</script>
+
 <script lang="ts">
-  // The picture of a step: read from the hub with the session (an `<img>` could carry no token) and drawn into a
-  // canvas. Whatever the file holds is pixels here, never markup.
-  import type { App } from '../lib/app.svelte';
+  // The picture of a step: read through `load` (from the hub with the session, since an `<img>` could carry no token;
+  // from the folder of a recording in the web variant) and drawn into a canvas. Whatever the file holds is pixels
+  // here, never markup.
   import type { Key } from '../lib/i18n';
   import { shown } from '../lib/model';
   import { messageOf } from '../lib/reader.svelte';
 
   let {
-    app,
+    load,
     t,
     size,
     n,
     kind,
     label,
   }: {
-    app: App;
+    load: LoadPicture;
     t: (key: Key, params?: Record<string, string | number>) => string;
     size: string;
     n: number;
@@ -28,12 +33,13 @@
   $effect(() => {
     const target = canvas;
     const at = { size, n, kind };
+    const read = load;
     if (!target) return;
     const abort = new AbortController();
     failure = null;
     void (async () => {
       try {
-        const blob = await app.stepImage(at.size, at.n, at.kind, abort.signal);
+        const blob = await read(at.size, at.n, at.kind, abort.signal);
         const bitmap = await createImageBitmap(blob);
         if (abort.signal.aborted) return;
         target.width = bitmap.width;

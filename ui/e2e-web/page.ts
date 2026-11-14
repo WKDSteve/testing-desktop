@@ -38,6 +38,32 @@ export function exportFiles(): Record<string, string> {
   return files;
 }
 
+const RECORDING = resolve(here, '..', '..', 'crates', 'testing-hub', 'tests', 'fixtures', 'recording');
+
+/** The recording of a stepped run a real run of testing.nvim left: the folder with `events.jsonl`. */
+export function recordingFiles(): Record<string, string> {
+  return { 'events.jsonl': readFileSync(join(RECORDING, 'events.jsonl'), 'utf8') };
+}
+
+/** The recording with the events `match` picks changed by `change`. */
+export function changedRecording(match: (event: Record<string, unknown>) => boolean, change: (event: Record<string, unknown>) => void): string {
+  const lines = (recordingFiles()['events.jsonl'] as string).split('\n').filter((line) => line.trim() !== '');
+  return (
+    lines
+      .map((line) => {
+        const event = JSON.parse(line) as Record<string, unknown>;
+        if (match(event)) change(event);
+        return JSON.stringify(event);
+      })
+      .join('\n') + '\n'
+  );
+}
+
+/** A file of a fake folder that is not text: its bytes, as the fake folder takes them. */
+export function binary(bytes: Uint8Array): string {
+  return `base64:${Buffer.from(bytes).toString('base64')}`;
+}
+
 /** The export with one document changed by `change`, and its size and sum in the manifest made right. */
 export function changed(files: Record<string, string>, path: string, change: (doc: Record<string, unknown>) => void): Record<string, string> {
   const doc = JSON.parse(files[path] as string) as Record<string, unknown>;
@@ -64,7 +90,9 @@ export async function fakePicker(page: Page, files: Record<string, string>, name
       const enc = new TextEncoder();
       const disk = new Map<string, { bytes: Uint8Array; time: number }>();
       let clock = 1_700_000_000_000;
-      const put = (path: string, text: string) => disk.set(path, { bytes: enc.encode(text), time: (clock += 5000) });
+      // `base64:<...>` is a file that is not text (a picture of a recording).
+      const bytesOf = (text: string) => (text.startsWith('base64:') ? Uint8Array.from(atob(text.slice(7)), (c) => c.charCodeAt(0)) : enc.encode(text));
+      const put = (path: string, text: string) => disk.set(path, { bytes: bytesOf(text), time: (clock += 5000) });
       for (const [path, text] of Object.entries(tree)) put(path, text);
       const dir = (prefix: string, dirName: string): unknown => ({
         kind: 'directory',

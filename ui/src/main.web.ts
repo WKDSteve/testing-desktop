@@ -10,7 +10,8 @@ import { mount } from 'svelte';
 import logo from '../../assets/icons/testing-web/testing-web-small.svg?url';
 import { Entry } from './web/entry';
 import { HANDLES_DB } from './web/folder';
-import { readExport } from './web/folder-source';
+import { holdsExport, readExport } from './web/folder-source';
+import { readRecording, recordingFile } from './web/recording';
 import WebPage from './web/WebPage.svelte';
 
 declare const __WEB_BUILD__: string | null;
@@ -25,6 +26,8 @@ const entry = new Entry({
   win: window as unknown as PickerWindow,
   recent: new RecentFolders(idbKeyValue(window.indexedDB, HANDLES_DB)),
   read: (handle) => readExport(handle),
+  // A folder with `events.jsonl` and no export is the recording of a stepped run; an export wins.
+  recording: async (handle) => ((await recordingFile(handle)) !== null && !(await holdsExport(handle)) ? readRecording(handle) : null),
   now: () => Date.now(),
 });
 

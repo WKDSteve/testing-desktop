@@ -23,6 +23,7 @@
     <p role="alert">{t(`web.entry.unsupported.${view.reason}` as Key)}</p>
   {:else}
     <p>{t('web.entry.lead')}</p>
+    <p class="muted">{t('web.entry.lead_recording')}</p>
 
     {#if view.step === 'choose' && view.notice}
       <p role="alert" class="notice">{t(`web.notice.${view.notice.code}` as Key, { detail: shown(view.notice.detail) ?? '' })}</p>

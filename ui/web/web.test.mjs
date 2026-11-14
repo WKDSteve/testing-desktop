@@ -5,10 +5,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { GENERATED, generate } from './gen-validate.mjs';
+import { GENERATED, generate, generateSession, SESSION_GENERATED } from './gen-validate.mjs';
 import { assemble, CSP, verifyShell } from './pack.mjs';
 import { DICTIONARIES } from '../src/lib/i18n';
 import validate from '../src/web/validate.generated.js';
+import validateSession from '../src/web/validate-session.generated.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const WEB_SRC = join(here, '..', 'src', 'web');
@@ -55,9 +56,34 @@ describe('the check of the documents', () => {
   });
 
   it('needs nothing at run time: no require, no eval', () => {
-    const text = readFileSync(GENERATED, 'utf8');
-    expect(text).not.toMatch(/\brequire\(/);
-    expect(text).not.toMatch(/\bnew Function\b|\beval\(/);
+    for (const file of [GENERATED, SESSION_GENERATED]) {
+      const text = readFileSync(file, 'utf8');
+      expect(text).not.toMatch(/\brequire\(/);
+      expect(text).not.toMatch(/\bnew Function\b|\beval\(/);
+    }
+  });
+
+  it('of a line of a recording is what the generator writes from its schema too', () => {
+    expect(readFileSync(SESSION_GENERATED, 'utf8').replaceAll('\r\n', '\n')).toBe(generateSession().replaceAll('\r\n', '\n'));
+  });
+
+  it('takes every line of a recorded run (with the root the recording leaves out) and refuses what is none', () => {
+    const lines = readFileSync(join(GOLDEN, 'recording/events.jsonl'), 'utf8')
+      .split('\n')
+      .filter((l) => l.trim() !== '');
+    expect(lines.length).toBeGreaterThan(10);
+    for (const line of lines) {
+      const doc = JSON.parse(line);
+      const subject = doc.event === 'start' ? { ...doc, root: '' } : doc;
+      expect(validateSession(subject), `${line.slice(0, 80)}: ${JSON.stringify(validateSession.errors)}`).toBe(true);
+    }
+    const end = JSON.parse(lines.at(-1));
+    expect(validateSession({ ...end, status: 'maybe' })).toBe(false);
+    expect(validateSession({ ...end, schema: 'testing-sheet-session/2' })).toBe(false);
+    expect(validateSession({ schema: 'testing-sheet-session/1' })).toBe(false);
+    expect(validateSession(null)).toBe(false);
+    // An event a newer engine adds is for a newer reader: it passes, and the page ignores it.
+    expect(validateSession({ schema: 'testing-sheet-session/1', event: 'something-new', x: 1 })).toBe(true);
   });
 
   it('takes every golden document', () => {

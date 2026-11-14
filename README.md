@@ -18,7 +18,7 @@ them. Its web variant, one HTML file opened from disk, is published to
 the ETag). The fleet is a snapshot: a watcher of the state folder renews it, one question to the engine per change, and
 `/api/testing/events` tells the page. The page shows the fleet (the last local run and the CI on each system, red first,
 a filter for the red ones and a search) and one repository with its red cases, their output, its findings, the history of its runs (searchable, cut to a period, saved as CSV or JSON), what its heavy runs cost on this machine (runs, machine minutes, runs per push, cache, queue; the `metrics` of `testing stats`, the file handed to the engine as `params.metrics`; for the whole fleet the same under the table) and its test sheets, and follows new results
-by itself. The page starts a run of the suite or of spec files of a repository through testing.nvim's command line, and a paired phone the test sheets of a task (`/api/testing/run`, [docs/USAGE.md](docs/USAGE.md#a-run-through-testingnvim)). A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
+by itself. The page starts a run of the suite or of spec files of a repository through testing.nvim's command line, and a paired phone the test sheets of a task (`/api/testing/run`, [docs/USAGE.md](docs/USAGE.md#a-run-through-testingnvim)). A test sheet runs step by step from the page (`/api/testing/sheet-step`, the first routes that start something: testing.nvim's `testing sheets step` as a child of the hub, one run at a time, its events on the stream), with the steps, their state, breakpoints, the screen or the picture of each step and the questions of the sheet, as `:Testing sheet step` shows them in the editor. The web variant plays such a run back from its recording, without a hub ([docs/USAGE.md](docs/USAGE.md#a-recorded-run-step-by-step)). With a GitHub token (a file, or the login of `gh`) the CI columns show the state of GitHub, asked at most once a minute per repository; without one they say "not asked". The phases below fill it. CI, the rolling build `latest`, the release workflow and the install scripts are
 there ([docs/USAGE.md](docs/USAGE.md), [docs/SECURITY.md](docs/SECURITY.md), [docs/RELEASING.md](docs/RELEASING.md)).
 
 A phone app, **testing mobil** (Android, Tauri 2), shows the fleet, the red runs and their cases on the way, tells you
@@ -48,10 +48,10 @@ releases a commit. See [docs/MOBILE.md](docs/MOBILE.md).
 | engine | the engine seam to testing.nvim and the routes of the fleet, a repository and its findings |
 | ui-read | the read-only interface: overview, filter "red", detail with the red cases, link to the CI run |
 | release | CI, the rolling build, releases and the install scripts |
-| web | the same interface as `testing.html` for `file://`, reading an export folder: built (`pnpm web:build`), not published yet |
+| web | the same interface as `testing.html` for `file://`, reading an export folder: built (`pnpm web:build`), not published yet. It also plays back the recording of a stepped run (`events.jsonl` of `testing sheets step`), step by step, from a folder: no live stream, by decision |
 | sheets | a test sheet step by step from the page (`/api/testing/sheet-step`): the engine's `testing sheets step` as a child of the hub, its events on the stream, the page as its client (the same as the panel in the editor) |
 | run | a run through the engine from the page and the hub (`/api/testing/run`): the suite of a repository, its spec files of one name, or the test sheets bound to a task (the one a phone may start) |
-| later | a panel in the central hub, the stepped run in testing-web over the event stream, an explanation per step (`ai`) |
+| later | a panel in the central hub, an explanation per step (`ai`) |
 
 The planning notes live outside this repository, in the maintainer's task vault.
 
@@ -61,7 +61,7 @@ The planning notes live outside this repository, in the maintainer's task vault.
 crates/testing-hub/   the hub: names, settings, the engine seam to testing.nvim, routes, on appkit
 engine.lock           the testing.nvim and lib.nvim commits this is built and tested against
 ui/                   the page (Svelte 5, Vite, TypeScript, appkit-ui), read through a source of its own (`TestingSource`)
-ui/src/web/           the web variant: the export folder as a source, its check against the contract, the way in
+ui/src/web/           the web variant: the export folder as a source, its check against the contract, the way in, a recorded run played back
 ui/web/               the packing into one file and the tests of the web variant
 ui/e2e/               browser tests (Playwright, axe) against the real binary, the real engine and repositories made for them
 ui/e2e-web/           browser tests of the single file, opened from disk

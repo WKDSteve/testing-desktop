@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WKDSteve/testing.nvim/schemas/testing-sheet-session/1/testing-sheet-session.schema.json",
+  "title": "testing-sheet-session/1",
+  "description": "One line on stdout of `testing sheets step`: an event of a test sheet run step by step. The commands go the other way, one line each on stdin: `next`, `continue`, `until <n>`, `break <n>`, `clear <n>`, `answer yes|no [text]`, `note <text>`, `abort`; closed stdin is `abort`. A reader ignores unknown events and fields and refuses a higher schema.",
+  "type": "object",
+  "required": ["schema", "event"],
+  "properties": {
+    "schema": { "const": "testing-sheet-session/1" },
+    "event": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    { "if": { "properties": { "event": { "const": "start" } } }, "then": { "$ref": "#/$defs/start" } },
+    { "if": { "properties": { "event": { "const": "size" } } }, "then": { "$ref": "#/$defs/size" } },
+    { "if": { "properties": { "event": { "const": "step-before" } } }, "then": { "$ref": "#/$defs/stepBefore" } },
+    { "if": { "properties": { "event": { "const": "step-after" } } }, "then": { "$ref": "#/$defs/stepAfter" } },
+    { "if": { "properties": { "event": { "const": "paused" } } }, "then": { "$ref": "#/$defs/paused" } },
+    { "if": { "properties": { "event": { "const": "ask" } } }, "then": { "$ref": "#/$defs/ask" } },
+    { "if": { "properties": { "event": { "const": "note" } } }, "then": { "$ref": "#/$defs/note" } },
+    { "if": { "properties": { "event": { "const": "task" } } }, "then": { "$ref": "#/$defs/task" } },
+    { "if": { "properties": { "event": { "const": "error" } } }, "then": { "$ref": "#/$defs/error" } },
+    { "if": { "properties": { "event": { "const": "end" } } }, "then": { "$ref": "#/$defs/end" } }
+  ],
+  "$defs": {
+    "tag": { "description": "A size as a tag: columns x rows (a browser: width x height).", "type": "string", "pattern": "^[0-9]+x[0-9]+$" },
+    "n": { "description": "The number of a step, from 1.", "type": "integer", "minimum": 1 },
+    "value": { "description": "The action's value, as in the sheet.", "anyOf": [{ "type": "string" }, { "type": "number" }] },
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "start": {
+      "description": "The first line: the whole sheet, so that a client can draw every step before the first one runs.",
+      "type": "object",
+      "required": ["id", "title", "engine", "root", "sizes", "steps", "headed", "delay_ms", "breaks"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "engine": { "type": "string", "minLength": 1 },
+        "task": { "type": "string" },
+        "app": { "description": "The program of `sheets.apps` the sheet runs against.", "type": "string" },
+        "path": { "type": "string" },
+        "root": { "type": "string" },
+        "sizes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["rows", "cols"],
+            "properties": { "rows": { "type": "integer", "minimum": 1 }, "cols": { "type": "integer", "minimum": 1 } }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["n", "action", "value"],
+            "properties": {
+              "n": { "$ref": "#/$defs/n" },
+              "action": { "type": "string" },
+              "value": { "$ref": "#/$defs/value" },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "headed": { "description": "A visible window: asked for with --headed and the engine has one.", "type": "boolean" },
+        "delay_ms": { "type": "integer", "minimum": 0 },
+        "breaks": { "type": "array", "items": { "$ref": "#/$defs/n" } },
+        "judge": { "$ref": "#/$defs/strings" },
+        "manual": { "$ref": "#/$defs/strings" }
+      }
+    },
+    "size": {
+      "description": "A size's target: started, could not start (`reason` is the failure line), or the sheet is skipped.",
+      "type": "object",
+      "required": ["size", "state"],
+      "properties": {
+        "size": { "$ref": "#/$defs/tag" },
+        "state": { "enum": ["open", "failed", "skip"] },
+        "reason": { "type": "string" }
+      }
+    },
+    "stepBefore": {
+      "description": "What the step will do; nothing of it has happened yet.",
+      "type": "object",
+      "required": ["size", "n", "total", "action", "value"],
+      "properties": {
+        "size": { "$ref": "#/$defs/tag" },
+        "n": { "$ref": "#/$defs/n" },
+        "total": { "type": "integer", "minimum": 1 },
+        "action": { "type": "string" },
+        "value": { "$ref": "#/$defs/value" },
+        "note": { "type": "string" }
+      }
+    },
+    "stepAfter": {
+      "description": "What the step did. The first failed step ends its size.",
+      "type": "object",
+      "required": ["size", "n", "status", "ms"],
+      "properties": {
+        "size": { "$ref": "#/$defs/tag" },
+        "n": { "$ref": "#/$defs/n" },
+        "status": { "description": "skip: the step could not be done here (an rpc `shot` without a browser); the others go on, the sheet ends as a skip.", "enum": ["pass", "fail", "skip"] },
+        "ms": { "type": "integer", "minimum": 0 },
+        "reason": { "description": "Why it failed, or why it was skipped.", "type": "string" },
+        "failure": { "description": "The failure line as a normal run writes it.", "type": "string" },
+        "shot": { "description": "The file of a `shot` step.", "type": "string" },
+        "image": { "description": "browser and desktop engine: the picture of the target after this step, in a folder of the run.", "type": "string" },
+        "screen": { "description": "rpc engine: the child's screen after the step, one string per row.", "$ref": "#/$defs/strings" },
+        "measure": {
+          "description": "A `measure` step: what it measured (also when the value broke its bound); `value` is the median of `values`.",
+          "type": "object",
+          "required": ["name", "value", "values"],
+          "properties": {
+            "name": { "type": "string" },
+            "value": { "type": "number" },
+            "values": { "type": "array", "items": { "type": "number" } },
+            "unit": { "type": "string" },
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "size": { "$ref": "#/$defs/tag" },
+            "n": { "$ref": "#/$defs/n" }
+          }
+        }
+      }
+    },
+    "paused": {
+      "description": "Waiting for a command. `n` is the step about to run; after `failed` the step that failed.",
+      "type": "object",
+      "required": ["size", "n", "reason"],
+      "properties": {
+        "size": { "$ref": "#/$defs/tag" },
+        "n": { "$ref": "#/$defs/n" },
+        "reason": { "enum": ["start", "step", "break", "until", "failed"] }
+      }
+    },
+    "ask": {
+      "description": "A question to a person: the run waits for `answer yes|no [text]`. A no fails the step.",
+      "type": "object",
+      "required": ["size", "n", "text"],
+      "properties": {
+        "size": { "$ref": "#/$defs/tag" },
+        "n": { "$ref": "#/$defs/n" },
+        "text": { "type": "string" }
+      }
+    },
+    "noteItem": {
+      "type": "object",
+      "required": ["size", "n", "text", "time"],
+      "properties": {
+        "size": { "$ref": "#/$defs/tag" },
+        "n": { "$ref": "#/$defs/n" },
+        "text": { "type": "string", "minLength": 1 },
+        "time": { "description": "UTC, YYYY-MM-DDTHH:MM:SSZ.", "type": "string" }
+      }
+    },
+    "note": {
+      "description": "A note taken (`note <text>`): it belongs to the step the run stands before, else to the one that ran last. Taken at once, also while a step runs.",
+      "$ref": "#/$defs/noteItem"
+    },
+    "task": {
+      "description": "With --tasks: what became of the task's block, after a run that counts as a verdict.",
+      "type": "object",
+      "required": ["id", "outcome"],
+      "properties": {
+        "id": { "type": "string" },
+        "outcome": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "error": {
+      "description": "A command that could not be done; the run stays paused.",
+      "type": "object",
+      "required": ["message"],
+      "properties": { "message": { "type": "string" } }
+    },
+    "end": {
+      "description": "The last line; the target and everything else of the run is gone by now.",
+      "type": "object",
+      "required": ["status", "ok", "verdict", "failures", "snapshots", "ms"],
+      "properties": {
+        "status": { "enum": ["pass", "fail", "skip", "manual", "aborted"] },
+        "ok": { "type": "boolean" },
+        "verdict": { "description": "Whether this run may count as a verdict: it ran to its end, without an abort. The command itself writes nothing.", "type": "boolean" },
+        "failures": { "$ref": "#/$defs/strings" },
+        "snapshots": { "$ref": "#/$defs/strings" },
+        "skipped": { "type": "string" },
+        "ms": { "type": "integer", "minimum": 0 },
+        "notes": { "description": "The notes of the run, when there are any.", "type": "array", "items": { "$ref": "#/$defs/noteItem" } },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["size", "n", "text", "answer"],
+            "properties": {
+              "size": { "$ref": "#/$defs/tag" },
+              "n": { "$ref": "#/$defs/n" },
+              "text": { "type": "string" },
+              "answer": { "enum": ["yes", "no"] },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

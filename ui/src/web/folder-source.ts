@@ -115,6 +115,11 @@ async function exportFolder(chosen: DirHandleLike): Promise<DirHandleLike | null
   return null;
 }
 
+/** Whether the chosen folder is an export, or holds one in its subfolder `export`. */
+export async function holdsExport(chosen: DirHandleLike): Promise<boolean> {
+  return (await exportFolder(chosen)) !== null;
+}
+
 /** Read one export whole, or refuse it. */
 export async function readExport(chosen: DirHandleLike, maxTotal: number = MAX_TOTAL_BYTES): Promise<Snapshot> {
   const root = await exportFolder(chosen);

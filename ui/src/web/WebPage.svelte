@@ -1,6 +1,7 @@
 <script lang="ts">
   // The page of the web variant: the way in until a folder is open, then the same views as on the hub, with how old the
-  // export is. It looks at the folder when the window gets the focus back and every 30 seconds (the kit's watch).
+  // export is. It looks at the folder when the window gets the focus back and every 30 seconds (the kit's watch). A
+  // folder that is the recording of a stepped run is played back instead (Replay.svelte).
   import type { MenuItem } from 'appkit-ui/MenuBar.svelte';
   import { watchFolder, type Watcher } from 'appkit-web/watch';
   import { untrack } from 'svelte';
@@ -13,6 +14,8 @@
   import Overview from '../views/Overview.svelte';
   import type { Entry, EntryState } from './entry';
   import { signatureOf } from './folder-source';
+  import type { Recording } from './recording';
+  import Replay from './Replay.svelte';
   import { WebReader } from './web-reader.svelte';
   import WebEntry from './WebEntry.svelte';
 
@@ -22,6 +25,7 @@
 
   let reader = $state<WebReader | null>(null);
   let folderName = $state('');
+  let replay = $state<Recording | null>(null);
   let now = $state(Date.now());
   let watcher: Watcher | null = null;
 
@@ -66,6 +70,7 @@
   function otherFolder(): void {
     leave();
     reader = null;
+    replay = null;
     void entry.start();
   }
 
@@ -75,6 +80,12 @@
     });
     const off = entry.subscribe((state) => {
       if (state.step === 'open') void enter(state);
+      if (state.step === 'replay') {
+        leave();
+        reader = null;
+        folderName = state.name;
+        replay = state.recording;
+      }
     });
     // The age of the export on the page goes on while nothing changes.
     const clock = setInterval(() => (now = Date.now()), 60_000);
@@ -122,6 +133,9 @@
       <Overview app={reader} {t} />
     {/if}
   </Frame>
+{:else if replay}
+  <header class="plain"><span class="brand"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span></header>
+  <main class="replay"><Replay recording={replay} name={folderName} {t} onOther={otherFolder} /></main>
 {:else}
   <header class="plain"><span class="brand"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span></header>
   <main><WebEntry {entry} {t} /></main>
@@ -140,6 +154,10 @@
     padding: 0.6rem 1rem;
     border-bottom: 1px solid var(--line);
     background: var(--surface);
+  }
+  .replay {
+    padding: 1rem;
+    max-width: 80rem;
   }
   .brand {
     display: inline-flex;

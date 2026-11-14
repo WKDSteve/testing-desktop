@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Each copy (relative to this repository) and the file of testing.nvim it is a copy of.
-const COPIES: [(&str, &str); 11] = [
+const COPIES: [(&str, &str); 12] = [
     (
         "crates/testing-hub/tests/fixtures/golden/findings.json",
         "TESTS/golden/testing-export-1-findings/findings.json",
@@ -33,6 +33,11 @@ const COPIES: [(&str, &str); 11] = [
     (
         "ui/src/web/testing-export.schema.json",
         "schemas/testing-export/1/testing-export.schema.json",
+    ),
+    // The schema the check of a recording's lines is compiled from (the replay of a stepped run in the web page).
+    (
+        "ui/src/web/testing-sheet-session.schema.json",
+        "schemas/testing-sheet-session/1/testing-sheet-session.schema.json",
     ),
     // A whole export folder: what the web page reads, with its manifest and the sums in it.
     (

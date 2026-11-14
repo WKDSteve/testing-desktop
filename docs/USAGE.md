@@ -33,6 +33,24 @@ writes nothing; the CI columns hold what the export holds. Build it from a check
 window gets the focus back and every 30 seconds. Firefox and Safari have no folder picker: there the folder is read
 once, through a file dialog.
 
+### A recorded run, step by step
+
+The same page plays back a test sheet that ran step by step (`testing sheets step`, `:Testing sheet step`, or **Step
+through** on the hub's page). testing.nvim records every such run beside its pictures: the folder
+`testing/sheet-evidence/<sheet id>` below the cache folder of Neovim (`%TEMP%\nvim` on Windows, `~/.cache/nvim`
+elsewhere; `:echo stdpath('cache')` says where), with `events.jsonl` and the pictures of the steps. Copy that
+folder to where the browser may read it (Chrome and Edge refuse folders below `AppData`) or to another machine, and
+choose it with **Choose folder**: a folder with `events.jsonl` and no export in it is a recording.
+
+It opens at the end of the run, with the view of the hub's "Step by step" page: the steps with their state, and the
+tile of a step with what it did, its notes, the reason of a failure, the screen of the child editor as text or the
+picture of the target. **To the start**, **Step back**, **Step forward** and **To the end** (`s`, `p`, `n`, `e`) walk
+through it: the page shows the run as it stood after that many steps. Nothing runs and nothing is sent: there is no
+live view in the web variant, a run is followed live on the hub's page. The recording names no folder of the machine
+it was made on. `notes.json` in the same folder does (the root of the repository), and the page does not read it: to
+hand a run on, `events.jsonl` and the pictures are enough. The folder holds the last stepped run of a sheet; the next
+one replaces it.
+
 ## What it needs
 
 - **Neovim 0.12 or newer**: `TESTING_NVIM`, else the one on the `PATH`, or the key `nvim` of `config.json`.

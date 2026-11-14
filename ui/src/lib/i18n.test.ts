@@ -13,6 +13,17 @@ describe('the words of the page', () => {
     }
   });
 
+  it('names a rejected run as a workflow file GitHub refused, never as the runner guard', () => {
+    // `rejected` of testing.nvim: GitHub did not take the workflow file. A job the guard refused is a `failure`.
+    for (const lang of ['en', 'de'] as const) {
+      for (const key of ['mobile.rerun.rejected', 'tip.ci.rejected'] as const) {
+        const text = (DICTIONARIES[lang] as Record<string, string>)[key] ?? '';
+        expect(text, `${lang} ${key}`).toMatch(/workflow/i);
+        expect(text, `${lang} ${key}`).not.toMatch(/guard|testing ci release/i);
+      }
+    }
+  });
+
   it('follows the browser and fills the placeholders', () => {
     expect(langOf(['de-AT', 'en'])).toBe('de');
     expect(langOf(['fr'])).toBe('en');

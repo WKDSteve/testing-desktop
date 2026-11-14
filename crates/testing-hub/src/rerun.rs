@@ -3,9 +3,11 @@
 //!
 //! The request names a repository of the fleet by its key, nothing else. The hub looks the run up in the fleet it
 //! holds: the latest run of the CI workflow for the head of origin (`ci_remote`), and only when it failed, was
-//! cancelled or found no runner. A run the runner guard refused (`rejected`) is not started again: that needs
-//! `testing ci release` on the PC, where the person looks at the commit. The hub then runs GitHub's own command,
-//! `gh run rerun <id> --failed -R <owner>/<repo>`, as an argv with no shell, its input closed, under a time limit.
+//! cancelled or found no runner. A run GitHub refused (`rejected`: it did not take the workflow file, the run failed
+//! without a job, `docs/CI.md` of testing.nvim) is not started again: it has no failed job, and the same file would be
+//! refused again. A job the runner guard refused is another thing: it shows as `failure` and is released on the PC
+//! (the release assistant, `testing ci release`), where the person looks at the commit. The hub then runs GitHub's
+//! own command, `gh run rerun <id> --failed -R <owner>/<repo>`, as an argv with no shell, its input closed, under a time limit.
 //! Nothing of the request reaches the command but the key, and the key only chooses a row of the fleet.
 
 use std::ffi::OsString;
@@ -27,6 +29,9 @@ use crate::routes::Shared;
 
 /// The states of a run that may be started again from the phone.
 pub const RERUNNABLE: [&str; 3] = ["failure", "cancelled", "no_runner"];
+/// What the hub says to a run GitHub refused (`rejected`).
+pub const REJECTED: &str =
+    "GitHub refused the workflow file of this run (it failed without a job): there is no job to start again, fix the workflow file on the PC";
 /// How long `gh` may take.
 const GH_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -153,11 +158,7 @@ pub(crate) async fn ci_rerun(State(st): State<Arc<Shared>>, body: Bytes) -> Resp
     let (repo, id) = match rerunnable(&fleet, &request.key) {
         Ok(found) => found,
         Err("rejected") => {
-            return error_body(
-                StatusCode::CONFLICT,
-                "rejected",
-                "the runner guard refused this run: release it on the PC (testing ci release)",
-            );
+            return error_body(StatusCode::CONFLICT, "rejected", REJECTED);
         }
         Err("no_repo") => {
             return error_body(
@@ -230,6 +231,17 @@ mod tests {
             ),
             Err("no_repo")
         );
+    }
+
+    #[test]
+    fn a_rejected_run_is_named_as_what_it_is_a_workflow_file_github_refused() {
+        // `rejected` is GitHub's refusal of the workflow file (testing.nvim, docs/CI.md), never the runner guard's
+        // refusal of a job (that is a `failure`, released with `testing ci release`).
+        let said = REJECTED.to_lowercase();
+        assert!(said.contains("workflow file"), "{REJECTED}");
+        for wrong in ["guard", "release"] {
+            assert!(!said.contains(wrong), "{REJECTED}");
+        }
     }
 
     #[test]

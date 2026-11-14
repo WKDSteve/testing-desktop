@@ -19,7 +19,9 @@ appkit's mobile basis ([appkit `docs/MOBILE.md`](https://github.com/WKDSteve/app
 | Releasing a commit for the self-hosted runner (`testing ci release`), trusting a root, any command | never: the release assistant is for a session of the PC and no route of it is released to a phone; no route of the hub trusts a root or runs a command (tests `phone.rs`, `crates/testing-hub/src/phone.rs`) |
 
 A job the runner guard refused is not released from the phone: release its commit on the PC, where you look at what
-it changes (`USAGE.md`, *Releasing a commit for the runner*). The run of a task's test sheets (`POST /api/testing/run/task`, `{ "task": "<area>/<slug>" }`) is
+it changes (`USAGE.md`, *Releasing a commit for the runner*). A run GitHub refused (`rejected`: it did not take the
+workflow file, the run failed without a job) is not started again either: the phone says so, the workflow file is
+fixed on the PC. The run of a task's test sheets (`POST /api/testing/run/task`, `{ "task": "<area>/<slug>" }`) is
 testing.nvim's `testing sheets run --task` on the PC, in the repository of the fleet named like the task's area; the
 hub starts it only when a sheet there names the task. tasks mobil calls it; the routes are in
 [USAGE.md](USAGE.md#a-run-through-testingnvim).

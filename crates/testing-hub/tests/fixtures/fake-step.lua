@@ -186,10 +186,7 @@ elseif sheet == "green" then
       while true do
         local line = next_command()
         if line == nil or line == "abort" then
-          emit(
-            "end",
-            { status = "aborted", ok = false, verdict = false, failures = {}, snapshots = {}, ms = 1 }
-          )
+          emit("end", { status = "aborted", ok = false, verdict = false, failures = {}, snapshots = {}, ms = 1 })
           os.exit(3)
         elseif line == "next" or line:match("^until%s+%d+$") then
           break

@@ -14,7 +14,11 @@ return {
   steps = {
     { scheme = "light" },
     { open = "${link}", note = "the single file, built for this run" },
-    { wait = "document.querySelector('.entry button.primary') !== null", timeout = 10000, note = "the way in asks for a folder" },
+    {
+      wait = "document.querySelector('.entry button.primary') !== null",
+      timeout = 10000,
+      note = "the way in asks for a folder",
+    },
     { hover = "#web-entry-title", note = "the pointer on the heading" },
     { expect = "!document.querySelector('.entry button.primary').matches(':hover')" },
     { shot = "choose-rest-light" },
@@ -23,7 +27,10 @@ return {
     { shot = "choose-hover-light" },
     { hover = "#web-entry-title" },
     { focus = ".entry button.primary" },
-    { expect = "document.querySelector('.entry button.primary').matches(':focus-visible')", note = "the focus ring shows" },
+    {
+      expect = "document.querySelector('.entry button.primary').matches(':focus-visible')",
+      note = "the focus ring shows",
+    },
     { shot = "choose-focus-light" },
     { blur = true, note = "the focus off again" },
     { scheme = "dark" },
@@ -36,7 +43,10 @@ return {
     { shot = "choose-hover-dark" },
     { hover = "#web-entry-title" },
     { focus = ".entry button.primary" },
-    { expect = "document.querySelector('.entry button.primary').matches(':focus-visible')", note = "the focus ring shows" },
+    {
+      expect = "document.querySelector('.entry button.primary').matches(':focus-visible')",
+      note = "the focus ring shows",
+    },
     { shot = "choose-focus-dark" },
   },
   judge = {

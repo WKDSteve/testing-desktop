@@ -258,10 +258,16 @@ describe('the stepped run on the page', () => {
     await app.onMessage(line(7, 6, ev('error', { message: 'step 2 has not run yet' })));
     expect(app.stepExplainAsked).toBeNull();
     expect(app.step.error).toBe('step 2 has not run yet');
+    // The same question again is refused with the same words: that is an answer too, the page does not wait on.
+    await app.stepExplainAsk(2, 'result');
+    expect(app.stepExplainAsked).toEqual({ n: 2, kind: 'result' });
+    await app.onMessage(line(7, 7, ev('error', { message: 'step 2 has not run yet' })));
+    expect(app.stepExplainAsked).toBeNull();
+    expect(app.step.error).toBe('step 2 has not run yet');
 
     // A request of another run is not this run's, and a new run forgets the one before.
-    await app.onMessage(line(7, 7, request));
-    await app.onMessage(line(8, 8, { ...request, prompt: 'of another run' }));
+    await app.onMessage(line(7, 8, request));
+    await app.onMessage(line(8, 9, { ...request, prompt: 'of another run' }));
     expect(app.stepExplain?.prompt).not.toBe('of another run');
     await app.stepSheet('smoke');
     setState({ schema: 1, available: true, session: 9, running: true, seq: 1, key: 'k', sheet: 'smoke', events: [START] });

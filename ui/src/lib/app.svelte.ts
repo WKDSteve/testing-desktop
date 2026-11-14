@@ -388,6 +388,8 @@ export class App extends Reader {
     if (!this.step.running || (this.step.paused === null && this.step.question === null)) return;
     this.stepExplain = null;
     this.stepExplainAsked = { n, kind };
+    // What the run refused before is not the answer to this question: the same words again must count as new.
+    if (this.step.error !== null) this.step = { ...this.step, error: null };
     await this.stepCommand({ command: 'explain', n, kind });
     if (this.stepFailure !== null) this.stepExplainAsked = null;
   }

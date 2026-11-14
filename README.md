@@ -153,4 +153,5 @@ MIT, see [LICENSE](LICENSE).
 **Used by**
 
 - [hub-desktop](https://github.com/WKDSteve/hub-desktop): hub-desktop shows testing-desktop as a tile and starts it, native or as a web app. ([picture](assets/graphs/pair/hub-desktop--testing-desktop.png))
+- [tasks-desktop](https://github.com/WKDSteve/tasks-desktop): `tasks-hub testing link` pairs the tasks hub with the testing hub as a device, so a phone of tasks can start a test run. ([picture](assets/graphs/pair/tasks-desktop--testing-desktop.png))
 <!-- connections:end -->

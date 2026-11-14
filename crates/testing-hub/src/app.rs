@@ -47,12 +47,10 @@ pub async fn phone(args: &[String], usage: &str) -> Result<String, String> {
         [cmd, rest @ ..] if cmd == "pair" => {
             let way = match rest {
                 [] => {
-                    // The tailnet name of the settings, else the tunnel.
+                    // The tailnet name the hub serves (the variable, else the settings), else the tunnel.
                     let file: FileConfig<TestingSettings> =
                         appkit_hub::config::load_file(&dir).map_err(|e| e.to_string())?;
-                    file.app
-                        .tailnet_name
-                        .map_or(PhoneWay::Tunnel, PhoneWay::Tailnet)
+                    tailnet_name(&file.app, &env)?.map_or(PhoneWay::Tunnel, PhoneWay::Tailnet)
                 }
                 [flag] if flag == "--tunnel" => PhoneWay::Tunnel,
                 [flag, name] if flag == "--tailnet" && crate::phone::plain_tailnet_name(name) => {
@@ -229,6 +227,27 @@ fn limits_for(watching: bool) -> Limits {
     }
 }
 
+/// The tailnet name phones reach this hub by: `TESTING_DESKTOP_TAILNET`, else `tailnet_name` of the settings. The
+/// hub and `testing-hub phone pair` both take it from here, so a pairing link names the host the hub serves.
+///
+/// # Errors
+///
+/// The variable names no plain host (with an optional port other than 443).
+fn tailnet_name(settings: &TestingSettings, env: &Env) -> Result<Option<String>, String> {
+    match env.get("TESTING_DESKTOP_TAILNET").and_then(|v| v.to_str()) {
+        Some(name) if !name.is_empty() => {
+            if !crate::phone::plain_tailnet_name(name) {
+                return Err(
+                    "TESTING_DESKTOP_TAILNET must be a plain host name like pc.example.ts.net"
+                        .to_owned(),
+                );
+            }
+            Ok(Some(name.to_owned()))
+        }
+        _ => Ok(settings.tailnet_name.clone()),
+    }
+}
+
 /// Run the server until Ctrl-C.
 ///
 /// Phones of this hub (testing mobil): the paired devices in the config folder, the tailnet name of `tailnet_name`
@@ -242,18 +261,7 @@ fn phone_setup(
     settings: &TestingSettings,
     env: &Env,
 ) -> Result<crate::phone::Phone, String> {
-    let tailnet = match env.get("TESTING_DESKTOP_TAILNET").and_then(|v| v.to_str()) {
-        Some(name) if !name.is_empty() => {
-            if !crate::phone::plain_tailnet_name(name) {
-                return Err(
-                    "TESTING_DESKTOP_TAILNET must be a plain host name like pc.example.ts.net"
-                        .to_owned(),
-                );
-            }
-            Some(name.to_owned())
-        }
-        _ => settings.tailnet_name.clone(),
-    };
+    let tailnet = tailnet_name(settings, env)?;
     let transport = appkit_hub::push_net::NetPush::new()?;
     let push = appkit_hub::push::Push::open(dir, Arc::new(transport))
         .map_err(|e| format!("the push of the hub cannot be used: {e}"))?;
@@ -560,6 +568,32 @@ mod tests {
         ] {
             let err = launch(bad).unwrap_err();
             assert!(err.contains("not opened"), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn the_tailnet_name_comes_from_the_environment_then_the_settings() {
+        let settings = TestingSettings {
+            tailnet_name: Some("pc.example.ts.net".to_owned()),
+            ..TestingSettings::default()
+        };
+        let env = Env::from_pairs([("TESTING_DESKTOP_TAILNET", "pc.example.ts.net:8443")]);
+        assert_eq!(
+            tailnet_name(&settings, &env).unwrap().as_deref(),
+            Some("pc.example.ts.net:8443")
+        );
+        let empty = Env::from_pairs([("TESTING_DESKTOP_TAILNET", "")]);
+        assert_eq!(
+            tailnet_name(&settings, &empty).unwrap().as_deref(),
+            Some("pc.example.ts.net")
+        );
+        assert_eq!(
+            tailnet_name(&TestingSettings::default(), &Env::default()).unwrap(),
+            None
+        );
+        for bad in ["pc.example.ts.net:443", "https://pc.example.ts.net", "pc/x"] {
+            let env = Env::from_pairs([("TESTING_DESKTOP_TAILNET", bad)]);
+            assert!(tailnet_name(&settings, &env).is_err(), "{bad}");
         }
     }
 

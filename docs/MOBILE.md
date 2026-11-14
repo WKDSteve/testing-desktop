@@ -39,7 +39,7 @@ hub starts it only when a sheet there names the task. tasks mobil calls it; the 
 ## Pairing, levels, losing the phone
 
 ```
-testing-hub phone pair                 a QR code to scan with the app (the tailnet name of config.json)
+testing-hub phone pair                 a QR code to scan with the app (TESTING_DESKTOP_TAILNET, else config.json)
 testing-hub phone pair --tunnel        the same for a phone behind an SSH tunnel
 testing-hub phone list                 the paired phones: id, name, level
 testing-hub phone level <id> trigger   let this phone start a rerun of a red run, and a task's test sheets

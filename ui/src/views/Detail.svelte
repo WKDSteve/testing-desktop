@@ -174,6 +174,11 @@
               label={t('run.ended', { what: runWhat(run), verdict: t(`run.verdict.${run.verdict}` as Key) })}
             />
           </p>
+          {#if run.block}
+            <p class={run.block.written ? 'muted' : 'bad'} role="status">
+              {t(run.block.written ? 'run.block.written' : 'run.block.not_written', { outcome: shown(run.block.outcome) ?? '' })}
+            </p>
+          {/if}
           {#if run.output}
             <p class="label">{t('run.output')}</p>
             <pre>{shown(run.output)}</pre>

@@ -230,6 +230,8 @@ async fn about(State(st): State<Arc<Shared>>, RawQuery(query): RawQuery) -> Resp
     body["reads"] = json!({
         "state_dir": rt.origins.state_dir.map(crate::settings::Origin::word),
         "areas": rt.origins.areas.map(crate::settings::Origin::word),
+        // Only whether the person named a vault for the results of a task's sheets, never where it is.
+        "tasks_vault": rt.origins.tasks_vault.map(crate::settings::Origin::word),
     });
     body["ci"] = json!(rt.origins.ci.word());
     json_response(StatusCode::OK, body.to_string(), None)

@@ -106,6 +106,9 @@ The engine runs as a child with only a few variables of the environment, so the 
 - `areas` (or `TESTING_DESKTOP_AREAS`): the `areas.json` of the data classes of this device; by default the one of
   tasks-desktop (`%APPDATA%\tasks-desktop\areas.json`). Only the `public` and `internal` repositories it names are
   shown; without the file none is.
+- `tasks_vault` (or `TESTING_DESKTOP_TASKS_VAULT`, optional, no default): the vault of the tasks. With it a run of
+  the test sheets of a task writes its result into that task (`testing sheets run --tasks`, see
+  [docs/USAGE.md](docs/USAGE.md#the-result-of-a-tasks-sheets-in-the-task)).
 
 A `config.json` that cannot be read, or a path in it or in one of these variables that is not whole, stops the start.
 `about` says where each came from (`environment`, `setting`, `default`), never the path.

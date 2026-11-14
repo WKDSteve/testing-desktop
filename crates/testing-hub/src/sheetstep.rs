@@ -83,8 +83,12 @@ const MAX_REPLAY: usize = 20_000;
 /// where Neovim keeps the pictures of a run (`stdpath("cache")`), and `SYSTEMDRIVE`, without which Neovim on
 /// Windows takes ten seconds to end the child editor of a sheet (measured: an abort then outlives the grace). A
 /// browser or desktop sheet finds its driver through the `TESTING_*` and Playwright variables (without them it is a
-/// reported skip that a terminal would not have), and the program a sheet names may be built with `cargo`.
+/// reported skip that a terminal would not have), and the program a sheet names may be built with `cargo`. A run
+/// that writes into a task (`--tasks`, `launch`) finds the engine of tasks.nvim through `TASKS_NVIM_DIR` and the
+/// other projects a task's block names below `REPOS_DIR`, as a terminal does.
 const PASS_THROUGH: &[&str] = &[
+    "TASKS_NVIM_DIR",
+    "REPOS_DIR",
     "TESTING_TRUST_ROOTS",
     "NVIM_MACHINE_ROLE",
     "TESTING_ALLOW_WORKSTATION",
@@ -1013,6 +1017,8 @@ mod tests {
             ("PLAYWRIGHT_BROWSERS_PATH", "browsers"),
             ("CARGO_HOME", "cargo"),
             ("RUSTUP_HOME", "rustup"),
+            ("TASKS_NVIM_DIR", "tasks.nvim"),
+            ("REPOS_DIR", "repos"),
             ("A_SECRET_TOKEN", "secret"),
         ]);
         let passed = passed_through(&env);
@@ -1023,6 +1029,8 @@ mod tests {
             "PLAYWRIGHT_BROWSERS_PATH",
             "CARGO_HOME",
             "RUSTUP_HOME",
+            "TASKS_NVIM_DIR",
+            "REPOS_DIR",
         ] {
             assert!(names.contains(&name), "{name} is not passed on");
         }

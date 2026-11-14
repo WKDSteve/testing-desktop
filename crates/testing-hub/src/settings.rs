@@ -11,6 +11,10 @@
 //! file in the config folder of tasks-desktop (`places::areas_file`). `TESTING_DESKTOP_AREAS`
 //! overrides the file.
 //!
+//! `tasks_vault` is the vault of the tasks a run of a task's sheets writes its result into (`testing sheets run
+//! --task <id> --tasks <vault>`, `launch`); without it such a run writes into no task. `TESTING_DESKTOP_TASKS_VAULT`
+//! overrides the file. Like the other paths it is a statement of the person, never of a request.
+//!
 //! `github_token_file` holds the token the hub asks GitHub with (`github`); without it the hub takes
 //! `gh auth token` once. `ask_github = false` asks GitHub with neither.
 
@@ -29,6 +33,9 @@ pub struct TestingSettings {
     /// The `areas.json` of the data classes; none: the one of tasks-desktop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub areas: Option<PathBuf>,
+    /// The vault of the tasks, for the result of a run of a task's sheets; none: such a run writes into no task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasks_vault: Option<PathBuf>,
     /// A file with the GitHub token, for the user only; none: `gh auth token`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_token_file: Option<PathBuf>,
@@ -79,6 +86,9 @@ impl AppSettings for TestingSettings {
         if let Some(path) = &self.github_token_file {
             check_path("github_token_file", path)?;
         }
+        if let Some(path) = &self.tasks_vault {
+            check_path("tasks_vault", path)?;
+        }
         Ok(())
     }
 }
@@ -111,6 +121,9 @@ pub struct Places {
     /// The `metrics.jsonl` of the heavy runs: `TESTING_METRICS_FILE` (the engine's own variable),
     /// else the place the engine writes it to.
     pub metrics: Option<(PathBuf, Origin)>,
+    /// The vault of the tasks (`TESTING_DESKTOP_TASKS_VAULT`, else `tasks_vault`); there is no default: without a
+    /// word of the person a run writes into no task.
+    pub tasks_vault: Option<(PathBuf, Origin)>,
 }
 
 /// Resolve [`Places`].
@@ -153,6 +166,11 @@ pub fn places(file: &FileConfig<TestingSettings>, env: &Env) -> Result<Places, S
                 crate::places::metrics_file(env),
             )?
         },
+        tasks_vault: pick(
+            &crate::IDENTITY.var("TASKS_VAULT"),
+            &file.app.tasks_vault,
+            None,
+        )?,
     })
 }
 
@@ -218,6 +236,7 @@ mod tests {
             state_dir: Some(root()),
             areas: Some(root().join("areas.json")),
             github_token_file: Some(root().join("token")),
+            tasks_vault: Some(root().join("tasks-vault")),
             ask_github: Some(true),
             tailnet_name: Some("pc.example.ts.net".to_owned()),
         };
@@ -238,6 +257,10 @@ mod tests {
             },
             TestingSettings {
                 github_token_file: Some(PathBuf::from("token")),
+                ..TestingSettings::default()
+            },
+            TestingSettings {
+                tasks_vault: Some(PathBuf::from("../tasks-vault")),
                 ..TestingSettings::default()
             },
         ] {
@@ -280,6 +303,33 @@ mod tests {
             places(&file(None, None), &Env::default()).unwrap().areas,
             None
         );
+    }
+
+    #[test]
+    fn the_vault_of_the_tasks_is_named_by_the_person_or_there_is_none() {
+        let (a, b) = (root().join("a"), root().join("b"));
+        let named = FileConfig {
+            app: TestingSettings {
+                tasks_vault: Some(b.clone()),
+                ..TestingSettings::default()
+            },
+            ..FileConfig::default()
+        };
+        let env = Env::from_pairs([("TESTING_DESKTOP_TASKS_VAULT", a.display().to_string())]);
+        assert_eq!(
+            places(&named, &env).unwrap().tasks_vault,
+            Some((a, Origin::Env))
+        );
+        assert_eq!(
+            places(&named, &Env::default()).unwrap().tasks_vault,
+            Some((b, Origin::Setting))
+        );
+        // No default: not the vault beside the repositories, not `TASKS_VAULT` of the person's shell.
+        let shell = Env::from_pairs([("TASKS_VAULT", root().display().to_string())]);
+        assert_eq!(places(&file(None, None), &shell).unwrap().tasks_vault, None);
+        let bad = Env::from_pairs([("TESTING_DESKTOP_TASKS_VAULT", "relative")]);
+        let err = places(&file(None, None), &bad).unwrap_err();
+        assert!(err.contains("TESTING_DESKTOP_TASKS_VAULT"), "{err}");
     }
 
     #[test]

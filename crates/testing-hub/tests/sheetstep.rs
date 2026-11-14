@@ -182,6 +182,7 @@ async fn start_hub(fx: &Fixture, program: Option<StepProgram>) -> Hub {
         origins: Origins::default(),
         watch: None,
         step: program,
+        tasks_vault: None,
         ui: testing_hub::ui::UiFiles::none(),
         warm: false,
         phone: None,

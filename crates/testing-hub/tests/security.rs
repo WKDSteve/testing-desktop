@@ -37,6 +37,7 @@ impl Subject for Testing {
             origins: testing_hub::Origins::default(),
             watch: None,
             step: None,
+            tasks_vault: None,
             ui: testing_hub::ui::UiFiles::none(),
             warm: false,
             phone: None,

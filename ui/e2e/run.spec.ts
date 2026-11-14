@@ -57,3 +57,50 @@ test('the spec files of a repository run through the engine from the page, to th
   await page.emulateMedia({ colorScheme: 'dark' });
   await expectAccessible(page, 'run (dark)');
 });
+
+test("a run of a task's sheets says under its verdict what became of the task's block", async ({ page }, testInfo) => {
+  const seen = await watch(page);
+  // The run is the phone's to start (tasks mobil), so its state is stood in here: green sheets, and a task that
+  // testing.nvim could not write. The key is the real one of alpha.nvim, taken from the fleet the page reads.
+  const fleet = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/testing/fleet' && r.status() === 200);
+  const key = fleet.then(async (r) => {
+    const doc = (await r.json()) as { repos: { name: string; key: string }[] };
+    return doc.repos.find((repo) => repo.name === 'alpha.nvim')?.key ?? '';
+  });
+  await page.route('**/api/testing/run', async (route) => {
+    await route.fulfill({
+      json: {
+        schema: 1,
+        kind: 'hub.run',
+        available: true,
+        run: {
+          id: 7,
+          key: await key,
+          what: 'task',
+          task: 'alpha.nvim/try-it',
+          running: false,
+          exit: 1,
+          verdict: 'red',
+          started: 1,
+          ended: 2,
+          output: 'sheet try-it: pass\ntesting sheets: task alpha.nvim/try-it conflict',
+          block: { written: false, outcome: 'conflict' },
+        },
+      },
+    });
+  });
+  await page.addInitScript((t) => sessionStorage.setItem('testing-desktop.session', t), state().token);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'alpha.nvim' }).click();
+  await expect(page.getByText('Last run, the test sheets of alpha.nvim/try-it: red.')).toBeVisible();
+  await expect(page.getByText('The result is not in the task: testing.nvim could not write it (conflict).', { exact: false })).toBeVisible();
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expectAccessible(page, `task block (${colorScheme})`);
+    await page.getByText('The result is not in the task').scrollIntoViewIfNeeded();
+    await testInfo.attach(`block-${colorScheme}`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  expect(seen.errors).toEqual([]);
+  expect(seen.foreign).toEqual([]);
+  expect(await violations(page)).toEqual([]);
+});

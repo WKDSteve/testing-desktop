@@ -116,6 +116,9 @@ pub struct Start {
     /// How a stepped run of a test sheet is started (`testing sheets step` as a child); `None`: the page
     /// cannot start one.
     pub step: Option<sheetstep::StepProgram>,
+    /// The vault of the tasks a run of a task's sheets writes its result into (`testing sheets run --tasks`), a
+    /// setting of the person; `None`: such a run writes into no task.
+    pub tasks_vault: Option<std::path::PathBuf>,
     /// The files of the page; [`ui::UiFiles::none`] serves the placeholder page of the core.
     pub ui: ui::UiFiles,
     /// Read the fleet right after the start, before a page asks: the first read asks GitHub and takes
@@ -157,6 +160,7 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
                     max_age,
                     watch: s.watch,
                     step: s.step,
+                    tasks_vault: s.tasks_vault,
                     warm: s.warm,
                     rerun: s.rerun,
                     push: s.phone.as_ref().and_then(|p| p.push.clone()),

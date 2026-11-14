@@ -5,7 +5,9 @@
 //! * the suite: `testing run --root <root>` (a heavy run: it takes its turn in the engine's queue of heavy runs, the
 //!   machine-wide run lock, across every session of the person);
 //! * a file: `testing run --root <root> --file <text>` (a selected run, which the engine never queues);
-//! * the sheets of a task: `testing sheets run --task <area/slug> --root <root>` (only sheets that name the task run).
+//! * the sheets of a task: `testing sheets run --task <area/slug> --root <root>` (only sheets that name the task run),
+//!   with `--tasks <vault>` when the person named a vault for this hub (`tasks_vault`): the engine then writes the
+//!   result into the task's block, as `:Tasks sheet-run` does.
 //!
 //! The result is where every run of the engine leaves it, in its state folder: the hub's watcher sees it there and
 //! `repo` reads it (`testing call repo`), one way to the result for a terminal, the app and the hub alike. The hub only
@@ -15,7 +17,8 @@
 //!
 //! * one run per hub: a second start while one runs is refused and names what runs;
 //! * the argv is fixed: a word of a closed list, the root the engine named for a key of the fleet (never a path of a
-//!   request), a file name of plain characters, a task id of plain characters; none can begin with `-`;
+//!   request), a file name of plain characters, a task id of plain characters; none can begin with `-`; the vault
+//!   of `--tasks` is a setting of the person, never of a request;
 //! * the engine's own rules decide the rest: the trust of a root (the hub never passes `--trust`), the workstation,
 //!   no sheet that names the task (exit 2, `refused`);
 //! * the hub knows the sheets bound to a task ([`task_sheets`]: the `task = "<id>"` line of a sheet, read as text as
@@ -81,9 +84,15 @@ impl What {
     /// The arguments after the engine's script: a fixed command of the engine, the root, and the one value of the
     /// request (checked by [`is_file_text`] or [`is_task_id`]). A run of specs records its result in `state_dir`, the
     /// state folder the hub reads (a setting of the person, never of a request); without one, in the state folder of
-    /// the engine's editor. A run of sheets keeps its results where `testing sheets report` reads them.
+    /// the engine's editor. A run of sheets keeps its results where `testing sheets report` reads them; with
+    /// `tasks_vault` (a setting of the person too) the engine also writes them into the task's block.
     #[must_use]
-    pub fn args(&self, root: &Path, state_dir: Option<&Path>) -> Vec<OsString> {
+    pub fn args(
+        &self,
+        root: &Path,
+        state_dir: Option<&Path>,
+        tasks_vault: Option<&Path>,
+    ) -> Vec<OsString> {
         let mut args: Vec<OsString> = Vec::new();
         match self {
             Self::Suite => args.extend(["run".into(), "--root".into(), root.into()]),
@@ -105,6 +114,9 @@ impl What {
         }
         if let (Self::Suite | Self::File(_), Some(dir)) = (self, state_dir) {
             args.extend(["--state-dir".into(), dir.into()]);
+        }
+        if let (Self::Task(_), Some(vault)) = (self, tasks_vault) {
+            args.extend(["--tasks".into(), vault.into()]);
         }
         args
     }
@@ -220,6 +232,24 @@ pub fn verdict(code: Option<i32>) -> &'static str {
     }
 }
 
+/// The outcomes of a task's block that mean it stands as the run left it (`testing.sheet.tasks` of the engine).
+const BLOCK_WRITTEN: [&str; 3] = ["changed", "unchanged", "would_change"];
+
+/// What became of the block of `task`, as the engine said it in the last line of its kind
+/// (`testing sheets: task <id> <outcome>[: <message>]`): the outcome, a plain word. `None`: it said nothing (no
+/// `--tasks`, the run did not get that far, or the line is not in the tail any more).
+#[must_use]
+pub fn block_outcome(output: &str, task: &str) -> Option<String> {
+    let prefix = format!("testing sheets: task {task} ");
+    output.lines().rev().find_map(|line| {
+        let rest = line.trim().strip_prefix(&prefix)?;
+        let word = rest.split([':', ' ']).next().unwrap_or_default();
+        let plain = (1..=32).contains(&word.len())
+            && word.bytes().all(|b| b.is_ascii_lowercase() || b == b'_');
+        plain.then(|| word.to_owned())
+    })
+}
+
 /// Why a run was not started.
 #[derive(Debug)]
 pub enum StartError {
@@ -251,6 +281,7 @@ pub struct Launch {
     program: Option<StepProgram>,
     store: Option<Arc<SnapshotStore>>,
     state_dir: Option<PathBuf>,
+    tasks_vault: Option<PathBuf>,
     run: Mutex<Option<Run>>,
     counter: AtomicU64,
 }
@@ -263,17 +294,20 @@ fn now() -> u64 {
 
 impl Launch {
     /// With the program of the engine (`None`: nothing can be run), the snapshot that is read again when a run ends,
-    /// and the state folder the hub reads, where a run of specs records its result.
+    /// the state folder the hub reads, where a run of specs records its result, and the vault of the tasks, into
+    /// which a run of a task's sheets writes its result (`None`: it writes into no task).
     #[must_use]
     pub fn new(
         program: Option<StepProgram>,
         store: Option<Arc<SnapshotStore>>,
         state_dir: Option<PathBuf>,
+        tasks_vault: Option<PathBuf>,
     ) -> Self {
         Self {
             program,
             store,
             state_dir,
+            tasks_vault,
             run: Mutex::new(None),
             counter: AtomicU64::new(0),
         }
@@ -303,11 +337,22 @@ impl Launch {
                 "verdict": (!r.running).then(|| verdict(r.exit)),
                 "started": r.started,
                 "ended": r.ended,
-                "output": scrub_tail(&r.output, &r.root),
+                "output": scrub_tail(&r.output, &r.root, self.tasks_vault.as_deref()),
             });
             match &r.what {
                 What::File(text) => v["file"] = json!(text),
-                What::Task(task) => v["task"] = json!(task),
+                What::Task(task) => {
+                    v["task"] = json!(task);
+                    // What became of the task's block, when the engine said it: a word of the engine, and whether
+                    // the block stands as the run left it. An exit 1 with a block that was not written need not
+                    // be a red sheet.
+                    let block = (!r.running)
+                        .then(|| block_outcome(&String::from_utf8_lossy(&r.output), task))
+                        .flatten();
+                    v["block"] = block.map_or(Value::Null, |outcome| {
+                        json!({ "written": BLOCK_WRITTEN.contains(&outcome.as_str()), "outcome": outcome })
+                    });
+                }
                 What::Suite => {}
             }
             v
@@ -357,7 +402,7 @@ impl Launch {
         let mut command = tokio::process::Command::new(&program.program);
         command
             .args(&program.args)
-            .args(what.args(root, self.state_dir.as_deref()))
+            .args(what.args(root, self.state_dir.as_deref(), self.tasks_vault.as_deref()))
             .env_clear()
             .envs(program.env.iter().map(|(k, v)| (k, v)))
             // A run of the command line starts in the root, as `scripts/test.sh` does.
@@ -467,14 +512,16 @@ impl Launch {
     }
 }
 
-/// The tail of the output as text for the page: the root taken out, nothing unprintable, the last lines.
-fn scrub_tail(output: &[u8], root: &Path) -> String {
+/// The tail of the output as text for the page: the root and the vault of the tasks taken out, nothing unprintable,
+/// the last lines.
+fn scrub_tail(output: &[u8], root: &Path, vault: Option<&Path>) -> String {
     let text = String::from_utf8_lossy(output);
     // `scrub` keeps the first 600 characters; the verdict is at the end, so the end is given to it.
     let chars: Vec<char> = text.chars().collect();
     let start = chars.len().saturating_sub(2000);
     let tail: String = chars[start..].iter().collect();
-    let scrubbed = scrub(&tail, &[root]);
+    let roots: Vec<&Path> = std::iter::once(root).chain(vault).collect();
+    let scrubbed = scrub(&tail, &roots);
     let lines: Vec<&str> = scrubbed.lines().collect();
     let from = lines.len().saturating_sub(20);
     lines[from..].join("\n")
@@ -488,7 +535,7 @@ mod tests {
     fn the_argv_is_a_fixed_command_the_root_and_one_checked_value() {
         let root = Path::new("/repos/alpha.nvim");
         let words = |what: What| -> Vec<String> {
-            what.args(root, None)
+            what.args(root, None, None)
                 .into_iter()
                 .map(|a| a.to_string_lossy().into_owned())
                 .collect()
@@ -512,7 +559,7 @@ mod tests {
         // The result of specs goes where the hub reads; sheets keep theirs where `sheets report` reads them.
         let state = Path::new("/state/nvim");
         let with_state = |what: What| -> Vec<String> {
-            what.args(root, Some(state))
+            what.args(root, Some(state), None)
                 .into_iter()
                 .map(|a| a.to_string_lossy().into_owned())
                 .collect()
@@ -523,6 +570,22 @@ mod tests {
         );
         assert_eq!(with_state(What::Suite)[3..], ["--state-dir", "/state/nvim"]);
         assert!(!with_state(What::Task("a/b".into())).contains(&"--state-dir".to_owned()));
+        // The vault of the tasks goes to the run of a task's sheets and to no other; without one, no `--tasks`.
+        let vault = Path::new("/vaults/tasks");
+        let with_vault = |what: What| -> Vec<String> {
+            what.args(root, Some(state), Some(vault))
+                .into_iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(
+            with_vault(What::Task("a/b".into()))[6..],
+            ["--tasks", "/vaults/tasks"]
+        );
+        for what in [What::Suite, What::File("x".into())] {
+            assert!(!with_vault(what).contains(&"--tasks".to_owned()));
+        }
+        assert!(!words(What::Task("a/b".into())).contains(&"--tasks".to_owned()));
         // Never the trust of a root, never a CI command.
         for what in [
             What::Suite,
@@ -646,8 +709,32 @@ mod tests {
     }
 
     #[test]
+    fn the_outcome_of_a_tasks_block_is_the_engines_last_word_on_that_task() {
+        let out = "sheet try: pass\ntesting sheets: task a/b conflict: edited in between\n";
+        assert_eq!(block_outcome(out, "a/b").as_deref(), Some("conflict"));
+        assert_eq!(
+            block_outcome("testing sheets: task a/b changed\r\n", "a/b").as_deref(),
+            Some("changed")
+        );
+        // Another task's line, a line that only looks alike, a word that is none.
+        for no in [
+            "",
+            "sheet try: pass",
+            "testing sheets: task a/bc changed",
+            "testing sheets: task a/b ",
+            "testing sheets: task a/b <b>x</b>",
+            "x testing sheets: task a/b changed",
+        ] {
+            assert_eq!(block_outcome(no, "a/b"), None, "{no}");
+        }
+        // The last one counts.
+        let twice = "testing sheets: task a/b conflict\ntesting sheets: task a/b changed";
+        assert_eq!(block_outcome(twice, "a/b").as_deref(), Some("changed"));
+    }
+
+    #[test]
     fn a_device_sees_a_task_run_without_its_output_and_of_any_other_only_that_it_runs() {
-        let launch = Launch::new(None, None, None);
+        let launch = Launch::new(None, None, None, None);
         assert_eq!(launch.state_for_device()["run"], Value::Null);
         let set = |what: What| {
             *launch.lock() = Some(Run {
@@ -676,5 +763,13 @@ mod tests {
         assert_eq!(device["run"]["task"], "alpha.nvim/try");
         assert_eq!(device["run"]["verdict"], "red");
         assert!(device["run"].get("output").is_none(), "{device}");
+        // The engine said nothing of the task's block: the state says so, a device hears the same.
+        assert_eq!(device["run"]["block"], Value::Null);
+        launch.lock().as_mut().unwrap().output =
+            b"sheet try: pass\ntesting sheets: task alpha.nvim/try conflict: /vault/x.md".to_vec();
+        assert_eq!(
+            launch.state_for_device()["run"]["block"],
+            json!({ "written": false, "outcome": "conflict" })
+        );
     }
 }

@@ -50,6 +50,8 @@ pub struct TestingRuntime {
 pub struct Origins {
     pub state_dir: Option<Origin>,
     pub areas: Option<Origin>,
+    /// The vault of the tasks a run of a task's sheets writes into; `None`: it writes into no task.
+    pub tasks_vault: Option<Origin>,
     /// Whether the hub asks GitHub, and why not.
     pub ci: CiState,
 }
@@ -72,6 +74,8 @@ pub struct Reading {
     pub watch: Option<Watch>,
     /// How a stepped run of a sheet is started; `None`: the page cannot start one.
     pub step: Option<StepProgram>,
+    /// The vault of the tasks for a run of a task's sheets (`--tasks`); `None`: such a run writes into no task.
+    pub tasks_vault: Option<PathBuf>,
     /// Read the fleet once at the start (`Start::warm`).
     pub warm: bool,
     /// How a red CI run is started again (`ci-rerun`).
@@ -93,6 +97,7 @@ impl TestingRuntime {
                 max_age: None,
                 watch: None,
                 step: None,
+                tasks_vault: None,
                 warm: false,
                 rerun: None,
                 push: None,
@@ -111,6 +116,7 @@ impl TestingRuntime {
             max_age,
             watch,
             step,
+            tasks_vault,
             warm,
             rerun,
             push,
@@ -167,6 +173,7 @@ impl TestingRuntime {
             step.clone(),
             Some(Arc::clone(&store)),
             ask.state_dir.clone(),
+            tasks_vault,
         ));
         // The steps of a release are the engine's command line too, with where the list of reviewed commits is and
         // where `gh` keeps its login, from the hub's own environment.

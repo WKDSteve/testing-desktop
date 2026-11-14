@@ -157,6 +157,15 @@ struct Hub {
 }
 
 async fn start_hub(fx: &Fixture, program: Option<StepProgram>) -> Hub {
+    start_hub_with(fx, program, None).await
+}
+
+/// With the vault of the tasks the person named, as `tasks_vault` of the settings does.
+async fn start_hub_with(
+    fx: &Fixture,
+    program: Option<StepProgram>,
+    tasks_vault: Option<PathBuf>,
+) -> Hub {
     let control = Secret::generate(TOKEN_BYTES).unwrap();
     let server = testing_hub::start(testing_hub::Start {
         addr: "127.0.0.1:0".parse().unwrap(),
@@ -178,6 +187,7 @@ async fn start_hub(fx: &Fixture, program: Option<StepProgram>) -> Hub {
         origins: Origins::default(),
         watch: None,
         step: program,
+        tasks_vault,
         ui: testing_hub::ui::UiFiles::none(),
         warm: false,
         phone: None,
@@ -375,6 +385,13 @@ async fn the_hub_knows_the_sheets_of_a_task_and_runs_only_those() {
         fx.argv()[..6],
         ["sheets", "run", "--task", TASK, "--root", root.as_str()]
     );
+    // No vault was named for this hub: the run writes into no task, and the state says nothing of a block.
+    assert!(
+        !fx.argv().contains(&"--tasks".to_owned()),
+        "{:?}",
+        fx.argv()
+    );
+    assert_eq!(state["run"]["block"], Value::Null);
     // The engine's refusal is the verdict `refused` (here: a sheet of another task, which the stand-in refuses).
     let r = hub
         .post("run/task", &json!({ "task": "alpha.nvim/other" }))
@@ -383,6 +400,73 @@ async fn the_hub_knows_the_sheets_of_a_task_and_runs_only_those() {
     let state = hub.ended().await;
     assert_eq!(state["run"]["verdict"], "refused", "{state}");
     assert_eq!(state["run"]["exit"], 2);
+}
+
+#[tokio::test]
+async fn with_a_vault_the_sheets_of_a_task_write_into_it_and_no_other_run_does() {
+    let Some(program) = program_or_skip() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let vault = fx.dir.join("tasks-vault");
+    std::fs::create_dir_all(&vault).unwrap();
+    let hub = start_hub_with(&fx, Some(program), Some(vault.clone())).await;
+    let root = fx.root().display().to_string();
+    let named = vault.display().to_string();
+    // The vault is the hub's own: a request cannot name one.
+    for body in [
+        json!({ "task": TASK, "tasks": "/elsewhere" }),
+        json!({ "task": TASK, "vault": "/elsewhere" }),
+    ] {
+        let r = hub.post("run/task", &body).await;
+        assert_eq!(r.status, 400, "{body}: {r:?}");
+    }
+    let r = hub.post("run/task", &json!({ "task": TASK })).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    let state = hub.ended().await;
+    assert_eq!(state["run"]["verdict"], "green", "{state}");
+    assert_eq!(
+        fx.argv()[..8],
+        [
+            "sheets",
+            "run",
+            "--task",
+            TASK,
+            "--root",
+            root.as_str(),
+            "--tasks",
+            named.as_str()
+        ]
+    );
+    assert_eq!(
+        state["run"]["block"],
+        json!({ "written": true, "outcome": "changed" })
+    );
+    // Green sheets and a task that could not be written: the engine's exit 1, told apart from a red sheet by its
+    // own word on the block. The vault is taken out of what the page sees.
+    let r = hub
+        .post("run/task", &json!({ "task": "alpha.nvim/other" }))
+        .await;
+    assert_eq!(r.status, 202, "{r:?}");
+    let state = hub.ended().await;
+    assert_eq!(state["run"]["exit"], 1, "{state}");
+    assert_eq!(state["run"]["verdict"], "red");
+    assert_eq!(
+        state["run"]["block"],
+        json!({ "written": false, "outcome": "conflict" })
+    );
+    let output = state["run"]["output"].as_str().unwrap();
+    assert!(output.contains("conflict: <path>/x.md changed"), "{output}");
+    assert!(!state.to_string().contains("tasks-vault"), "{state}");
+    // A run of the suite or of a file never gets the vault.
+    let r = hub.post("run/start", &json!({ "key": KEY })).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    hub.ended().await;
+    assert!(
+        !fx.argv().contains(&"--tasks".to_owned()),
+        "{:?}",
+        fx.argv()
+    );
 }
 
 #[tokio::test]

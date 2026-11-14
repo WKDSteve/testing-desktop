@@ -66,6 +66,9 @@ one replaces it.
   The hub asks GitHub at most once a minute per repository, however often a page reads.
 - **The state of testing.nvim**: `state_dir` of `config.json` or `TESTING_DESKTOP_STATE_DIR`, by default the state folder
   of Neovim (`%LOCALAPPDATA%\nvim-data`).
+- **The vault of the tasks** (optional): `tasks_vault` of `config.json` or `TESTING_DESKTOP_TASKS_VAULT`, a whole
+  path. There is no default: only with it a run of a task's test sheets writes its result into the task
+  ([below](#the-result-of-a-tasks-sheets-in-the-task)).
 
 What is missing, the page says. `about` says where each setting came from, never the path.
 
@@ -125,10 +128,30 @@ names. The routes, for a program that starts a run (the central hub, tasks mobil
 
 | Route | Body or query | Answer |
 | --- | --- | --- |
-| `GET /api/testing/run` | none | `{ "schema": 1, "kind": "hub.run", "available": bool, "run": null \| { "id", "key", "what": "suite" \| "file" \| "task", "file"?, "task"?, "running", "exit", "verdict", "started", "ended", "output" } }`; a phone sees a task's run without `output`, any other only as `{ "what": "other", "running" }` |
+| `GET /api/testing/run` | none | `{ "schema": 1, "kind": "hub.run", "available": bool, "run": null \| { "id", "key", "what": "suite" \| "file" \| "task", "file"?, "task"?, "running", "exit", "verdict", "started", "ended", "output", "block"? } }` (`block` of a task's run that ended: `null` or `{ "written": bool, "outcome": "<word of testing.nvim>" }`); a phone sees a task's run without `output`, any other only as `{ "what": "other", "running" }` |
 | `POST /api/testing/run/start` | `{ "key": "<key of the fleet>", "file"?: "<part of a spec file name>" }` | `202` and the state; `409 busy` while a run is under way. The PC only |
 | `GET /api/testing/run/task-sheets` | `?task=<area>/<slug>[&key=<key of the fleet>]` | `{ "schema": 1, "kind": "hub.task-sheets", "task", "key", "sheets": [<name>...] }` |
-| `POST /api/testing/run/task` | `{ "task": "<area>/<slug>", "key"?: "<key of the fleet>" }` | `202` and the state; `404 no_sheet` (no sheet names the task), `404 no_repo`, `409 ambiguous` (name the repository with `key`), `409 busy`. A phone at the level `trigger`, with `x-device-confirm` |
+| `POST /api/testing/run/task` | `{ "task": "<area>/<slug>", "key"?: "<key of the fleet>" }` | `202` and the state (with a [vault of the tasks](#the-result-of-a-tasks-sheets-in-the-task) the run also writes into the task); `404 no_sheet` (no sheet names the task), `404 no_repo`, `409 ambiguous` (name the repository with `key`), `409 busy`. A phone at the level `trigger`, with `x-device-confirm` |
+
+### The result of a task's sheets in the task
+
+By default a run of a task's sheets leaves its result where every run of sheets does (`testing sheets report` reads
+it), and the hub says how it ended. With a vault of the tasks named for this hub (`tasks_vault` of `config.json`, or
+`TESTING_DESKTOP_TASKS_VAULT`) the hub adds `--tasks <vault>` to the command, and testing.nvim writes the state of
+the sheets into the generated block of that task through tasks.nvim, exactly as `:Tasks sheet-run` does: tasks
+mobil and tasks-web then show it in the task. A program that started the run reads the task again when the run has
+ended.
+
+- The vault is named by you, on this PC: no request can name one, and a suite or a file never gets it. A path that
+  is not a folder is said at the start of the hub and not used.
+- testing.nvim finds tasks.nvim as in a terminal: `TASKS_NVIM_DIR`, `<vault>/.deps/tasks.nvim`,
+  `<vault>/../tasks.nvim`, the plugin folder of lazy. A sheet of the task in another project is found below
+  `REPOS_DIR`, else beside the vault. The hub passes both variables on.
+- `block` of the state says what became of the task: `written` and testing.nvim's word (`changed`, `unchanged`;
+  `conflict` when the task was edited in between, `missing` when it is not open). testing.nvim ends with exit 1 for
+  a red sheet and for a task it could not write alike, so the verdict is "red" in both cases: `block.written`
+  false tells them apart as far as testing.nvim says it, and the page says so under the verdict. `block` is `null`
+  when testing.nvim said nothing of the task (no vault, or the run did not get that far).
 
 ### A test sheet step by step
 

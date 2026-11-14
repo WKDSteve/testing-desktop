@@ -128,7 +128,14 @@ describe('the state of a run', () => {
     expect(runFrom(null)).toEqual({ available: false, run: null });
     expect(runFrom({ available: true, run: null })).toEqual({ available: true, run: null });
     const s = runFrom({ available: true, run: { id: 2, key: 'k', what: 'weird', running: false, exit: 0, verdict: 'green', output: 7 } });
-    expect(s.run).toEqual({ id: 2, key: 'k', what: 'other', file: null, task: null, running: false, verdict: 'green', exit: 0, output: '' });
+    expect(s.run).toEqual({ id: 2, key: 'k', what: 'other', file: null, task: null, running: false, verdict: 'green', exit: 0, output: '', block: null });
+    // What became of the task's block: the engine's word and whether it stands; nothing that is not a plain word.
+    const block = (b: unknown, running = false) => runFrom({ run: { what: 'task', running, block: b } }).run?.block;
+    expect(block({ outcome: 'conflict', written: false })).toEqual({ outcome: 'conflict', written: false });
+    expect(block({ outcome: 'changed', written: true })).toEqual({ outcome: 'changed', written: true });
+    expect(block({ outcome: 'changed', written: 'yes' })).toEqual({ outcome: 'changed', written: false });
+    for (const bad of [null, 'changed', [], { outcome: '<b>' }, { outcome: 7 }, { written: true }]) expect(block(bad)).toBeNull();
+    expect(block({ outcome: 'changed', written: true }, true)).toBeNull();
     // A verdict of a run that still runs is none.
     expect(runFrom({ run: { running: true, verdict: 'green' } }).run?.verdict).toBeNull();
     expect(runFrom({ run: { running: false, verdict: 'purple' } }).run?.verdict).toBeNull();

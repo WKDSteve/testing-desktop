@@ -19,6 +19,12 @@ export interface RunView {
   exit: number | null;
   /** The end of what the engine wrote, with the folders of the PC taken out. */
   output: string;
+  /**
+   * What became of the task's block, when the hub has a vault of the tasks and the engine said it: its word
+   * (`changed`, `unchanged`, `conflict`, ...) and whether the block stands as the run left it. A red verdict with a
+   * block that was not written need not be a red sheet.
+   */
+  block: { outcome: string; written: boolean } | null;
 }
 
 export interface RunState {
@@ -33,6 +39,15 @@ const VERDICTS: readonly RunVerdict[] = ['green', 'red', 'refused', 'failed', 's
 
 const text = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const int = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null);
+
+function blockFrom(v: unknown): RunView['block'] {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const b = v as Record<string, unknown>;
+  const outcome = text(b['outcome']);
+  // The hub sends a plain word; anything else is not shown as one.
+  if (outcome === null || !/^[a-z_]{1,32}$/.test(outcome)) return null;
+  return { outcome, written: b['written'] === true };
+}
 
 /** The state document of the hub as the page shows it; what is not of its form is left out. */
 export function runFrom(doc: unknown): RunState {
@@ -54,6 +69,7 @@ export function runFrom(doc: unknown): RunState {
       verdict: run['running'] === true ? null : verdict,
       exit: int(run['exit']),
       output: text(run['output']) ?? '',
+      block: run['running'] === true ? null : blockFrom(run['block']),
     },
   };
 }

@@ -203,10 +203,12 @@ async fn start_warming(
         origins: Origins {
             state_dir: Some(Origin::Default),
             areas: Some(Origin::Setting),
+            tasks_vault: Some(Origin::Env),
             ci,
         },
         watch,
         step: None,
+        tasks_vault: None,
         ui: testing_hub::ui::UiFiles::none(),
         warm,
         phone: None,
@@ -706,7 +708,7 @@ async fn about_names_the_engine_and_where_the_hub_reads_as_words_not_paths() {
     assert!(doc["engine_problem"].is_null());
     assert_eq!(
         doc["reads"],
-        json!({ "state_dir": "default", "areas": "setting" })
+        json!({ "state_dir": "default", "areas": "setting", "tasks_vault": "environment" })
     );
     // The body is JSON: a backslash of a Windows path would be doubled in it.
     let body = r.body.replace("\\\\", "/");

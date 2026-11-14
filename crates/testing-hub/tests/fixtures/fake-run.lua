@@ -39,9 +39,20 @@ end
 
 if argv[1] == "sheets" then
   assert(argv[2] == "run", "fake-run: sheets run")
+  local vault = value("--tasks")
   if value("--task") == "alpha.nvim/try-it" then
     io.stdout:write("sheet try-it: green\n")
+    if vault then
+      io.stdout:write("testing sheets: task alpha.nvim/try-it changed\n")
+    end
     os.exit(0)
+  end
+  if vault and value("--task") == "alpha.nvim/other" then
+    -- Green sheets, and a task edited in between: the engine's exit 1 that is not a red sheet. The message names the
+    -- vault, as a line of the engine may.
+    io.stdout:write("sheet other: pass\n")
+    io.stdout:write("testing sheets: task alpha.nvim/other conflict: " .. vault .. "/x.md changed\n")
+    os.exit(1)
   end
   io.stderr:write("testing sheets run: no sheet names the task\n")
   os.exit(2)

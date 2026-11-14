@@ -312,6 +312,13 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
             "note: no areas.json of the data classes was found: no repository is released, the fleet is empty"
         );
     }
+    // A vault that is not a folder is not named: the run of a task's sheets then writes into no task, as without one.
+    let tasks_vault = places.tasks_vault.as_ref().filter(|(p, _)| p.is_dir());
+    if places.tasks_vault.is_some() && tasks_vault.is_none() {
+        eprintln!(
+            "note: tasks_vault is not a folder: a run of a task's sheets writes its result into no task"
+        );
+    }
     let ask = Ask {
         state_dir: places.state_dir.as_ref().map(|(p, _)| p.clone()),
         // A file that is not there is not named: the engine then says that it has no data classes.
@@ -330,6 +337,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
             .as_ref()
             .filter(|(p, _)| p.is_file())
             .map(|(_, o)| *o),
+        tasks_vault: tasks_vault.map(|(_, o)| *o),
         ..Origins::default()
     };
 
@@ -382,6 +390,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         origins,
         watch: watch.clone(),
         step: state.step.clone(),
+        tasks_vault: tasks_vault.map(|(p, _)| p.clone()),
         ui: ui.clone(),
         warm: true,
         phone: phone.clone(),

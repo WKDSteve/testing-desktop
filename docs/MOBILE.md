@@ -15,7 +15,7 @@ appkit's mobile basis ([appkit `docs/MOBILE.md`](https://github.com/WKDSteve/app
 | A notice when a main turns red | through Tailscale, with a UnifiedPush app on the phone |
 | Run the test sheets of a task on the PC (from tasks mobil) | with the level `trigger` and a confirmation, each time; only a task a sheet of its repository names |
 | Where a run stands | read; of a run that is not a task's sheets only that one is under way |
-| A test sheet step by step, a run of a whole suite or of a file, the event stream | never (they stay on the PC) |
+| A test sheet step by step, a run of a whole suite or of a file, the abort of a run, the event stream | never (they stay on the PC) |
 | Releasing a commit for the self-hosted runner (`testing ci release`), trusting a root, any command | never: the release assistant is for a session of the PC and no route of it is released to a phone; no route of the hub trusts a root or runs a command (tests `phone.rs`, `crates/testing-hub/src/phone.rs`) |
 
 A job the runner guard refused is not released from the phone: release its commit on the PC, where you look at what

@@ -326,6 +326,25 @@ export class App extends Reader {
     }
   }
 
+  /**
+   * Abort the run under way (the hub ends the engine and everything it started); the page follows it to its end.
+   * A run that ended in between is not a failure of the page: it reads where the run stands.
+   */
+  async runAbort(): Promise<void> {
+    if (!this.run?.running) return;
+    this.runFailure = null;
+    try {
+      const doc = await this.env.hub.runAbort();
+      if (!this.live) return;
+      this.run = runFrom(doc).run;
+      void this.followRun();
+    } catch (error) {
+      if (!this.live) return;
+      if (error instanceof ApiError && error.status === 409) await this.readRun();
+      else this.runFailure = messageOf(error);
+    }
+  }
+
   /** Ask where the run stands until it ended; then the repository is read again. One follower at a time. */
   private async followRun(): Promise<void> {
     if (this.following) return;

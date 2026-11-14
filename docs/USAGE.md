@@ -130,8 +130,14 @@ names. The routes, for a program that starts a run (the central hub, tasks mobil
 | --- | --- | --- |
 | `GET /api/testing/run` | none | `{ "schema": 1, "kind": "hub.run", "available": bool, "run": null \| { "id", "key", "what": "suite" \| "file" \| "task", "file"?, "task"?, "running", "exit", "verdict", "started", "ended", "output", "block"? } }` (`block` of a task's run that ended: `null` or `{ "written": bool, "outcome": "<word of testing.nvim>" }`); a phone sees a task's run without `output`, any other only as `{ "what": "other", "running" }` |
 | `POST /api/testing/run/start` | `{ "key": "<key of the fleet>", "file"?: "<part of a spec file name>" }` | `202` and the state; `409 busy` while a run is under way. The PC only |
+| `POST /api/testing/run/abort` | `{}` | `202` and the state (the run may still be on its way down; `run` says when it ended, with the verdict `stopped`); `409 not_running`. The PC only |
 | `GET /api/testing/run/task-sheets` | `?task=<area>/<slug>[&key=<key of the fleet>]` | `{ "schema": 1, "kind": "hub.task-sheets", "task", "key", "sheets": [<name>...] }` |
 | `POST /api/testing/run/task` | `{ "task": "<area>/<slug>", "key"?: "<key of the fleet>" }` | `202` and the state (with a [vault of the tasks](#the-result-of-a-tasks-sheets-in-the-task) the run also writes into the task); `404 no_sheet` (no sheet names the task), `404 no_repo`, `409 ambiguous` (name the repository with `key`), `409 busy`. A phone at the level `trigger`, with `x-device-confirm` |
+
+**Abort the run** shows while a run is under way and ends it: the hub ends testing.nvim and every process the run
+started (its child editors, what those started), and the run reads as "stopped". Nothing is asked first, and there
+is no gentle end to wait for: `testing run` takes no command while it runs. The same happens when the hub stops and
+after five hours. What a run that ended by itself left behind is left alone.
 
 ### The result of a task's sheets in the task
 

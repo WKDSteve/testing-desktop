@@ -124,6 +124,11 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
     return this.postJson<unknown>(this.route('run/start'), file === undefined ? { key } : { key, file });
   }
 
+  /** Abort the run under way: it ends as stopped, with every process it started. */
+  runAbort(): Promise<unknown> {
+    return this.postJson<unknown>(this.route('run/abort'), {});
+  }
+
   /** The release assistant: the repositories a commit can be released of (`lib/release.ts` folds the answers). */
   releaseRepos(): Promise<unknown> {
     return this.json<unknown>(this.route('release/repos'));

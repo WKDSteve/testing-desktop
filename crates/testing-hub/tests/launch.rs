@@ -469,6 +469,80 @@ async fn with_a_vault_the_sheets_of_a_task_write_into_it_and_no_other_run_does()
     );
 }
 
+/// Wait until `file` is there and has something in it.
+async fn appears(file: &Path) {
+    let end = Instant::now() + Duration::from_secs(30);
+    while std::fs::metadata(file).map_or(0, |m| m.len()) == 0 {
+        assert!(Instant::now() < end, "{} did not appear", file.display());
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Wait until `file` has not grown for a whole second: the process that writes it is gone. It writes every tenth of
+/// a second for a minute, so a file that still grows after 30 s is a process that was left running.
+async fn goes_quiet(file: &Path, what: &str) {
+    let size = || std::fs::metadata(file).map_or(0, |m| m.len());
+    let end = Instant::now() + Duration::from_secs(30);
+    let (mut last, mut since) = (size(), Instant::now());
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let now = size();
+        if now != last {
+            (last, since) = (now, Instant::now());
+        } else if since.elapsed() >= Duration::from_secs(1) {
+            return;
+        }
+        assert!(Instant::now() < end, "{what}");
+    }
+}
+
+#[tokio::test]
+async fn an_abort_ends_the_run_with_every_process_it_started_and_so_does_a_stop_of_the_hub() {
+    let Some(program) = program_or_skip() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let beat = fx.root().join("beat.txt");
+    let hub = start_hub(&fx, Some(program)).await;
+    // Nothing runs: there is nothing to abort.
+    let r = hub.post("run/abort", &json!({})).await;
+    assert_eq!(r.status, 409, "{r:?}");
+    assert_eq!(r.json()["error"]["code"], "not_running");
+    let tree = json!({ "key": KEY, "file": "tree" });
+    let r = hub.post("run/start", &tree).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    appears(&beat).await;
+    // An abort names nothing: there is one run, and no word of a request reaches a process.
+    for body in [
+        json!({ "key": KEY }),
+        json!({ "signal": "TERM" }),
+        json!([]),
+    ] {
+        let r = hub.post("run/abort", &body).await;
+        assert_eq!(r.status, 400, "{body}: {r:?}");
+    }
+    assert_eq!(hub.state().await["run"]["running"], true);
+    let r = hub.post("run/abort", &json!({})).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    assert_eq!(r.json()["kind"], "hub.run", "{r:?}");
+    let state = hub.ended().await;
+    assert_eq!(state["run"]["verdict"], "stopped", "{state}");
+    assert_eq!(state["run"]["exit"], Value::Null);
+    // Not only the engine: the process it started is gone too.
+    goes_quiet(&beat, "a process of the run outlived its abort").await;
+    // The run is over: a second abort finds none, and the next run may start.
+    let r = hub.post("run/abort", &json!({})).await;
+    assert_eq!(r.status, 409, "{r:?}");
+
+    // The same when the hub stops.
+    std::fs::remove_file(&beat).unwrap();
+    let r = hub.post("run/start", &tree).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    appears(&beat).await;
+    hub.server.shutdown().await;
+    goes_quiet(&beat, "a process of the run outlived the hub").await;
+}
+
 #[tokio::test]
 async fn a_request_names_a_key_a_file_or_a_task_and_nothing_else() {
     let fx = Fixture::new();

@@ -7,6 +7,8 @@
 --   (suite)         prints a line that names the root, ends green
 --   red             prints a red case, exit 1
 --   slow            waits until it is killed (writes `<root>/slow.started` first)
+--   tree            starts a process of its own that writes into `<root>/beat.txt` while it lives, then waits
+--                   until it is killed
 --   orphan          leaves a process behind that holds its stdout and stderr for 25 s, and ends green
 --   <task>          exit 0 for the task `alpha.nvim/try-it`, else the refusal of the engine, exit 2
 
@@ -78,6 +80,47 @@ elseif file == "orphan" then
   io.stdout:write("GREEN 1 passed\n")
   io.stdout:flush()
   os.exit(0)
+elseif file == "tree" then
+  -- As a run whose children start processes of their own (a child editor's shell, `cargo test`): a process that goes
+  -- on writing for as long as it lives. A minute at most, so that a test that fails leaves nothing behind for long.
+  -- On Windows it is started through `cmd`: Neovim (libuv) ends its own children when it ends, but not what those
+  -- started, so only a grandchild shows whether the whole tree is ended.
+  local script = norm .. "/beat.lua"
+  local b = assert(io.open(script, "w"))
+  b:write(table.concat({
+    "local path = _G.arg[1]",
+    "for _ = 1, 600 do",
+    '  local f = io.open(path, "a")',
+    "  if f then",
+    '    f:write("x")',
+    "    f:close()",
+    "  end",
+    "  vim.uv.sleep(100)",
+    "end",
+    "",
+  }, "\n"))
+  b:close()
+  local words = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "-l", script, norm .. "/beat.txt" }
+  local handle
+  if vim.fn.has("win32") == 1 then
+    -- `/s /c "<line>"`: cmd takes the line between the outer quotes as it is.
+    local line = { '"' .. vim.v.progpath .. '"' }
+    for _, word in ipairs(words) do
+      line[#line + 1] = '"' .. word .. '"'
+    end
+    handle = vim.uv.spawn(vim.env.COMSPEC or "cmd.exe", {
+      args = { "/d", "/s", "/c", '"' .. table.concat(line, " ") .. '"' },
+      verbatim = true,
+      -- Not in the root: on Windows a folder in use as a working folder cannot be removed by the test.
+      cwd = vim.uv.os_tmpdir(),
+    })
+  else
+    handle = vim.uv.spawn(vim.v.progpath, { args = words, cwd = vim.uv.os_tmpdir() })
+  end
+  assert(handle, "fake-run: no process of its own")
+  while true do
+    vim.uv.sleep(100)
+  end
 elseif file == "slow" then
   local s = assert(io.open(norm .. "/slow.started", "w"))
   s:close()

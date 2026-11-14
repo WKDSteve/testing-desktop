@@ -101,6 +101,27 @@ async fn launch(st: &Shared, key: &str, what: What, root: PathBuf) -> Response {
     }
 }
 
+/// `POST /api/testing/run/abort` with `{}`: the run under way ends as `stopped`, with every process it started.
+/// Answers `202` with the state (the run may still be on its way down; `run` says when it ended), `409 not_running`
+/// when there is none. The PC only: no phone reaches it (`phone::DEVICE_ROUTES`).
+pub(crate) async fn abort(State(st): State<Arc<Shared>>, body: Bytes) -> Response {
+    let map = match object_of(&body) {
+        Ok(map) => map,
+        Err(r) => return *r,
+    };
+    if let Err(r) = fields(&map, &[]) {
+        return *r;
+    }
+    let rt = st.rt();
+    if !rt.launch.available() {
+        return unavailable();
+    }
+    if !rt.launch.abort() {
+        return error_body(StatusCode::CONFLICT, "not_running", "no run is under way");
+    }
+    json_response(StatusCode::ACCEPTED, rt.launch.state().to_string(), None)
+}
+
 /// `POST /api/testing/run/start`.
 pub(crate) async fn start(State(st): State<Arc<Shared>>, body: Bytes) -> Response {
     let map = match object_of(&body) {

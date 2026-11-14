@@ -54,6 +54,16 @@ function hub() {
       polls = 0;
       return json({ schema: 1, kind: 'hub.run', available: true, run }, 202);
     }
+    if (path === '/api/testing/run/abort' && init?.method === 'POST') {
+      posts.push({ path, body: JSON.parse(String(init.body)) as unknown });
+      if (!run?.['running']) return json({ error: { code: 'not_running', message: 'no run is under way' } }, 409);
+      // The hub ends it: the next look finds it stopped.
+      const stopped = { ...run, running: false, exit: null, verdict: 'stopped' };
+      const answer = json({ schema: 1, kind: 'hub.run', available: true, run }, 202);
+      run = stopped;
+      polls = -10;
+      return answer;
+    }
     return json({ error: { code: 'nope', message: 'nope' } }, 404);
   }) as typeof fetch;
   return { fetchFn, posts, repoReads: () => repoReads, setRun: (r: Record<string, unknown> | null) => (run = r) };
@@ -108,6 +118,45 @@ describe('a run through the engine on the page', () => {
     setRun({ id: 9, key: 'other-0123456789ab', what: 'suite', running: true });
     await app.runStart();
     expect(app.runFailure).toContain('under way');
+  });
+
+  it('aborts the run under way with a body that names nothing, and follows it to stopped', async () => {
+    const h = hub();
+    h.setRun({ id: 3, key: KEY, what: 'suite', running: true });
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    // The follower of the run that was found sleeps until the test lets it go on.
+    let wake: () => void = () => {};
+    const app = new App({ hub: new HubSource(h.fetchFn), session, sleep: () => new Promise<void>((r) => (wake = r)) });
+    await app.start(null);
+    await app.open(KEY);
+    expect(app.run?.running).toBe(true);
+    await app.runAbort();
+    expect(h.posts).toEqual([{ path: '/api/testing/run/abort', body: {} }]);
+    wake();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(app.run?.running).toBe(false);
+    expect(app.run?.verdict).toBe('stopped');
+    expect(app.runFailure).toBeNull();
+    // Nothing runs any more: nothing is sent.
+    await app.runAbort();
+    expect(h.posts).toHaveLength(1);
+  });
+
+  it('reads where the run stands when it ended before the abort came, and says no failure', async () => {
+    const h = hub();
+    h.setRun({ id: 3, key: KEY, what: 'suite', running: true });
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    const app = new App({ hub: new HubSource(h.fetchFn), session, sleep: () => new Promise<void>(() => {}) });
+    await app.start(null);
+    await app.open(KEY);
+    // The run ends by itself; the page has not looked yet.
+    h.setRun({ id: 3, key: KEY, what: 'suite', running: false, exit: 0, verdict: 'green' });
+    await app.runAbort();
+    expect(app.runFailure).toBeNull();
+    expect(app.run?.running).toBe(false);
   });
 
   it('learns of a run under way when a repository is opened', async () => {

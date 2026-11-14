@@ -24,7 +24,11 @@
 //! * the hub knows the sheets bound to a task ([`task_sheets`]: the `task = "<id>"` line of a sheet, read as text as
 //!   the engine reads a sheet that does not load) and starts a task's run only when there is one;
 //! * what the child writes is kept as a short tail, with the root taken out, for the PC only;
-//! * the run ends with the hub, and after [`RUN_LIMIT`]; a process it leaves behind does not hold it.
+//! * the run ends with the hub, after [`RUN_LIMIT`], and when the page aborts it (`run/abort`); then everything it
+//!   started ends with it ([`Tree`]: its child editors are not left running). `testing run` has no gentle end to ask
+//!   for (its input is closed, it reads no command), so the tree is ended at once; the engine takes over the lock of
+//!   a heavy run whose process is gone. A process a run that ended by itself left behind does not hold it, and is
+//!   left alone.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -250,6 +254,49 @@ pub fn block_outcome(output: &str, task: &str) -> Option<String> {
     })
 }
 
+/// Everything a run started, to end it whole: on Windows a job object the engine is put into right after its start
+/// (a process it starts in that first moment is not in it), elsewhere the process group the engine leads.
+struct Tree {
+    job: Option<appkit_core::job::Job>,
+    #[cfg(unix)]
+    group: Option<u32>,
+}
+
+impl Tree {
+    fn of(child: &tokio::process::Child) -> Self {
+        Self {
+            job: appkit_core::job::Job::adopt(child),
+            #[cfg(unix)]
+            group: child.id(),
+        }
+    }
+
+    /// The run ended by itself: what it left behind on purpose is not the hub's to end.
+    fn release(self) {
+        if let Some(job) = self.job {
+            job.release();
+        }
+    }
+
+    /// End the engine and every process it started.
+    async fn end(self, child: &mut tokio::process::Child) {
+        // Windows: closing the job ends every process in it, the engine among them.
+        #[cfg(windows)]
+        drop(self.job);
+        #[cfg(unix)]
+        if let Some(group) = self.group {
+            let _ = tokio::process::Command::new("/bin/kill")
+                .args(["-KILL", "--", &format!("-{group}")])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .await;
+        }
+        let _ = child.kill().await;
+    }
+}
+
 /// Why a run was not started.
 #[derive(Debug)]
 pub enum StartError {
@@ -416,10 +463,16 @@ impl Launch {
             // CREATE_NO_WINDOW: no console window for a process the hub starts, as for its engine.
             command.creation_flags(0x0800_0000);
         }
+        #[cfg(unix)]
+        {
+            // A process group of its own, so that an abort ends the engine and what it started, and nothing else.
+            command.process_group(0);
+        }
         let mut child = command
             .spawn()
             .map_err(|e| StartError::Spawn(scrub(&e.to_string(), &[root])))?;
         let id = self.counter.fetch_add(1, Ordering::AcqRel) + 1;
+        let tree = Tree::of(&child);
         let (kill_tx, kill_rx) = oneshot::channel();
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
@@ -442,13 +495,16 @@ impl Launch {
             let mut read_err = tokio::spawn(Arc::clone(&this).read_into(id, stderr));
             let code = async {
                 tokio::select! {
-                    status = child.wait() => status.ok().and_then(|s| s.code()),
+                    status = child.wait() => {
+                        tree.release();
+                        status.ok().and_then(|s| s.code())
+                    }
                     _ = kill_rx => {
-                        let _ = child.kill().await;
+                        tree.end(&mut child).await;
                         None
                     }
                     () = tokio::time::sleep(RUN_LIMIT) => {
-                        let _ = child.kill().await;
+                        tree.end(&mut child).await;
                         None
                     }
                 }
@@ -503,12 +559,22 @@ impl Launch {
         }
     }
 
-    /// The hub stops: a run under way is killed (the engine's child editors end with it, as when a terminal closes).
-    pub fn stop(&self) {
-        let kill = self.lock().as_mut().and_then(|r| r.kill.take());
-        if let Some(kill) = kill {
+    /// Abort the run under way: the engine and everything it started are ended, and the run ends as `stopped`.
+    /// `false`: no run is under way. A second abort of the same run finds it still under way and changes nothing.
+    pub fn abort(&self) -> bool {
+        let mut guard = self.lock();
+        let Some(run) = guard.as_mut().filter(|r| r.running) else {
+            return false;
+        };
+        if let Some(kill) = run.kill.take() {
             let _ = kill.send(());
         }
+        true
+    }
+
+    /// The hub stops: a run under way is ended with everything it started.
+    pub fn stop(&self) {
+        self.abort();
     }
 }
 
@@ -697,6 +763,31 @@ mod tests {
         assert_eq!(task_sheets(&dir, "x/z").unwrap(), ["other"]);
         assert!(task_sheets(&dir, "x/none").unwrap().is_empty());
         assert!(task_sheets(&dir.join("missing"), "x/y").unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_abort_finds_only_a_run_that_is_under_way() {
+        let launch = Launch::new(None, None, None, None);
+        assert!(!launch.abort(), "no run yet");
+        let (kill, mut killed) = oneshot::channel();
+        *launch.lock() = Some(Run {
+            id: 1,
+            key: "alpha.nvim-0123456789ab".into(),
+            what: What::Suite,
+            root: PathBuf::from("/repos/alpha.nvim"),
+            running: true,
+            exit: None,
+            started: 1,
+            ended: None,
+            output: Vec::new(),
+            kill: Some(kill),
+        });
+        assert!(launch.abort());
+        assert!(killed.try_recv().is_ok(), "the run was told to end");
+        // Asked again before the run has ended: still under way, nothing more to tell.
+        assert!(launch.abort());
+        launch.lock().as_mut().unwrap().running = false;
+        assert!(!launch.abort(), "a run that ended");
     }
 
     #[test]

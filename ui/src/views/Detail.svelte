@@ -167,6 +167,7 @@
       {#if run}
         {#if run.running}
           <p role="status">{t(run.key === null || run.key === app.openKey ? 'run.running' : 'run.other', { what: runWhat(run) })}</p>
+          <p class="run"><button type="button" onclick={() => void hub.runAbort()}>{t('run.abort')}</button></p>
         {:else if run.key === app.openKey && run.verdict}
           <p role="status">
             <ToneView

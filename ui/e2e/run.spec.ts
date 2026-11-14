@@ -104,3 +104,53 @@ test("a run of a task's sheets says under its verdict what became of the task's 
   expect(seen.foreign).toEqual([]);
   expect(await violations(page)).toEqual([]);
 });
+
+for (const scheme of ['light', 'dark'] as const) {
+test(`a run under way can be aborted from the page, and then reads as stopped (${scheme})`, async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: scheme });
+  const seen = await watch(page);
+  // What the hub does with an abort (the run and every process it started end) is its own test, against a stand-in
+  // that starts a process (crates/testing-hub/tests/launch.rs). Here the hub's state is stood in, so that the run is
+  // under way for as long as the page needs: the real suite of the fixture ends within a second.
+  const fleet = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/testing/fleet' && r.status() === 200);
+  const key = fleet.then(async (r) => {
+    const doc = (await r.json()) as { repos: { name: string; key: string }[] };
+    return doc.repos.find((repo) => repo.name === 'alpha.nvim')?.key ?? '';
+  });
+  let running = true;
+  const aborts: string[] = [];
+  const stateOf = async () => ({
+    schema: 1,
+    kind: 'hub.run',
+    available: true,
+    run: { id: 4, key: await key, what: 'suite', running, exit: null, verdict: running ? null : 'stopped', started: 1, ended: running ? null : 2, output: '' },
+  });
+  await page.route('**/api/testing/run', async (route) => route.fulfill({ json: await stateOf() }));
+  await page.route('**/api/testing/run/abort', async (route) => {
+    aborts.push(route.request().postData() ?? '');
+    const answer = await stateOf();
+    running = false;
+    await route.fulfill({ status: 202, json: answer });
+  });
+  await page.addInitScript((t) => sessionStorage.setItem('testing-desktop.session', t), state().token);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'alpha.nvim' }).click();
+  await expect(page.getByText('A run is under way: the suite.')).toBeVisible();
+  // While it runs nothing else can be started, and the one thing to do is to end it.
+  await expect(page.getByRole('button', { name: 'Run the suite' })).toBeDisabled();
+  const abort = page.getByRole('button', { name: 'Abort the run' });
+  await abort.hover();
+  await abort.focus();
+  await expectAccessible(page, `run under way, the focus on the abort (${scheme})`);
+  await abort.scrollIntoViewIfNeeded();
+  await testInfo.attach(`abort-${scheme}`, { body: await page.screenshot(), contentType: 'image/png' });
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Last run, the suite: stopped.')).toBeVisible({ timeout: 15_000 });
+  await expect(abort).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Run the suite' })).toBeEnabled();
+  expect(aborts).toEqual(['{}']);
+  expect(seen.errors).toEqual([]);
+  expect(seen.foreign).toEqual([]);
+  expect(await violations(page)).toEqual([]);
+});
+}

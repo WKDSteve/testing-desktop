@@ -528,6 +528,58 @@ async fn a_question_waits_for_its_answer_and_the_text_goes_as_one_line() {
     assert_eq!(fx.commands(), ["answer no the sound stutters", "next"]);
 }
 
+/// `explain`: the page asks the run for the request an AI would get about a step. The child's answer comes on the
+/// stream with the folder of the run taken out, is no part of what a later page is told, and the run stays where it
+/// was. The hub sends nothing anywhere: all it did was write one line of its closed list to the child.
+#[tokio::test]
+async fn a_request_for_an_ai_is_built_by_the_child_and_only_shown() {
+    let fx = Fixture::new();
+    let Some(program) = program_or_skip() else {
+        return;
+    };
+    let hub = start_hub(&fx, Some(program)).await;
+    let mut stream = Stream::open(&hub.server, &route("events"), &hub.token).await;
+    let r = hub.start("green").await;
+    assert_eq!(r.status, 200, "{r:?}");
+    stream.until("\"reason\":\"start\"").await;
+    let r = hub
+        .command(json!({ "command": "explain", "n": 1, "kind": "what" }))
+        .await;
+    assert_eq!(r.status, 200, "{r:?}");
+    let seen = stream.until("\"event\":\"explain\"").await;
+    let line = seen
+        .lines()
+        .find(|l| l.starts_with("data: ") && l.contains("\"event\":\"explain\""))
+        .expect("the line of the request");
+    let event: Value = serde_json::from_str(line.trim_start_matches("data: ")).unwrap();
+    let event = &event["event"];
+    assert_eq!(event["n"], 1);
+    assert_eq!(event["kind"], "what");
+    assert_eq!(event["system"], "You explain one step of a test sheet.");
+    // The folder of the run is not in what the page gets.
+    assert_eq!(
+        event["prompt"],
+        "Sheet fake.green\nsee <path>/TESTS/sheets/green.sheet.lua\nQuestion: what"
+    );
+    assert!(!seen.contains(&fx.root().display().to_string()), "{seen}");
+    // The run stands where it stood, and a page that comes now is not told a request of before.
+    let state = hub.state().await;
+    assert_eq!(state["running"], true);
+    assert_eq!(events(&state), ["start", "size", "paused"]);
+    // What is not one of the three questions never reaches the child.
+    for bad in [
+        json!({ "command": "explain", "n": 1, "kind": "why" }),
+        json!({ "command": "explain", "n": 1, "kind": "what", "text": "and send it" }),
+        json!({ "command": "explain", "kind": "what" }),
+    ] {
+        let r = hub.command(bad.clone()).await;
+        assert_eq!(r.status, 400, "{bad}: {r:?}");
+    }
+    hub.command(json!({ "command": "abort" })).await;
+    hub.ended().await;
+    assert_eq!(fx.commands(), ["explain 1 what", "abort"]);
+}
+
 #[tokio::test]
 async fn what_is_not_a_command_of_the_list_never_reaches_the_child() {
     let fx = Fixture::new();

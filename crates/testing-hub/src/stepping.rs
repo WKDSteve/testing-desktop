@@ -210,7 +210,9 @@ pub(crate) async fn start(State(st): State<Arc<Shared>>, body: Bytes) -> Respons
 }
 
 /// `POST /api/testing/sheet-step/command` `{ "command": "next" | "continue" | "until" | "break" | "clear" |
-/// "answer" | "abort", "n"?: <step>, "yes"?: <bool>, "text"?: "<line>" }`: one command of the list to the run.
+/// "answer" | "note" | "explain" | "abort", "n"?: <step>, "yes"?: <bool>, "text"?: "<line>", "kind"?: "what" |
+/// "watch" | "result" }`: one command of the list to the run. `explain` asks the run for the request an AI would get
+/// about a step; the answer comes on the stream as an `explain` event, and nothing is sent anywhere.
 pub(crate) async fn command(State(st): State<Arc<Shared>>, body: Bytes) -> Response {
     let map = match object_of(&body) {
         Ok(map) => map,

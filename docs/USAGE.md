@@ -152,6 +152,13 @@ hub.
   fails the step with the note as its reason.
 - The last line says where the run stands: paused before a step, a failed step, the question, or `finished: pass`.
   A run that went through without an abort counts as a verdict, as the line under it says.
+- **Explain this step with AI**, under the tile of a step, is closed until you open it. It offers the three questions
+  of `E` in the editor's panel: what the step does, what to watch out for, and (once the step ran) what its result
+  means. A click asks the run for the request an AI would get: testing.nvim builds it from what the run reported about
+  the step (the sheet, its steps, what this one did, the screen of the child editor as text, its notes; no picture),
+  and the page shows all of it with where it goes. From this page it goes nowhere: the hub cannot send a request yet
+  (it will go through ai.nvim, once that can be asked without an editor). **Copy** hands it to the AI you choose. A
+  request is built while the run is paused or waits for an answer, which is where a failed step stops.
 
 A failed step pauses so you can look at it; a browser sheet opens its window beside the page. The run writes no state
 and no snapshot. What testing.nvim refuses (the workstation rule, a root that is not trusted), the page shows with the

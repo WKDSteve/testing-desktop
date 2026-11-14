@@ -53,7 +53,8 @@ export type StepCommand =
   | { command: 'next' | 'continue' | 'abort' }
   | { command: 'until' | 'break' | 'clear'; n: number }
   | { command: 'answer'; yes: boolean; text?: string }
-  | { command: 'note'; text: string };
+  | { command: 'note'; text: string }
+  | { command: 'explain'; n: number; kind: 'what' | 'watch' | 'result' };
 
 /** Where the routes of this app live (`IDENTITY.route` of testing-hub). */
 export const API = '/api/testing';

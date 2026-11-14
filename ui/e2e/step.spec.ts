@@ -50,12 +50,44 @@ test('a sheet of a repository runs step by step from the page, and its steps sho
   await expect(steps.nth(0)).toContainText('set the value');
   await expect(steps.nth(1)).toContainText('the value holds');
 
+  // An explanation by an AI is an offer, closed until a person opens it; nothing was asked or built before that.
+  const explain = page.locator('details.explain');
+  await expect(explain).not.toHaveAttribute('open', '');
+  await expect(page.getByText(/^Request about step/)).toHaveCount(0);
+  await explain.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(explain).toHaveAttribute('open', '');
+  // The result of a step that has not run cannot be asked for.
+  await expect(page.getByRole('button', { name: 'What does its result mean?' })).toBeDisabled();
+  await page.getByRole('button', { name: 'What does this step do?' }).click();
+  // testing.nvim built the request (the real engine): the page shows all of it and where it goes: nowhere from here.
+  await expect(page.getByRole('heading', { name: 'Request about step 1: What does this step do?' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Goes to: nowhere from this page.')).toBeVisible();
+  const request = page.getByLabel('The whole request, instruction and question');
+  await expect(request).toContainText('You explain one step of a test sheet of testing.nvim');
+  await expect(request).toContainText('Sheet alpha.smoke: alpha smoke (engine rpc)');
+  await expect(request).toContainText('> 1. lua vim.g.alpha_smoke = 1  -- set the value');
+  await expect(request).toContainText('It has not run yet.');
+  await expect(request).toContainText('Question: What does this step do?');
+  // No folder of this machine is in it.
+  expect(await request.textContent()).not.toContain(state().root);
+  await explain.getByRole('button', { name: 'Copy' }).click();
+  await expect(explain.getByText('Copied.')).toBeVisible();
+  // The run did not move.
+  await expect(page.getByRole('status').first()).toContainText('paused before step 1');
+  await expectAccessible(page, 'the request for an AI');
+
   // One step: it passes, and the tile shows the screen of the child editor as text.
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('paused before step 2', { timeout: 30_000 });
+  await expect(page.getByRole('status').first()).toContainText('paused before step 2', { timeout: 30_000 });
   await expect(steps.nth(0)).toContainText('pass');
   await expect(page.getByRole('heading', { name: 'Step 1, lua' })).toBeVisible();
-  await expect(page.getByText('Screen')).toBeVisible();
+  await expect(page.getByText('Screen', { exact: true })).toBeVisible();
+  // Now that step 1 ran, its result can be asked about: the request says what it did.
+  await expect(explain).toHaveAttribute('open', '');
+  await page.getByRole('button', { name: 'What does its result mean?' }).click();
+  await expect(page.getByRole('heading', { name: 'Request about step 1: What does its result mean?' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel('The whole request, instruction and question')).toContainText('It ran: pass in');
 
   // A note: too long in bytes is said, not sent; it belongs to the step the run stands before, and its tile shows it.
   const field = page.getByLabel('Note on the step where the run stands');

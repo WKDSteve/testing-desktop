@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyStep, fromDocument, fromStream, isStale, noteProblem, notesOf, oneLine, reduce, screenRows, statusLine, statusOf, tileStep } from './step';
+import { emptyStep, explainOf, fromDocument, fromStream, isStale, noteProblem, notesOf, oneLine, reduce, screenRows, statusLine, statusOf, tileStep } from './step';
 
 const SCHEMA = 'testing-sheet-session/1';
 const ev = (event: string, fields: Record<string, unknown> = {}) => ({ schema: SCHEMA, event, ...fields });
@@ -174,5 +174,28 @@ describe('the model of a stepped run', () => {
     expect(screenRows(['hello   ', '~', '', '~  '])).toEqual(['hello']);
     // Hidden characters are made visible, as everywhere on the page.
     expect(oneLine(`a${String.fromCodePoint(0x202e)}b`, 20)).toContain('U+202E');
+  });
+
+  it('reads the request for an AI out of a line of the stream, and nothing that is not one', () => {
+    const line = (event: unknown, session: unknown = 7) => JSON.stringify({ session, seq: 9, event });
+    const request = ev('explain', { size: '80x24', n: 2, kind: 'result', system: 'You explain one step.', prompt: 'Sheet x\nQuestion: ...' });
+    expect(explainOf(line(request))).toEqual({ session: 7, size: '80x24', n: 2, kind: 'result', system: 'You explain one step.', prompt: 'Sheet x\nQuestion: ...' });
+    for (const bad of [
+      'not json',
+      '[]',
+      line(ev('error', { message: 'x' })),
+      line({ ...request, schema: 'testing-sheet-session/2' }),
+      line({ ...request, kind: 'why' }),
+      line({ ...request, prompt: '' }),
+      line({ ...request, system: 7 }),
+      line({ ...request, n: 'two' }),
+      line(request, null),
+      JSON.stringify({ seq: 9, event: request }),
+    ]) {
+      expect(explainOf(bad), bad).toBeNull();
+    }
+    // It is of the moment: the state of a run does not hold it.
+    const before = reduce(emptyStep(), start);
+    expect(reduce(before, request)).toEqual(before);
   });
 });

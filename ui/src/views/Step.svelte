@@ -6,7 +6,8 @@
   import type { App } from '../lib/app.svelte';
   import type { Key } from '../lib/i18n';
   import { shown } from '../lib/model';
-  import { NOTE_MAX_BYTES, noteProblem, oneLine, sheetTitle, statusLine } from '../lib/step';
+  import { EXPLAIN_KINDS, NOTE_MAX_BYTES, noteProblem, oneLine, sheetTitle, statusLine } from '../lib/step';
+  import CopyText from './CopyText.svelte';
   import StepView from './StepView.svelte';
 
   let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
@@ -15,6 +16,8 @@
   const doc = $derived(run.doc);
   const canUntil = $derived(app.stepChosen !== null && app.stepChosen > (run.at ?? 0) && run.paused !== null && !run.question);
   const paused = $derived(run.running && run.paused !== null && !run.question);
+  // The run reads a question about a step while it waits: paused, or for an answer.
+  const canExplain = $derived(run.running && (run.paused !== null || run.question !== null));
 
   let answer = $state('');
   let note = $state('');
@@ -145,7 +148,35 @@
       onChoose={(n) => (app.stepChosen = n)}
       loadPicture={(size, n, kind, signal) => app.stepImage(size, n, kind, signal)}
       onToggleBreak={(n) => void app.stepToggleBreak(n)}
-    />
+    >
+      {#snippet tileExtra(step, mark)}
+        {@const request = app.stepExplain && app.stepExplain.n === step.n && app.stepExplain.size === run.size ? app.stepExplain : null}
+        <!-- An offer, never a prompt: closed until a person opens it, and nothing is asked before a click. -->
+        <details class="explain">
+          <summary>{t('explain.heading')}</summary>
+          <p class="muted">{t('explain.lead')}</p>
+          <div class="controls">
+            {#each EXPLAIN_KINDS as kind (kind)}
+              <button type="button" disabled={!canExplain || (kind === 'result' && !mark)} onclick={() => void app.stepExplainAsk(step.n, kind)}>
+                {t(`explain.kind.${kind}` as Key)}
+              </button>
+            {/each}
+          </div>
+          {#if !canExplain}
+            <p class="muted">{t('explain.when')}</p>
+          {/if}
+          {#if app.stepExplainAsked?.n === step.n}
+            <p class="muted" role="status">{t('explain.asking')}</p>
+          {/if}
+          {#if request}
+            <h3>{t('explain.request', { n: request.n, question: t(`explain.kind.${request.kind}` as Key) })}</h3>
+            <p class="target">{t('explain.target')}</p>
+            <p class="label">{t('explain.prompt')}</p>
+            <CopyText text={`${request.system}\n\n${request.prompt}`} label={t('explain.copy_label')} {t} block />
+          {/if}
+        </details>
+      {/snippet}
+    </StepView>
   {/if}
 
   {#if run.question}
@@ -228,6 +259,30 @@
     margin: 0.5rem 0;
   }
   .keys {
+    font-size: 0.85em;
+  }
+  .explain {
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--line);
+    padding-top: 0.5rem;
+  }
+  .explain summary {
+    cursor: pointer;
+    color: var(--accent);
+  }
+  .explain h3 {
+    font-size: 0.95rem;
+    margin: 0.75rem 0 0.25rem;
+  }
+  .target {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.4rem 0.6rem;
+    margin: 0.25rem 0;
+  }
+  .label {
+    margin: 0.4rem 0 0;
+    color: var(--muted);
     font-size: 0.85em;
   }
   .question {

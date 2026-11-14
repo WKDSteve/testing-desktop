@@ -21,6 +21,24 @@ export function noteProblem(text: string): 'empty' | 'too_long' | null {
 /** The event of the hub's stream that carries a line of the run. */
 export const STREAM_EVENT = 'sheet-step';
 
+/** The questions about a step a request for an AI can be built for, as testing.nvim names them. */
+export const EXPLAIN_KINDS = ['what', 'watch', 'result'] as const;
+export type ExplainKind = (typeof EXPLAIN_KINDS)[number];
+
+/**
+ * The request an AI would get about one step, as testing.nvim built it (`testing.sheet.explain`, the answer to the
+ * command `explain`). The page shows it; nothing sends it.
+ */
+export interface ExplainRequest {
+  /** The run of the hub it belongs to. */
+  session: number;
+  size: string;
+  n: number;
+  kind: ExplainKind;
+  system: string;
+  prompt: string;
+}
+
 export interface SheetStepDoc {
   n: number;
   action: string;
@@ -303,6 +321,27 @@ export function fromStream(state: StepState, data: string): StepState {
   if (seq <= state.seq) return state;
   const next = reduce(state, line['event']);
   return { ...next, session, seq, running: next.finished === null && next.exit === null };
+}
+
+/**
+ * The request for an AI in a line of the stream (`data` of a `sheet-step` event), when the line is one: an `explain`
+ * event of the contract with all its parts. It is of the moment: the state of a run does not hold it.
+ */
+export function explainOf(data: string): ExplainRequest | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  const line = obj(parsed);
+  const e = obj(line?.['event']);
+  const session = num(line?.['session']);
+  if (!e || session === null || e['schema'] !== SCHEMA || e['event'] !== 'explain') return null;
+  const [size, n, kind, system, prompt] = [str(e['size']), num(e['n']), str(e['kind']), str(e['system']), str(e['prompt'])];
+  const known = EXPLAIN_KINDS.find((k) => k === kind);
+  if (size === null || n === null || known === undefined || !system || !prompt) return null;
+  return { session, size, n, kind: known, system, prompt };
 }
 
 /** Whether a line of another run came: the page reads the state of the hub again. */

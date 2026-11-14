@@ -222,4 +222,51 @@ describe('the stepped run on the page', () => {
     expect(app.stepView).toBe(false);
     app.stop();
   });
+
+  it('asks the run for the request an AI would get, shows the answer of the stream and sends nothing else', async () => {
+    const { app, posts, setState } = await started();
+    await app.open(app.fleet!.repos[0]!.key);
+    await app.stepSheet('float');
+    const commands = () => posts.filter((p) => p.path === '/api/testing/sheet-step/command').map((p) => p.body);
+    // The run does not wait yet (a step runs): it reads no question now, so none is sent.
+    await app.onMessage(line(7, 3, ev('step-before', { size: '80x24', n: 1, total: 2, action: 'keys', value: ':UI<CR>' })));
+    await app.stepExplainAsk(1, 'what');
+    expect(commands()).toEqual([]);
+    expect(app.stepExplainAsked).toBeNull();
+
+    await app.onMessage(line(7, 4, ev('paused', { size: '80x24', n: 1, reason: 'start' })));
+    setState({ schema: 1, available: true, session: 7, running: true, seq: 4, key: 'k', sheet: 'float', events: [START, ev('size', { size: '80x24', state: 'open' }), ev('paused', { size: '80x24', n: 1, reason: 'start' })] });
+    await app.stepExplainAsk(1, 'what');
+    expect(commands()).toEqual([{ command: 'explain', n: 1, kind: 'what' }]);
+    expect(app.stepExplainAsked).toEqual({ n: 1, kind: 'what' });
+    expect(app.stepExplain).toBeNull();
+
+    // testing.nvim built it: the page holds it, beside the state of the run, which a read of the hub replaces.
+    const request = ev('explain', { size: '80x24', n: 1, kind: 'what', system: 'You explain one step.', prompt: 'Sheet ui.float\nQuestion: What does this step do?' });
+    await app.onMessage(line(7, 5, request));
+    expect(app.stepExplain).toMatchObject({ n: 1, kind: 'what', prompt: 'Sheet ui.float\nQuestion: What does this step do?' });
+    expect(app.stepExplainAsked).toBeNull();
+    await app.readStep();
+    expect(app.stepExplain?.n).toBe(1);
+    // Nothing but the one command of the list went out: no request to an AI, no other route.
+    expect(posts.map((p) => p.path)).toEqual(['/api/testing/sheet-step/start', '/api/testing/sheet-step/command']);
+
+    // A question the run refuses (the result of a step that did not run) is answered by its error.
+    await app.stepExplainAsk(2, 'result');
+    expect(app.stepExplain).toBeNull();
+    expect(app.stepExplainAsked).toEqual({ n: 2, kind: 'result' });
+    await app.onMessage(line(7, 6, ev('error', { message: 'step 2 has not run yet' })));
+    expect(app.stepExplainAsked).toBeNull();
+    expect(app.step.error).toBe('step 2 has not run yet');
+
+    // A request of another run is not this run's, and a new run forgets the one before.
+    await app.onMessage(line(7, 7, request));
+    await app.onMessage(line(8, 8, { ...request, prompt: 'of another run' }));
+    expect(app.stepExplain?.prompt).not.toBe('of another run');
+    await app.stepSheet('smoke');
+    setState({ schema: 1, available: true, session: 9, running: true, seq: 1, key: 'k', sheet: 'smoke', events: [START] });
+    await app.readStep();
+    expect(app.stepExplain).toBeNull();
+    app.stop();
+  });
 });

@@ -151,8 +151,15 @@ pub enum Command {
     },
     /// A note on the step where the run stands; taken at once, also while a step runs.
     Note(String),
+    /// The request an AI would get about a step (one of [`EXPLAIN_KINDS`]): the child answers with an `explain`
+    /// event for the page to show. Nothing is sent anywhere, by the child or by the hub.
+    Explain(u64, &'static str),
     Abort,
 }
+
+/// The questions about a step a request can be built for, as testing.nvim names them (`testing.sheet.explain`): what
+/// the step does, what to watch out for, what its result means.
+pub const EXPLAIN_KINDS: [&str; 3] = ["what", "watch", "result"];
 
 /// The `text` of a command, trimmed: one line without control characters. `None` when it is missing, null or empty.
 fn line_text(map: &Map<String, Value>) -> Result<Option<String>, String> {
@@ -170,7 +177,8 @@ fn line_text(map: &Map<String, Value>) -> Result<Option<String>, String> {
 }
 
 impl Command {
-    /// The command of a request body `{ "command": "<name>", "n"?: <step>, "yes"?: <bool>, "text"?: "<line>" }`.
+    /// The command of a request body `{ "command": "<name>", "n"?: <step>, "yes"?: <bool>, "text"?: "<line>",
+    /// "kind"?: "<question>" }`.
     ///
     /// # Errors
     ///
@@ -180,7 +188,7 @@ impl Command {
             .as_object()
             .ok_or_else(|| "the body must be a JSON object".to_owned())?;
         for key in map.keys() {
-            if !["command", "n", "yes", "text"].contains(&key.as_str()) {
+            if !["command", "n", "yes", "text", "kind"].contains(&key.as_str()) {
                 return Err(format!("unknown field {key:?}"));
             }
         }
@@ -234,6 +242,16 @@ impl Command {
                 }
                 Ok(Self::Note(text))
             }
+            "explain" => {
+                no_extra(&["n", "kind"])?;
+                let n = step()?;
+                let kind = map
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .and_then(|kind| EXPLAIN_KINDS.iter().find(|word| **word == kind))
+                    .ok_or_else(|| "explain needs kind: what, watch or result".to_owned())?;
+                Ok(Self::Explain(n, kind))
+            }
             other => Err(format!("unknown command {other:?}")),
         }
     }
@@ -256,6 +274,7 @@ impl Command {
                 }
             }
             Self::Note(text) => format!("note {text}\n"),
+            Self::Explain(n, kind) => format!("explain {n} {kind}\n"),
         }
     }
 }
@@ -759,7 +778,8 @@ impl SheetStep {
                 s.replay.current = None;
                 s.replay.end = Some(value.clone());
             }
-            // `task` and `error` are of the moment; an unknown event is for a newer reader.
+            // `task`, `error` and `explain` (the answer to a question of the page) are of the moment; an unknown
+            // event is for a newer reader.
             _ => {}
         }
         s.seq += 1;
@@ -1052,6 +1072,14 @@ mod tests {
                 json!({"command": "note", "text": " the border flickers "}),
                 "note the border flickers\n",
             ),
+            (
+                json!({"command": "explain", "n": 2, "kind": "what"}),
+                "explain 2 what\n",
+            ),
+            (
+                json!({"command": "explain", "n": 12, "kind": "result"}),
+                "explain 12 result\n",
+            ),
         ];
         for (body, line) in cases {
             assert_eq!(Command::parse(&body).unwrap().line(), line, "{body}");
@@ -1085,6 +1113,16 @@ mod tests {
             json!({"command": "note", "text": "two\nlines"}),
             json!({"command": "note", "text": "x".repeat(MAX_NOTE_BYTES + 1)}),
             json!({"command": "note", "text": "a", "n": 1}),
+            json!({"command": "explain"}),
+            json!({"command": "explain", "n": 1}),
+            json!({"command": "explain", "kind": "what"}),
+            json!({"command": "explain", "n": 0, "kind": "what"}),
+            json!({"command": "explain", "n": 1, "kind": "why"}),
+            json!({"command": "explain", "n": 1, "kind": "what now"}),
+            json!({"command": "explain", "n": 1, "kind": "what\nabort"}),
+            json!({"command": "explain", "n": 1, "kind": ["what"]}),
+            json!({"command": "explain", "n": 1, "kind": "what", "text": "send it to x"}),
+            json!({"command": "next", "kind": "what"}),
             json!({"command": "next", "extra": true}),
         ] {
             assert!(Command::parse(&bad).is_err(), "{bad}");

@@ -196,6 +196,16 @@ elseif sheet == "green" then
         elseif line == "continue" then
           mode = "continue"
           break
+        elseif line:match("^explain%s+%d+%s+%a+$") then
+          -- as the engine: the request an AI would get, built from the run (it names a file of the root here)
+          local en, kind = line:match("^explain%s+(%d+)%s+(%a+)$")
+          emit("explain", {
+            size = SIZE,
+            n = tonumber(en),
+            kind = kind,
+            system = "You explain one step of a test sheet.",
+            prompt = "Sheet fake.green\nsee " .. root .. "/TESTS/sheets/green.sheet.lua\nQuestion: " .. kind,
+          })
         elseif not (line:match("^break%s+%d+$") or line:match("^clear%s+%d+$")) then
           -- a breakpoint leaves the run paused; anything else is no command
           emit("error", { message = "unknown command: " .. line })

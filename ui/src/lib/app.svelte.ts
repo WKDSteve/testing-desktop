@@ -8,7 +8,7 @@ import { messageOf, Reader } from './reader.svelte';
 import { ApiError, type HubSource, type StepCommand } from './source';
 import { commitsFrom, emptyWizard, isFullSha, outcomeFrom, reposFrom, reviewFrom, type Wizard } from './release';
 import { fileTextProblem, runFrom, type RunView } from './run';
-import { emptyStep, fromDocument, fromStream, isStale, noteProblem, STREAM_EVENT, type StepState } from './step';
+import { emptyStep, explainOf, fromDocument, fromStream, isStale, noteProblem, STREAM_EVENT, type ExplainKind, type ExplainRequest, type StepState } from './step';
 
 export type { Phase } from './reader.svelte';
 
@@ -62,6 +62,13 @@ export class App extends Reader {
   stepFailure = $state<string | null>(null);
   /** The step whose tile is shown, chosen in the list; `null`: the last one that did something. */
   stepChosen = $state<number | null>(null);
+  /**
+   * The request an AI would get about a step, as testing.nvim built it when the person asked (`stepExplainAsk`). The
+   * page shows it; nothing here sends it anywhere.
+   */
+  stepExplain = $state<ExplainRequest | null>(null);
+  /** The question that is on its way to the run and not answered yet. */
+  stepExplainAsked = $state<{ n: number; kind: ExplainKind } | null>(null);
 
   /** The run through the engine that is or was last (`lib/run.ts`); `null` before the first. */
   run = $state<RunView | null>(null);
@@ -192,10 +199,20 @@ export class App extends Reader {
   /** One event of the stream. Returns when what it asked for is read (the tests wait for it). */
   async onMessage(message: SseMessage): Promise<void> {
     if (message.event === STREAM_EVENT) {
+      // The answer to a question of this page about a step of the run it holds: kept beside the state of the run,
+      // which a read of the hub replaces.
+      const request = explainOf(message.data);
+      if (request !== null && request.session === this.step.session) {
+        this.stepExplain = request;
+        this.stepExplainAsked = null;
+      }
+      const before = this.step.error;
       const next = fromStream(this.step, message.data);
       // A line of a run the page does not hold: its state is read whole.
       if (isStale(next)) await this.readStep();
       else this.step = next;
+      // The run refused a command: a question that waited for its answer got this one.
+      if (this.step.error !== before) this.stepExplainAsked = null;
       return;
     }
     if (message.event === 'fleet' || message.event === 'resync') {
@@ -225,6 +242,11 @@ export class App extends Reader {
     if (next.session === this.step.session && next.seq < this.step.seq) return;
     // The breakpoints of this page hold while it follows the run; a page that comes later reads them from the hub.
     if (next.session === this.step.session) next.breaks = this.step.breaks;
+    // A request for an AI belongs to the run it was built from.
+    if (next.session !== this.step.session) {
+      this.stepExplain = null;
+      this.stepExplainAsked = null;
+    }
     this.step = next;
   }
 
@@ -352,6 +374,19 @@ export class App extends Reader {
   stepNote(text: string): Promise<boolean> {
     if (!this.step.running || noteProblem(text) !== null) return Promise.resolve(false);
     return this.stepCommand({ command: 'note', text: text.trim() }).then(() => this.stepFailure === null);
+  }
+
+  /**
+   * Ask the run for the request an AI would get about step `n`: what it does, what to watch out for, or what its
+   * result means. testing.nvim builds it and answers on the stream; the page shows it. Nothing is sent to an AI, here
+   * or in the hub. Only while the run waits (paused, or for an answer): that is when it reads the command.
+   */
+  async stepExplainAsk(n: number, kind: ExplainKind): Promise<void> {
+    if (!this.step.running || (this.step.paused === null && this.step.question === null)) return;
+    this.stepExplain = null;
+    this.stepExplainAsked = { n, kind };
+    await this.stepCommand({ command: 'explain', n, kind });
+    if (this.stepFailure !== null) this.stepExplainAsked = null;
   }
 
   /** Run on from a stop; nothing while a step runs or a question waits. */
@@ -523,6 +558,8 @@ export class App extends Reader {
     this.etag = null;
     this.step = emptyStep();
     this.stepFailure = null;
+    this.stepExplain = null;
+    this.stepExplainAsked = null;
     this.run = null;
     this.runFailure = null;
     this.release = emptyWizard();

@@ -315,6 +315,7 @@ async fn the_hub_serves_the_fleet_of_the_real_engine() {
         warm: false,
         phone: None,
         rerun: None,
+        login: None,
     })
     .await
     .expect("the hub starts");
@@ -404,6 +405,7 @@ async fn a_real_run_is_seen_by_the_watcher_and_its_findings_are_one_document() {
         warm: false,
         phone: None,
         rerun: None,
+        login: None,
     })
     .await
     .expect("the hub starts");
@@ -559,6 +561,7 @@ async fn hub_with_children(
         warm: false,
         phone: None,
         rerun: None,
+        login: None,
     })
     .await
     .expect("the hub starts");

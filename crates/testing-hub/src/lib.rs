@@ -26,6 +26,7 @@ pub mod github;
 pub mod launch;
 mod launching;
 mod live;
+pub mod loginentry;
 pub mod phone;
 pub mod places;
 pub mod release;
@@ -129,6 +130,8 @@ pub struct Start {
     pub phone: Option<phone::Phone>,
     /// How a red CI run is started again (`ci-rerun`); `None`: the route says it cannot.
     pub rerun: Option<Arc<dyn rerun::Rerunner>>,
+    /// The start of the hub with the login (`autostart`, the switch of the page); `None`: the page offers no switch.
+    pub login: Option<Arc<dyn loginentry::LoginEntry>>,
 }
 
 /// Starts the hub.
@@ -165,7 +168,8 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
                     rerun: s.rerun,
                     push: s.phone.as_ref().and_then(|p| p.push.clone()),
                 },
-            ),
+            )
+            .with_login(s.login),
             // There is one repositories root and no list to choose from, so this is never called.
             build: Arc::new(|()| TestingRuntime::new(app::no_engine_status())),
             vaults: None,

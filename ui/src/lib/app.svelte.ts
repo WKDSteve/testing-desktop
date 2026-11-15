@@ -164,9 +164,38 @@ export class App extends Reader {
     await this.refresh();
     if (this.stopped || !this.env.hub.hasToken) return;
     void this.readAbout();
+    void this.readAutostart();
     // It runs for as long as the page: `start` does not wait for it. A start after a stop (a pairing link pasted into
     // the tab) finds the one that ran still going: the kit keeps it and it reads on with the new token.
     void this.followStream();
+  }
+
+  /** Whether the hub starts with the login (the switch of the help menu); `null`: no switch. */
+  autostart = $state<boolean | null>(null);
+  /** The last switch did not go through. */
+  autostartFailed = $state(false);
+
+  /**
+   * Read the start with the login again: at the start and whenever the window gets the focus, since hub-desktop can
+   * switch it too (one state, two switches).
+   */
+  async readAutostart(): Promise<void> {
+    const on = await this.env.hub.autostart();
+    if (!this.stopped && this.env.hub.hasToken) this.autostart = on;
+  }
+
+  /** The switch of the menu: shows what the system says afterwards. */
+  async toggleAutostart(): Promise<void> {
+    if (this.autostart === null) return;
+    const wanted = !this.autostart;
+    try {
+      const now = await this.env.hub.setAutostart(wanted);
+      this.autostart = now;
+      this.autostartFailed = now !== wanted;
+    } catch {
+      this.autostartFailed = true;
+      await this.readAutostart();
+    }
   }
 
   /** The words of the help menu. A hub that cannot say leaves the menu without them. */

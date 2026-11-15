@@ -42,6 +42,7 @@ impl Subject for Testing {
             warm: false,
             phone: None,
             rerun: None,
+            login: None,
         }))
     }
 

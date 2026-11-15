@@ -166,6 +166,25 @@ export class HubSource extends HubClient<Fleet> implements TestingSource {
     return response.blob();
   }
 
+  /**
+   * Whether the hub starts with the login: the one state that hub-desktop shows and switches too. `null` where there is
+   * nothing to switch (the system cannot tell, or the hub has no login entry).
+   */
+  async autostart(): Promise<boolean | null> {
+    try {
+      const doc = await this.json<{ on: unknown }>(this.route('autostart'));
+      return typeof doc.on === 'boolean' ? doc.on : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Switch the start with the login; what is true afterwards. */
+  async setAutostart(on: boolean): Promise<boolean | null> {
+    const doc = await this.postJson<{ on: unknown }>(this.route('autostart'), { on });
+    return typeof doc.on === 'boolean' ? doc.on : null;
+  }
+
   /** What this build is and which engine answers: only the words the page shows are taken. */
   async about(): Promise<About> {
     const doc = await this.json<Record<string, unknown>>(this.route('about'));

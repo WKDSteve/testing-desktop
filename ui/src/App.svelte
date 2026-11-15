@@ -24,7 +24,11 @@
   });
 
   function onFocus(): void {
-    if (app.phase === 'ready') void app.refresh();
+    if (app.phase === 'ready') {
+      void app.refresh();
+      // hub-desktop can switch the start with the login too: the menu shows what is true now.
+      void app.readAutostart();
+    }
   }
 
   /** The words of what `about` says of GitHub; a word this page does not know says nothing. */
@@ -33,7 +37,18 @@
     return key in DICTIONARIES.en ? (key as Key) : null;
   }
 
-  const help = $derived<MenuItem[]>(
+  // The start with the login, the same state as the tile of hub-desktop; only where there is one to switch.
+  const login = $derived<MenuItem[]>(
+    app.autostart === null
+      ? []
+      : [
+          { kind: 'separator' },
+          { kind: 'check', label: t('menu.autostart'), checked: app.autostart, onselect: () => void app.toggleAutostart() },
+          ...(app.autostartFailed ? [{ kind: 'info' as const, label: t('notice.autostart_failed') }] : []),
+        ],
+  );
+
+  const about = $derived<MenuItem[]>(
     app.about
       ? [
           { kind: 'separator' },
@@ -65,7 +80,7 @@
 
 <svelte:window onfocus={onFocus} />
 
-<Frame {app} {t} {logo} {help}>
+<Frame {app} {t} {logo} help={[...login, ...about]}>
   {#if app.phase === 'ready'}
     {#if app.releaseView}
       <Release {app} {t} />

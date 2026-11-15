@@ -197,6 +197,7 @@ async fn start_hub_with(
         warm: false,
         phone: None,
         rerun: None,
+        login: None,
     })
     .await
     .expect("the hub starts");

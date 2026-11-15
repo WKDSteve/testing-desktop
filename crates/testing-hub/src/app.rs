@@ -410,6 +410,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         warm: true,
         phone: phone.clone(),
         rerun: rerun.clone(),
+        login: Some(Arc::new(crate::loginentry::SystemLoginEntry)),
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server
     // still starts, on another port, and says so.

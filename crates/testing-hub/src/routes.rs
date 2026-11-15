@@ -57,6 +57,7 @@ pub const ROUTES: &[(&str, MakeRoute)] = &[
     ("release/commits", || get(releasing::commits)),
     ("release/show", || get(releasing::show)),
     ("release/outcome", || get(releasing::outcome)),
+    ("autostart", || get(autostart_get).post(autostart_set)),
 ];
 
 /// The router of the app, built from [`ROUTES`] and from nothing else. Invariant: this stays a
@@ -67,6 +68,68 @@ pub(crate) fn app_routes(_core: &Arc<Shared>) -> Router<Arc<Shared>> {
     ROUTES.iter().fold(Router::new(), |router, (name, make)| {
         router.route(&IDENTITY.route(name), make())
     })
+}
+
+/// `GET /api/testing/autostart`: whether the hub starts with the login (`{ "on": true | false }`), the one state of the
+/// kit that hub-desktop shows too; `{ "on": null }` where this system cannot tell: the page then offers no switch. The PC
+/// only: no phone reaches it (`phone::DEVICE_ROUTES`).
+async fn autostart_get(State(st): State<Arc<Shared>>) -> Response {
+    let Some(login) = st.rt().login.clone() else {
+        return answer(json!({ "on": null }));
+    };
+    match tokio::task::spawn_blocking(move || login.is_on()).await {
+        Ok(on) => answer(json!({ "on": on })),
+        Err(_) => answer(json!({ "on": null })),
+    }
+}
+
+/// `POST /api/testing/autostart` `{ "on": bool }`: the hub starts with the login, or not. The answer is what the system
+/// says afterwards, not what was asked.
+async fn autostart_set(State(st): State<Arc<Shared>>, body: axum::body::Bytes) -> Response {
+    let on = match serde_json::from_slice::<Value>(&body) {
+        Ok(doc) => match (
+            doc.as_object().map(serde_json::Map::len),
+            doc["on"].as_bool(),
+        ) {
+            (Some(1), Some(on)) => on,
+            _ => {
+                return error_body(
+                    StatusCode::BAD_REQUEST,
+                    "bad_request",
+                    "the body is { \"on\": true | false }",
+                );
+            }
+        },
+        Err(_) => {
+            return error_body(
+                StatusCode::BAD_REQUEST,
+                "bad_request",
+                "the body is not JSON",
+            )
+        }
+    };
+    let Some(login) = st.rt().login.clone() else {
+        return error_body(
+            StatusCode::NOT_FOUND,
+            "autostart_unavailable",
+            "this hub has no login entry",
+        );
+    };
+    let done = tokio::task::spawn_blocking(move || login.set(on).map(|()| login.is_on())).await;
+    match done {
+        Ok(Ok(now)) => answer(json!({ "on": now })),
+        Ok(Err(why)) => error_body(StatusCode::BAD_GATEWAY, "autostart_failed", &why),
+        Err(_) => error_body(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "autostart_failed",
+            "the change stopped unexpectedly",
+        ),
+    }
+}
+
+/// A JSON answer of the hub's own (not a document of the engine).
+fn answer(doc: Value) -> Response {
+    axum::response::IntoResponse::into_response(axum::Json(doc))
 }
 
 /// The `digest` of a document of the engine, when it has one of the contract's form
@@ -306,6 +369,7 @@ mod tests {
                 "release/commits",
                 "release/show",
                 "release/outcome",
+                "autostart",
             ]
         );
     }

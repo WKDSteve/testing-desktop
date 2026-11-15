@@ -213,6 +213,7 @@ async fn start_warming(
         warm,
         phone: None,
         rerun: None,
+        login: None,
     })
     .await
     .expect("the hub starts");

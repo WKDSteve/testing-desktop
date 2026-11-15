@@ -114,6 +114,7 @@ impl Subject for TestingPhone {
                 push: Some(Arc::clone(&self.push)),
             }),
             rerun: Some(Arc::clone(&self.reruns) as Arc<dyn testing_hub::rerun::Rerunner>),
+            login: None,
         }))
     }
 

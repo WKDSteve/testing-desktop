@@ -97,6 +97,11 @@ the tile **Testing**: one click starts it and opens it.
 `testing-hub open` without a running hub says so and names `testing-hub start --open`, which starts it and opens the
 page in one go.
 
+Whether the hub starts with your login is one state, switched in three places that always show the same: the Help
+menu of the page (**Start with the login**, on the PC only, never on a phone), `testing-hub autostart on|off|status`
+and the menu of the tile in hub-desktop. While hub-desktop starts with your login it starts the hub
+(`start_with_hub` of its settings), and the hub stays without a page; otherwise the hub has its own login entry.
+
 ## The page
 
 The hub reads the fleet as soon as it starts, before a page asks: right after a start that read also asks GitHub and

@@ -491,3 +491,53 @@ describe('the reads', () => {
     expect(new ApiError(1, 'a', 'b')).toBeInstanceOf(Error);
   });
 });
+
+describe('the start with the login', () => {
+  /** The hub of the test, with the state the machine holds; the switch writes it unless it refuses. */
+  const started = async (login: { on: boolean | null; refuse?: boolean }) => {
+    const fake = fakeHub((path) => {
+      if (path === '/api/testing/autostart') return json(JSON.stringify({ on: login.on }));
+      return standard(path);
+    });
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    const app = new App({ hub: fake.hub, session, sleep: now });
+    // The switch is a POST to the same path: the fake of this file answers by path, so the body is looked at here.
+    const post = fake.hub.setAutostart.bind(fake.hub);
+    fake.hub.setAutostart = async (on: boolean) => {
+      if (login.refuse) throw new ApiError(502, 'autostart_failed', 'no');
+      login.on = on;
+      return post(on);
+    };
+    await app.start(null);
+    await app.readAutostart();
+    return { app, login };
+  };
+
+  it('shows what the machine holds, switches it and reads it again when the window comes back', async () => {
+    const { app, login } = await started({ on: false });
+    expect(app.autostart).toBe(false);
+    await app.toggleAutostart();
+    expect(login.on).toBe(true);
+    expect(app.autostart).toBe(true);
+    expect(app.autostartFailed).toBe(false);
+    // Switched off in hub-desktop: the next read (the focus of the window) shows it.
+    login.on = false;
+    await app.readAutostart();
+    expect(app.autostart).toBe(false);
+    app.stop();
+  });
+
+  it('offers no switch where there is none, and says so when a switch fails', async () => {
+    const none = await started({ on: null });
+    expect(none.app.autostart).toBeNull();
+    await none.app.toggleAutostart();
+    expect(none.app.autostartFailed).toBe(false);
+    none.app.stop();
+    const refused = await started({ on: true, refuse: true });
+    await refused.app.toggleAutostart();
+    expect(refused.app.autostart).toBe(true);
+    expect(refused.app.autostartFailed).toBe(true);
+    refused.app.stop();
+  });
+});

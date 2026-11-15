@@ -38,6 +38,8 @@ pub struct TestingRuntime {
     pub(crate) rerun: Option<Arc<dyn crate::rerun::Rerunner>>,
     /// The steps of the release assistant (`testing ci release`), and which commit a release may name.
     pub(crate) release: Arc<crate::release::Release>,
+    /// The start of the hub with the login; `None`: the page offers no switch.
+    pub(crate) login: Option<Arc<dyn crate::loginentry::LoginEntry>>,
     /// The refresher; ended when the hub stops.
     jobs: Mutex<Vec<JoinHandle<()>>>,
     // Kept alive: the refresher ends when every sender of hints is gone.
@@ -85,6 +87,13 @@ pub struct Reading {
 }
 
 impl TestingRuntime {
+    /// The start of the hub with the login, which the page shows and switches (`autostart`).
+    #[must_use]
+    pub fn with_login(mut self, login: Option<Arc<dyn crate::loginentry::LoginEntry>>) -> Self {
+        self.login = login;
+        self
+    }
+
     /// A hub without an engine.
     #[must_use]
     pub fn new(status: HubStatus) -> Self {
@@ -193,6 +202,7 @@ impl TestingRuntime {
             launch,
             rerun,
             release,
+            login: None,
             jobs: Mutex::new(jobs),
             _hints: hints,
             _watcher: watcher,

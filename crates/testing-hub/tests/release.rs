@@ -172,6 +172,7 @@ async fn start_hub(program: Option<StepProgram>) -> Hub {
         warm: false,
         phone: None,
         rerun: None,
+        login: None,
     })
     .await
     .expect("the hub starts");

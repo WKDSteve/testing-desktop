@@ -76,6 +76,10 @@ jobs:
       # The tests of the program start the engine in a real Neovim, and compare the goldens and the page's types of
       # the contract with those of the pinned engine.
       - run: cargo test --workspace --locked
+      # The release build is a window program (no console window for the link, the login entry or a double click); a
+      # debug build stays a console program, so only a release test run proves the attribute.
+      - name: The release build is a window program
+        run: cargo test --release --locked -p testing-hub --test window_program
       # No test left a folder in the temp dir of this job (a test makes its folder with `Scratch`, which removes it
       # also after a failure). Strict: whatever name a test gave its folder counts; `nvim` and `nvim.0` are what the
       # real Neovim of the engine tests may make itself, `testing` the lock of testing.nvim's queue of heavy runs

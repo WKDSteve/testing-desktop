@@ -265,5 +265,8 @@ jobs:
       # A colour the CSS of the page states is a token of appkit-ui or of the palette of this app (the same check
       # runs in appkit).
       - run: python tools/check-color-literals.py --tokens ui/src/palette.css
+      # Every process the hub starts goes through appkit_core::child (no console window, bound to the hub, named in
+      # its log; docs/PROCESSES.md of appkit, where the same check runs). tools/process-starts.allow names exceptions.
+      - run: python tools/check-process-starts.py
       # The shell scripts of the repository (NREL-16): ShellCheck is on the runner (`scoop install shellcheck`).
       - run: shellcheck scripts/*.sh

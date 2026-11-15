@@ -21,6 +21,7 @@ python tools/check-control-chars.py
 python tools/check-color-literals.py --tokens ui/src/palette.css
 python tools/check-lock-age.py --min-days 7     # fragt crates.io; beim ersten Lauf eines frischen Worktrees Minuten
 python tools/check-appkit-pin.py
+python tools/check-process-starts.py           # jeder Prozessstart über appkit_core::child (neue Dateien vorher `git add -N`)
 cargo build --locked
 cd ui && pnpm e2e                                # echtes Binary, echte Engine, axe hell und dunkel
 cd ui && pnpm web:build && pnpm web:e2e          # testing.html auf file://, keine Anfrage, keine CSP-Verletzung

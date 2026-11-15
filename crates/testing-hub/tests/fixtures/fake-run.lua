@@ -9,7 +9,8 @@
 --   slow            waits until it is killed (writes `<root>/slow.started` first)
 --   tree            starts a process of its own that writes into `<root>/beat.txt` while it lives, then waits
 --                   until it is killed
---   orphan          leaves a process behind that holds its stdout and stderr for 25 s, and ends green
+--   orphan          leaves a process behind that holds its stdout and stderr for a minute and writes into
+--                   `<root>/orphan.txt` while it lives, and ends green
 --   <task>          exit 0 for the task `alpha.nvim/try-it`, else the refusal of the engine, exit 2; with `--tasks`
 --                   the task `alpha.nvim/other` has green sheets and is not written, `alpha.nvim/red` a red sheet
 --                   and is written (both exit 1). With `--result` the last line is the engine's document of
@@ -85,36 +86,14 @@ if argv[1] == "sheets" then
   os.exit(2)
 end
 
-assert(argv[1] == "run", "fake-run: run")
-local file = value("--file")
-if file == "red" then
-  io.stdout:write(root .. "/TESTS/red_spec.lua:3: expected 1, got 2\n")
-  io.stdout:write("RED 1 failed\n")
-  os.exit(1)
-elseif file == "orphan" then
-  -- As a child editor that outlives its run does: it inherits the pipes and keeps them for a while.
-  local handle = vim.uv.spawn(vim.v.progpath, {
-    args = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "--cmd", "lua vim.wait(25000)", "--cmd", "qa!" },
-    stdio = { nil, 1, 2 },
-    -- Not in the root: on Windows a folder in use as a working folder cannot be removed by the test.
-    cwd = vim.uv.os_tmpdir(),
-    detached = true,
-  })
-  assert(handle, "fake-run: no process to leave behind")
-  handle:unref()
-  io.stdout:write("GREEN 1 passed\n")
-  io.stdout:flush()
-  os.exit(0)
-elseif file == "tree" then
-  -- As a run whose children start processes of their own (a child editor's shell, `cargo test`): a process that goes
-  -- on writing for as long as it lives. A minute at most, so that a test that fails leaves nothing behind for long.
-  -- On Windows it is started through `cmd`: Neovim (libuv) ends its own children when it ends, but not what those
-  -- started, so only a grandchild shows whether the whole tree is ended.
+---A script that writes an `x` into the file of its first argument every tenth of a second, as often as its second
+---argument says (a minute at most, so that a test that fails leaves nothing behind for long). Its path.
+local function beat_script()
   local script = norm .. "/beat.lua"
   local b = assert(io.open(script, "w"))
   b:write(table.concat({
-    "local path = _G.arg[1]",
-    "for _ = 1, 600 do",
+    "local path, times = _G.arg[1], tonumber(_G.arg[2])",
+    "for _ = 1, math.min(times, 600) do",
     '  local f = io.open(path, "a")',
     "  if f then",
     '    f:write("x")',
@@ -125,7 +104,40 @@ elseif file == "tree" then
     "",
   }, "\n"))
   b:close()
-  local words = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "-l", script, norm .. "/beat.txt" }
+  return script
+end
+
+assert(argv[1] == "run", "fake-run: run")
+local file = value("--file")
+if file == "red" then
+  io.stdout:write(root .. "/TESTS/red_spec.lua:3: expected 1, got 2\n")
+  io.stdout:write("RED 1 failed\n")
+  os.exit(1)
+elseif file == "orphan" then
+  -- As a child editor that outlives its run does: it inherits the pipes and keeps them for a minute, writing
+  -- into `<root>/orphan.txt` while it lives. Detached: Neovim (libuv) would end it with itself otherwise.
+  local handle = vim.uv.spawn(vim.v.progpath, {
+    args = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "-l", beat_script(), norm .. "/orphan.txt", "600" },
+    stdio = { nil, 1, 2 },
+    -- Not in the root: on Windows a folder in use as a working folder cannot be removed by the test.
+    cwd = vim.uv.os_tmpdir(),
+    detached = true,
+  })
+  assert(handle, "fake-run: no process to leave behind")
+  handle:unref()
+  -- It lives before the run ends: its first beat is there.
+  vim.wait(10000, function()
+    return (vim.uv.fs_stat(norm .. "/orphan.txt") or { size = 0 }).size > 0
+  end, 20)
+  io.stdout:write("GREEN 1 passed\n")
+  io.stdout:flush()
+  os.exit(0)
+elseif file == "tree" then
+  -- As a run whose children start processes of their own (a child editor's shell, `cargo test`): a process that goes
+  -- on writing for as long as it lives. A minute at most, so that a test that fails leaves nothing behind for long.
+  -- On Windows it is started through `cmd`: Neovim (libuv) ends its own children when it ends, but not what those
+  -- started, so only a grandchild shows whether the whole tree is ended.
+  local words = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "-l", beat_script(), norm .. "/beat.txt", "600" }
   local handle
   if vim.fn.has("win32") == 1 then
     -- `/s /c "<line>"`: cmd takes the line between the outer quotes as it is.

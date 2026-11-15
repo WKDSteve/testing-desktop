@@ -1,0 +1,5 @@
+# Files that may start a process by hand (tools/check-process-starts.py, copied from appkit; docs/PROCESSES.md there).
+# <path> <count> <reason>
+#
+# None: the engine (launch, release, sheetstep) and `gh auth token` run through appkit_core::child, and a CI run is
+# started again over the REST API of GitHub, without a process.

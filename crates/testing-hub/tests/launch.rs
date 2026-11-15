@@ -623,7 +623,7 @@ async fn a_process_the_engine_leaves_behind_does_not_hold_the_run() {
         .post("run/start", &json!({ "key": KEY, "file": "orphan" }))
         .await;
     assert_eq!(r.status, 202, "{r:?}");
-    // The process it left keeps the pipes for 25 s; the run is over long before.
+    // The process it left keeps the pipes for a minute; the run is over long before.
     let start = Instant::now();
     let end = start + Duration::from_secs(15);
     let state = loop {
@@ -638,6 +638,14 @@ async fn a_process_the_engine_leaves_behind_does_not_hold_the_run() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
     assert_eq!(state["run"]["verdict"], "green", "{state}");
+    // Nor does it outlive the run: nothing the run started stays behind it. (On Unix the stand-in leaves the group of
+    // the run on purpose, `setsid`, which no group signal reaches.)
+    #[cfg(windows)]
+    {
+        let orphan = fx.root().join("orphan.txt");
+        appears(&orphan).await;
+        goes_quiet(&orphan, "a process the run left behind outlived it").await;
+    }
     // And the next run may start.
     let r = hub.post("run/start", &json!({ "key": KEY })).await;
     assert_eq!(r.status, 202, "{r:?}");

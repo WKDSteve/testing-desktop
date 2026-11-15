@@ -8,10 +8,10 @@
 
 use std::ffi::OsStr;
 use std::fmt;
-use std::path::Path;
-use std::process::Stdio;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use appkit_core::child::{self, Environment, Leftovers, Run, Start};
 use appkit_hub::HubStatus;
 
 use crate::settings::TestingSettings;
@@ -121,31 +121,50 @@ fn only_for_the_user(_meta: &std::fs::Metadata) -> Result<(), String> {
     Ok(())
 }
 
-/// One `<program> auth token`: arguments, no shell, a time limit. `None` when it gives no token, whatever the reason.
-pub async fn ask_program(program: &OsStr) -> Option<GithubToken> {
-    let mut command = tokio::process::Command::new(program);
-    command
+/// One `<program> auth token`: arguments, no shell, a time limit, a child of the hub (`appkit_core::child`: no console
+/// window, bound to the hub, named in its log). `program` is an absolute path to a file. `None` when it gives no
+/// token, whatever the reason.
+pub async fn ask_program(program: &Path) -> Option<GithubToken> {
+    // gh needs the environment of the person to find its login (`GH_CONFIG_DIR`, `APPDATA`, the keyring); it is never
+    // to ask anything.
+    let start = Start::new("testing-hub gh auth token", program)
         .args(["auth", "token"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    // CREATE_NO_WINDOW: no console window for a console program.
-    #[cfg(windows)]
-    command.creation_flags(0x0800_0000);
-    let output = tokio::time::timeout(GH_TIMEOUT, command.output())
-        .await
-        .ok()?
-        .ok()?;
-    if !output.status.success() {
+        .env(Environment::Inherited {
+            set: vec![("GH_PROMPT_DISABLED".into(), "1".into())],
+            remove: Vec::new(),
+        });
+    let output = child::run(Run {
+        start,
+        stdin: Vec::new(),
+        timeout: GH_TIMEOUT,
+        max_stdout: MAX_FILE_BYTES as usize,
+        max_stderr: 64 * 1024,
+        leftovers: Leftovers::End,
+    })
+    .await
+    .ok()?;
+    if output.code != Some(0) {
         return None;
     }
     GithubToken::parse(std::str::from_utf8(&output.stdout).ok()?)
 }
 
+/// A program of this name in a folder of `path` (the value of `PATH`) that is an absolute folder: an empty or relative
+/// entry, which some systems read as the current folder, is passed over, so a file planted in the folder the hub
+/// happens to run in is never started.
+#[must_use]
+pub fn on_path(name: &str, path: Option<&OsStr>) -> Option<PathBuf> {
+    let file = format!("{name}{}", std::env::consts::EXE_SUFFIX);
+    std::env::split_paths(path?)
+        .filter(|dir| child::local_absolute(dir))
+        .map(|dir| dir.join(&file))
+        .find(|candidate| candidate.is_file())
+}
+
 /// The token of `gh`, the way a person is logged in on this machine.
 pub async fn from_gh() -> Option<GithubToken> {
-    ask_program(OsStr::new("gh")).await
+    let gh = on_path("gh", std::env::var_os("PATH").as_deref())?;
+    ask_program(&gh).await
 }
 
 /// The token the hub holds, and what `about` says of it. `gh` is only asked when its token can be used.
@@ -281,9 +300,28 @@ mod tests {
 
     #[tokio::test]
     async fn a_program_that_is_not_there_gives_no_token() {
-        assert!(ask_program(OsStr::new("no-such-program-of-testing-hub"))
+        let dir = appkit_scratch::Scratch::new("gh-missing");
+        assert!(ask_program(&dir.join("no-such-program-of-testing-hub.exe"))
             .await
             .is_none());
+        // A name, not a path: the helper of the kit searches nothing.
+        assert!(ask_program(Path::new("gh")).await.is_none());
+    }
+
+    #[test]
+    fn gh_is_looked_for_only_in_absolute_folders_of_the_path() {
+        let dir = appkit_scratch::Scratch::new("gh-on-path");
+        let file = format!("gh{}", std::env::consts::EXE_SUFFIX);
+        std::fs::write(dir.join(&file), b"").unwrap();
+        let joined = |dirs: &[&Path]| std::env::join_paths(dirs).unwrap();
+        // Found in an absolute folder, after one that does not have it.
+        let other = appkit_scratch::Scratch::new("gh-elsewhere");
+        let path = joined(&[&other, &dir]);
+        assert_eq!(on_path("gh", Some(&path)), Some(dir.join(&file)));
+        // A relative entry is the current folder to some systems: passed over even when it has the file.
+        assert_eq!(on_path("gh", Some(&joined(&[Path::new(".")]))), None);
+        assert_eq!(on_path("gh", Some(OsStr::new(""))), None);
+        assert_eq!(on_path("gh", None), None);
     }
 
     #[tokio::test]

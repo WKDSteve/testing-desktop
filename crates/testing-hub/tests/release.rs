@@ -620,3 +620,46 @@ async fn without_an_engine_no_step_is_there_and_without_a_session_no_route() {
     assert_eq!(r.status, 401, "{r:?}");
     hub.server.shutdown().await;
 }
+
+/// A process a step leaves behind holds neither the step nor stays behind it: the step is answered as soon as the
+/// engine ended, and what it started ends with it (the stand-in keeps the stdout of the step for a minute).
+#[tokio::test]
+async fn a_process_a_step_leaves_behind_does_not_hold_the_step_and_does_not_outlive_it() {
+    let fx = Fixture::new();
+    let Some(program) = fx.program_or_skip() else {
+        return;
+    };
+    let hub = start_hub(Some(program)).await;
+    fx.mode("orphan");
+    let start = Instant::now();
+    let doc = hub.repos().await;
+    assert_eq!(doc["exit"], 0, "{doc}");
+    assert!(
+        start.elapsed() < Duration::from_secs(15),
+        "the step waited for what it left behind: {:?}",
+        start.elapsed()
+    );
+    // On Unix the stand-in leaves the group of the step on purpose (`setsid`), which no group signal reaches.
+    #[cfg(windows)]
+    {
+        let orphan = fx.dir.join("orphan.txt");
+        let size = || std::fs::metadata(&orphan).map_or(0, |m| m.len());
+        assert!(size() > 0, "the process the step left behind never ran");
+        let end = Instant::now() + Duration::from_secs(30);
+        let (mut last, mut since) = (size(), Instant::now());
+        loop {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let now = size();
+            if now != last {
+                (last, since) = (now, Instant::now());
+            } else if since.elapsed() >= Duration::from_secs(1) {
+                break;
+            }
+            assert!(
+                Instant::now() < end,
+                "a process the step left behind outlived it"
+            );
+        }
+    }
+    hub.server.shutdown().await;
+}

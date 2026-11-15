@@ -8,7 +8,8 @@
 --   ask      one step that is a question; the answer decides
 --   refused  no event, the refusal of the workstation on stderr, exit 2
 --   hang     stops before the first step and waits for its stdin to close (writes started, ended)
---   deaf     stops before the first step and never reads its stdin; writes `alive` every 100 ms
+--   deaf     stops before the first step and never reads its stdin; writes `alive` every 100 ms, and a process of a
+--            process of its own rewrites `grandchild` every 100 ms
 --   chatty   after start, one line longer than the hub takes
 --   orphan   leaves a process behind that holds its stdout and stderr, and ends
 
@@ -81,6 +82,46 @@ local function start(steps)
   emit("size", { size = SIZE, state = "open" })
 end
 
+---Start a process of a process of its own (a target's shell, a build): it rewrites `<root>/<name>` with a counter
+---every tenth of a second, for a minute at most, so that a test that fails leaves nothing behind for long. On
+---Windows through `cmd`: Neovim (libuv) ends its own children when it ends, but not what those started, so only a
+---grandchild shows whether the whole tree is ended.
+local function grandchild(name)
+  local script = root .. "/beat.lua"
+  local b = assert(io.open(script, "w"))
+  b:write(table.concat({
+    "local path = _G.arg[1]",
+    "for i = 1, 600 do",
+    '  local f = io.open(path, "w")',
+    "  if f then",
+    "    f:write(tostring(i))",
+    "    f:close()",
+    "  end",
+    "  vim.uv.sleep(100)",
+    "end",
+    "",
+  }, "\n"))
+  b:close()
+  local words = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "-l", script, root .. "/" .. name }
+  local handle
+  if vim.fn.has("win32") == 1 then
+    -- `/s /c "<line>"`: cmd takes the line between the outer quotes as it is.
+    local line = { '"' .. vim.v.progpath .. '"' }
+    for _, word in ipairs(words) do
+      line[#line + 1] = '"' .. word .. '"'
+    end
+    handle = vim.uv.spawn(vim.env.COMSPEC or "cmd.exe", {
+      args = { "/d", "/s", "/c", '"' .. table.concat(line, " ") .. '"' },
+      verbatim = true,
+      -- Not in the root: on Windows a folder in use as a working folder cannot be removed by the test.
+      cwd = vim.uv.os_tmpdir(),
+    })
+  else
+    handle = vim.uv.spawn(vim.v.progpath, { args = words, cwd = vim.uv.os_tmpdir() })
+  end
+  assert(handle, "fake-step: no process of its own")
+end
+
 if sheet == "refused" then
   io.stderr:write(
     "testing sheets: refused on the workstation (NVIM_MACHINE_ROLE=workstation): a sheet starts editors in "
@@ -103,6 +144,7 @@ elseif sheet == "hang" then
   os.exit(3)
 elseif sheet == "deaf" then
   start(STEPS)
+  grandchild("grandchild")
   touch("started")
   emit("paused", { size = SIZE, n = 1, reason = "start" })
   while true do

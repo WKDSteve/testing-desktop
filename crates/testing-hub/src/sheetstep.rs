@@ -15,7 +15,9 @@
 //!   `end`) and passed on by the event stream of the hub as they come;
 //! * a child that writes nothing holds no request: only `start` waits, for the first event or the end, and not long;
 //! * `abort` and the stop of the hub say `abort` to the child and close its stdin, so that it takes its own target
-//!   down; a child that does not end on that within a grace is killed.
+//!   down; a child that does not end on that within a grace is killed with everything it started (it is a child of
+//!   the hub through `appkit_core::child`: a job object on Windows, a process group elsewhere). A run that ends by
+//!   itself leaves nothing running either.
 //!
 //! The workstation rule and the trust of a root are the engine's own (`testing sheets step` refuses with exit 2 and
 //! the reason on stderr): a refusal before the first event is the answer of `start`.
@@ -27,11 +29,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use appkit_core::child::{self, Environment, Start};
 use appkit_hub::discovery::{engine_script, Setup};
 use appkit_hub::engine::{child_env, is_unprintable, EngineVars};
 use appkit_hub::env::Env;
 use serde_json::{json, Map, Value};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
 use crate::engine::{DIALECT, DISCOVERY};
@@ -526,35 +530,24 @@ impl SheetStep {
                 });
             }
             id = self.counter.fetch_add(1, Ordering::AcqRel) + 1;
-            let mut child = tokio::process::Command::new(&program.program);
-            child
+            // A child of the hub (appkit_core::child): no console window, bound to the hub (a job object on
+            // Windows, a process group elsewhere), named in its log. An abort ends it with everything it started.
+            let mut start = Start::as_given("testing-hub sheet step", &program.program)
                 .args(&program.args)
-                .arg("sheets")
-                .arg("step")
-                .arg(sheet)
+                .args(["sheets", "step", sheet])
                 .arg("--root")
                 .arg(root)
-                .env_clear()
-                .envs(program.env.iter().map(|(k, v)| (k, v)))
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .kill_on_drop(true);
+                .env(Environment::Only(program.env.clone()));
             if let Some(cwd) = &program.cwd {
-                child.current_dir(cwd);
+                start = start.cwd(cwd);
             }
-            #[cfg(windows)]
-            {
-                // CREATE_NO_WINDOW: no console window for a process the hub starts, as for its engine.
-                child.creation_flags(0x0800_0000);
-            }
-            let mut child = match child.spawn() {
+            let mut child = match child::spawn(&start) {
                 Ok(child) => child,
                 Err(e) => return Err(StartError::Spawn(scrub(&e.to_string(), &[root]))),
             };
-            let stdin = child.stdin.take();
-            let stdout = child.stdout.take();
-            let stderr = child.stderr.take();
+            let stdin = child.take_stdin();
+            let stdout = child.take_stdout();
+            let stderr = child.take_stderr();
             *guard = Some(Session {
                 id,
                 key: key.to_owned(),
@@ -620,10 +613,10 @@ impl SheetStep {
     fn spawn_tasks(
         self: &Arc<Self>,
         id: u64,
-        mut child: tokio::process::Child,
-        stdin: Option<tokio::process::ChildStdin>,
-        stdout: Option<tokio::process::ChildStdout>,
-        stderr: Option<tokio::process::ChildStderr>,
+        mut child: child::Owned,
+        stdin: Option<ChildStdin>,
+        stdout: Option<ChildStdout>,
+        stderr: Option<ChildStderr>,
         mut stdin_rx: mpsc::UnboundedReceiver<String>,
         kill_rx: oneshot::Receiver<()>,
     ) {
@@ -684,9 +677,11 @@ impl SheetStep {
         let me = Arc::clone(self);
         tokio::spawn(async move {
             let code = tokio::select! {
+                // Ended by itself: what it left running is ended too (`Leftovers::End` of the kit).
                 status = child.wait() => status.ok().and_then(|s| s.code()),
+                // Past the grace of an abort, or the hub stops: the child and everything it started.
                 _ = kill_rx => {
-                    let _ = child.kill().await;
+                    child.end().await;
                     None
                 }
             };
@@ -912,7 +907,8 @@ impl SheetStep {
 
     /// The hub stops: the run is ended as by `abort`, so that the child takes its own target (an editor, a browser)
     /// down with it; the grace is shorter than the hub's own, and a child that ignores it is killed. Nothing stays
-    /// behind of the hub itself: the child is killed with the hub's last task too (`kill_on_drop`).
+    /// behind of the hub itself: the child and what it started end with the hub's last task too (the job object or the
+    /// process group of `appkit_core::child`).
     pub fn stop(self: &Arc<Self>) {
         self.abort();
     }

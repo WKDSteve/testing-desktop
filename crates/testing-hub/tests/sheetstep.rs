@@ -669,18 +669,33 @@ async fn a_child_that_ignores_its_stdin_is_killed_on_abort_and_when_the_hub_stop
     let hub = start_hub(&fx, Some(program)).await;
     let r = hub.start("deaf").await;
     assert_eq!(r.status, 200, "{r:?}");
+    appears(&fx.left("grandchild")).await;
     hub.command(json!({ "command": "abort" })).await;
     heartbeat_stops(&fx.left("alive")).await;
+    // Not only the child: what it started is gone too.
+    goes_quiet(
+        &fx.left("grandchild"),
+        "a process of the child outlived the abort",
+    )
+    .await;
     let state = hub.ended().await;
     // No `end` of the child: the hub's own note says it went.
     assert_eq!(events(&state).last().map(String::as_str), Some("exit"));
 
-    std::fs::remove_file(fx.left("alive")).unwrap();
+    for name in ["alive", "grandchild"] {
+        std::fs::remove_file(fx.left(name)).unwrap();
+    }
     let r = hub.start("deaf").await;
     assert_eq!(r.status, 200, "{r:?}");
     appears(&fx.left("alive")).await;
+    appears(&fx.left("grandchild")).await;
     hub.server.shutdown().await;
     goes_quiet(&fx.left("alive"), "the child outlived the hub").await;
+    goes_quiet(
+        &fx.left("grandchild"),
+        "a process of the child outlived the hub",
+    )
+    .await;
 }
 
 #[tokio::test]

@@ -11,6 +11,8 @@
 --   wait        the step's document, once `$FAKE_RELEASE_DIR/go` is there
 --   moved       `show` answers for another commit than the one asked (the id named something else)
 --   rerun-red   the release is recorded, a re-run fails: exit 3 with the document
+--   orphan      the step's document, after it left a process behind that holds its stdout for a minute and writes into
+--               `orphan.txt` while it lives
 
 -- luacheck: globals vim
 
@@ -46,6 +48,36 @@ assert(argv[#argv] == "--json", "fake-release: --json comes last")
 if mode == "old" then
   io.stderr:write("testing ci: unknown argument release\n")
   os.exit(2)
+end
+if mode == "orphan" then
+  -- A process the step leaves behind (a credential helper, an editor of git): it inherits the stdout of the step
+  -- and keeps it for a minute, writing into `orphan.txt` while it lives. Detached: Neovim (libuv) would end it with
+  -- itself otherwise.
+  local script = dir .. "/beat.lua"
+  local b = assert(io.open(script, "w"))
+  b:write(table.concat({
+    "for _ = 1, 600 do",
+    '  local f = io.open(_G.arg[1], "a")',
+    "  if f then",
+    '    f:write("x")',
+    "    f:close()",
+    "  end",
+    "  vim.uv.sleep(100)",
+    "end",
+    "",
+  }, "\n"))
+  b:close()
+  local handle = vim.uv.spawn(vim.v.progpath, {
+    args = { "--headless", "-u", "NONE", "-i", "NONE", "-n", "-l", script, dir .. "/orphan.txt" },
+    stdio = { nil, 1, nil },
+    cwd = vim.uv.os_tmpdir(),
+    detached = true,
+  })
+  assert(handle, "fake-release: no process to leave behind")
+  handle:unref()
+  vim.wait(10000, function()
+    return (vim.uv.fs_stat(dir .. "/orphan.txt") or { size = 0 }).size > 0
+  end, 20)
 end
 if mode == "wait" then
   while not vim.uv.fs_stat(dir .. "/go") do

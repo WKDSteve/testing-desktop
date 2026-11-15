@@ -24,8 +24,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use appkit_core::child::{self, Environment, Leftovers, ProcError, Run, Start};
 use serde_json::Value;
-use tokio::io::AsyncReadExt;
 
 use crate::rerun::plain_repo;
 use crate::sheetstep::{hide_root, StepProgram};
@@ -45,6 +45,9 @@ pub const SHOWN_FOR: Duration = Duration::from_secs(15 * 60);
 
 /// The largest document of a step: a review aid lists at most 300 files and 250 commits.
 const MAX_OUTPUT: usize = 4 * 1024 * 1024;
+
+/// The most a step may write on stderr, which nobody reads (a release that starts many runs again says each).
+const MAX_STDERR: usize = 4 * 1024 * 1024;
 
 /// The variables of the person's environment the steps read beyond what a stepped run gets: where the list of
 /// reviewed commits is kept (the runner guard reads the same), and where `gh` keeps its login.
@@ -392,50 +395,36 @@ impl Release {
         let Some(program) = &self.program else {
             return Err(StepError::Unavailable);
         };
-        let mut command = tokio::process::Command::new(&program.program);
-        command
+        // A child of the hub (appkit_core::child): no console window, bound to the hub, named in its log, its stdin
+        // closed. A step whose time is up ends with everything it started, and so does one that writes more than a
+        // document; what a step that ended by itself left running is ended too, and never holds the step.
+        let env = program.env.iter().chain(&self.extra).cloned().collect();
+        let start = Start::as_given("testing-hub release step", &program.program)
             .args(&program.args)
             .args(step.args())
-            .env_clear()
-            .envs(program.env.iter().map(|(k, v)| (k, v)))
-            .envs(self.extra.iter().map(|(k, v)| (k, v)))
-            .current_dir(&self.cwd)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .kill_on_drop(true);
-        #[cfg(windows)]
-        {
-            // CREATE_NO_WINDOW: no console window for a process the hub starts, as for its engine.
-            command.creation_flags(0x0800_0000);
-        }
-        let mut child = command
-            .spawn()
-            .map_err(|e| StepError::Spawn(e.to_string()))?;
-        let Some(stdout) = child.stdout.take() else {
-            return Err(StepError::Protocol("the child has no output"));
-        };
-        let read = async {
-            let mut out = Vec::new();
-            stdout
-                .take(MAX_OUTPUT as u64 + 1)
-                .read_to_end(&mut out)
-                .await
-                .map_err(|_| StepError::Protocol("the output could not be read"))?;
-            // More than a document: the child is not waited for (it is ended when it is dropped).
-            if out.len() > MAX_OUTPUT {
-                return Ok(out);
+            .env(Environment::Only(env))
+            .cwd(&self.cwd);
+        let out = child::run(Run {
+            start,
+            stdin: Vec::new(),
+            timeout: step.limit(),
+            max_stdout: MAX_OUTPUT,
+            max_stderr: MAX_STDERR,
+            leftovers: Leftovers::End,
+        })
+        .await
+        .map_err(|error| match error {
+            ProcError::Spawn(e) => StepError::Spawn(e.to_string()),
+            ProcError::Timeout(_) => StepError::Timeout,
+            ProcError::TooLarge {
+                stream: "stdout", ..
+            } => StepError::Protocol("the document is too large"),
+            ProcError::TooLarge { .. } => {
+                StepError::Protocol("the engine wrote too much on stderr")
             }
-            child
-                .wait()
-                .await
-                .map_err(|_| StepError::Protocol("the child did not end"))?;
-            Ok::<_, StepError>(out)
-        };
-        // Too slow: the child is ended when it is dropped (`kill_on_drop`).
-        let out = tokio::time::timeout(step.limit(), read)
-            .await
-            .map_err(|_| StepError::Timeout)??;
+            ProcError::Io(_) => StepError::Protocol("the output could not be read"),
+        })?
+        .stdout;
         self.document(step, &out)
     }
 

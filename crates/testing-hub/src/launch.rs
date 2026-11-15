@@ -26,10 +26,12 @@
 //!   the engine reads a sheet that does not load) and starts a task's run only when there is one;
 //! * what the child writes is kept as a short tail, with the root taken out, for the PC only;
 //! * the run ends with the hub, after [`RUN_LIMIT`], and when the page aborts it (`run/abort`); then everything it
-//!   started ends with it ([`Tree`]: its child editors are not left running). `testing run` has no gentle end to ask
-//!   for (its input is closed, it reads no command), so the tree is ended at once; the engine takes over the lock of
-//!   a heavy run whose process is gone. A process a run that ended by itself left behind does not hold it, and is
-//!   left alone.
+//!   started ends with it (the engine is a child of the hub through `appkit_core::child`: a job object on Windows,
+//!   its own process group elsewhere, ended with `killpg`; its child editors are not left running). `testing run` has
+//!   no gentle end to ask for (its input is closed, it reads no command), so the tree is ended at once; the engine
+//!   takes over the lock of a heavy run whose process is gone;
+//! * a run that ends by itself leaves nothing behind either: what it left running is ended with it, and does not
+//!   hold the run.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -37,6 +39,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use appkit_core::child::{self, Environment, Start};
 use serde_json::{json, Value};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::oneshot;
@@ -60,8 +63,8 @@ pub const RUN_LIMIT: Duration = Duration::from_secs(5 * 60 * 60);
 /// How much of the child's output is kept: the end of it, where the verdict stands.
 const TAIL_BYTES: usize = 16 * 1024;
 
-/// How long the last lines of a run that ended are read. A process it left behind may hold its stdout and stderr for as
-/// long as it lives; that does not hold the run.
+/// How long the last lines of a run that ended are read. What it left behind is ended with it, so the pipes close at
+/// once; this is the bound should one not (a process that left the job or the group on purpose).
 const DRAIN: Duration = Duration::from_secs(2);
 
 /// What runs.
@@ -287,49 +290,6 @@ pub fn block_of(result: Option<&Value>, task: &str) -> Option<Value> {
     Some(json!({ "written": written, "outcome": outcome }))
 }
 
-/// Everything a run started, to end it whole: on Windows a job object the engine is put into right after its start
-/// (a process it starts in that first moment is not in it), elsewhere the process group the engine leads.
-struct Tree {
-    job: Option<appkit_core::job::Job>,
-    #[cfg(unix)]
-    group: Option<u32>,
-}
-
-impl Tree {
-    fn of(child: &tokio::process::Child) -> Self {
-        Self {
-            job: appkit_core::job::Job::adopt(child),
-            #[cfg(unix)]
-            group: child.id(),
-        }
-    }
-
-    /// The run ended by itself: what it left behind on purpose is not the hub's to end.
-    fn release(self) {
-        if let Some(job) = self.job {
-            job.release();
-        }
-    }
-
-    /// End the engine and every process it started.
-    async fn end(self, child: &mut tokio::process::Child) {
-        // Windows: closing the job ends every process in it, the engine among them.
-        #[cfg(windows)]
-        drop(self.job);
-        #[cfg(unix)]
-        if let Some(group) = self.group {
-            let _ = tokio::process::Command::new("/bin/kill")
-                .args(["-KILL", "--", &format!("-{group}")])
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await;
-        }
-        let _ = child.kill().await;
-    }
-}
-
 /// Why a run was not started.
 #[derive(Debug)]
 pub enum StartError {
@@ -481,36 +441,21 @@ impl Launch {
                 key: r.key.clone(),
             });
         }
-        let mut command = tokio::process::Command::new(&program.program);
-        command
+        // A child of the hub (appkit_core::child): no console window, bound to the hub (a job object on Windows, a
+        // process group elsewhere, ended with killpg), named in its log. Its stdin is closed at once.
+        let start = Start::as_given("testing-hub run", &program.program)
             .args(&program.args)
             .args(what.args(root, self.state_dir.as_deref(), self.tasks_vault.as_deref()))
-            .env_clear()
-            .envs(program.env.iter().map(|(k, v)| (k, v)))
+            .env(Environment::Only(program.env.clone()))
             // A run of the command line starts in the root, as `scripts/test.sh` does.
-            .current_dir(root)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
-        #[cfg(windows)]
-        {
-            // CREATE_NO_WINDOW: no console window for a process the hub starts, as for its engine.
-            command.creation_flags(0x0800_0000);
-        }
-        #[cfg(unix)]
-        {
-            // A process group of its own, so that an abort ends the engine and what it started, and nothing else.
-            command.process_group(0);
-        }
-        let mut child = command
-            .spawn()
-            .map_err(|e| StartError::Spawn(scrub(&e.to_string(), &[root])))?;
+            .cwd(root);
+        let mut child =
+            child::spawn(&start).map_err(|e| StartError::Spawn(scrub(&e.to_string(), &[root])))?;
+        drop(child.take_stdin());
         let id = self.counter.fetch_add(1, Ordering::AcqRel) + 1;
-        let tree = Tree::of(&child);
         let (kill_tx, kill_rx) = oneshot::channel();
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
+        let stdout = child.take_stdout();
+        let stderr = child.take_stderr();
         *guard = Some(Run {
             id,
             key: key.to_owned(),
@@ -530,23 +475,21 @@ impl Launch {
             let mut read_err = tokio::spawn(Arc::clone(&this).read_into(id, stderr));
             let code = async {
                 tokio::select! {
-                    status = child.wait() => {
-                        tree.release();
-                        status.ok().and_then(|s| s.code())
-                    }
+                    // Ended by itself: what it left running is ended too (`Leftovers::End` of the kit).
+                    status = child.wait() => status.ok().and_then(|s| s.code()),
                     _ = kill_rx => {
-                        tree.end(&mut child).await;
+                        child.end().await;
                         None
                     }
                     () = tokio::time::sleep(RUN_LIMIT) => {
-                        tree.end(&mut child).await;
+                        child.end().await;
                         None
                     }
                 }
             }
             .await;
-            // The last lines, for a short while: a process the run left behind (a child editor that did not go down)
-            // may hold the pipes for as long as it lives, and it does not hold the run.
+            // The last lines, for a short while: should a process of the run have escaped its end, it holds the pipes
+            // for as long as it lives, and it does not hold the run.
             let _ = tokio::time::timeout(DRAIN, async {
                 let _ = (&mut read_out).await;
                 let _ = (&mut read_err).await;

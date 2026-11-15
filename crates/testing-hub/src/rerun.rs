@@ -81,6 +81,8 @@ impl ApiRerun {
     /// The HTTP client could not be built (no TLS).
     pub fn new(api: &str, token: GithubToken) -> Result<Self, String> {
         let client = reqwest::Client::builder()
+            // rustls with the Mozilla roots, as appkit's push-net: no TLS of the system.
+            .use_rustls_tls()
             .timeout(API_TIMEOUT)
             // An answer that sends the request elsewhere is not followed: the token goes to GitHub only.
             .redirect(reqwest::redirect::Policy::none())
@@ -325,6 +327,12 @@ mod tests {
         ] {
             assert!(request.contains(&header), "{header}");
         }
+    }
+
+    #[test]
+    fn the_client_for_github_itself_can_be_built() {
+        // TLS is there: without it the hub would start with no rerun and only a note.
+        assert!(ApiRerun::new(GITHUB_API, GithubToken::parse(TOKEN).unwrap()).is_ok());
     }
 
     #[tokio::test]

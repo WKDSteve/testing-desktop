@@ -25,6 +25,9 @@ path = "src/main.rs"
 appkit-core.workspace = true
 # push-net: the hub sends Web Push to phones (testing mobil).
 appkit-hub = { workspace = true, features = ["push-net"] }
+# A red CI run is started again over GitHub's REST API (src/rerun.rs): the client of appkit's push-net, same version
+# and features, so nothing new is built.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

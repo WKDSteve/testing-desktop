@@ -1560,6 +1560,7 @@ dependencies = [
  "appkit-testkit",
  "axum",
  "p256",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",

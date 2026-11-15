@@ -364,14 +364,17 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         eprintln!("note: no GitHub token (github_token_file, or `gh auth login`): the CI columns say not asked");
     }
     origins.ci = ci;
-    // A red run is started again with gh, with the token the hub reads GitHub with (its own login otherwise).
-    let rerun: Option<Arc<dyn crate::rerun::Rerunner>> = matches!(ci, CiState::File | CiState::Gh)
-        .then(|| {
-            Arc::new(crate::rerun::GhRerun {
-                program: "gh".into(),
-                token: github_token.clone(),
-            }) as Arc<dyn crate::rerun::Rerunner>
-        });
+    // A red run is started again over GitHub's REST API, with the token the hub reads GitHub with: no process.
+    let rerun: Option<Arc<dyn crate::rerun::Rerunner>> = match &github_token {
+        Some(token) => match crate::rerun::ApiRerun::new(crate::rerun::GITHUB_API, token.clone()) {
+            Ok(rerun) => Some(Arc::new(rerun)),
+            Err(why) => {
+                eprintln!("note: a red CI run cannot be started again from here: {why}");
+                None
+            }
+        },
+        None => None,
+    };
     let ask = Ask {
         github_token,
         ..ask

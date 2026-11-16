@@ -27,6 +27,22 @@ async function watch(page: Page): Promise<{ errors: string[]; foreign: string[] 
   return { errors, foreign };
 }
 
+/**
+ * The real key of alpha.nvim, asked of the hub with the test's own session. Not taken from a response of the page it
+ * watches: a read of the fleet that the page aborts, or answers from what it holds, never comes, and a stand-in that
+ * waits for it held the page's read of the run, and with it the opening of the repository, until the test timed out.
+ */
+async function alphaKey(page: Page): Promise<string> {
+  const r = await page.request.get(`${origin()}/api/testing/fleet`, {
+    headers: { Authorization: `Bearer ${state().token}` },
+  });
+  expect(r.status()).toBe(200);
+  const doc = (await r.json()) as { repos: { name: string; key: string }[] };
+  const key = doc.repos.find((repo) => repo.name === 'alpha.nvim')?.key;
+  expect(key).toBeTruthy();
+  return key ?? '';
+}
+
 test('the spec files of a repository run through the engine from the page, to their verdict', async ({ page }) => {
   const seen = await watch(page);
   await page.addInitScript((t) => sessionStorage.setItem('testing-desktop.session', t), state().token);
@@ -61,12 +77,8 @@ test('the spec files of a repository run through the engine from the page, to th
 test("a run of a task's sheets says under its verdict what became of the task's block", async ({ page }, testInfo) => {
   const seen = await watch(page);
   // The run is the phone's to start (tasks mobil), so its state is stood in here: green sheets, and a task that
-  // testing.nvim could not write. The key is the real one of alpha.nvim, taken from the fleet the page reads.
-  const fleet = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/testing/fleet' && r.status() === 200);
-  const key = fleet.then(async (r) => {
-    const doc = (await r.json()) as { repos: { name: string; key: string }[] };
-    return doc.repos.find((repo) => repo.name === 'alpha.nvim')?.key ?? '';
-  });
+  // testing.nvim could not write. The key is the real one of alpha.nvim, asked of the hub by the test itself.
+  const key = alphaKey(page);
   await page.route('**/api/testing/run', async (route) => {
     await route.fulfill({
       json: {
@@ -113,11 +125,7 @@ test(`a run under way can be aborted from the page, and then reads as stopped ($
   // What the hub does with an abort (the run and every process it started end) is its own test, against a stand-in
   // that starts a process (crates/testing-hub/tests/launch.rs). Here the hub's state is stood in, so that the run is
   // under way for as long as the page needs: the real suite of the fixture ends within a second.
-  const fleet = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/testing/fleet' && r.status() === 200);
-  const key = fleet.then(async (r) => {
-    const doc = (await r.json()) as { repos: { name: string; key: string }[] };
-    return doc.repos.find((repo) => repo.name === 'alpha.nvim')?.key ?? '';
-  });
+  const key = alphaKey(page);
   let running = true;
   const aborts: string[] = [];
   const stateOf = async () => ({

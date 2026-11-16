@@ -14,7 +14,9 @@
 --   <task>          exit 0 for the task `alpha.nvim/try-it`, else the refusal of the engine, exit 2; with `--tasks`
 --                   the task `alpha.nvim/other` has green sheets and is not written, `alpha.nvim/red` a red sheet
 --                   and is written (both exit 1). With `--result` the last line is the engine's document of
---                   the run (`testing-sheet-run/1`), as the real command prints it
+--                   the run (`testing-sheet-run/1`), as the real command prints it. `alpha.nvim/noisy`, `huge` and
+--                   `giant` (with `--result`): green sheets, a task not written, and a document that is split by a
+--                   line on stderr, larger than the kept output, or larger than any document the hub reads
 
 -- luacheck: globals vim
 
@@ -81,6 +83,34 @@ if argv[1] == "sheets" then
   if vault and task == "alpha.nvim/red" then
     -- The other exit 1: a red sheet, and the task says so.
     done(1, "red", "fail", "changed")
+  end
+  if wants_result and (task == "alpha.nvim/noisy" or task == "alpha.nvim/huge" or task == "alpha.nvim/giant") then
+    -- Green sheets and a task not written (exit 1), with a document the hub must read whole or not at all. `noisy`:
+    -- the engine writes on stderr while its document is half out. `huge`: a document larger than the end of the
+    -- output the hub keeps for the page (a long message). `giant`: one larger than any document the hub reads.
+    local filler = ({ noisy = 0, huge = 40 * 1024, giant = 2 * 1024 * 1024 })[task:match("/(.*)")]
+    io.stdout:write("sheet " .. task:match("/(.*)") .. ": pass\n")
+    local doc = vim.json.encode({
+      schema = "testing-sheet-run/1",
+      exit = 1,
+      task = task,
+      sheets = { { id = task:match("/(.*)"), status = "pass" } },
+      red = false,
+      tasks = { { id = task, outcome = "failed", message = "DOCPART" .. ("y"):rep(filler) } },
+      written = false,
+    }) .. "\n"
+    local half = math.floor(#doc / 2)
+    io.stdout:write(doc:sub(1, half))
+    io.stdout:flush()
+    if task == "alpha.nvim/noisy" then
+      vim.uv.sleep(200)
+      io.stderr:write("warning: the engine says something on stderr\n")
+      io.stderr:flush()
+      vim.uv.sleep(200)
+    end
+    io.stdout:write(doc:sub(half + 1))
+    io.stdout:flush()
+    os.exit(1)
   end
   io.stderr:write("testing sheets run: no sheet names the task\n")
   os.exit(2)

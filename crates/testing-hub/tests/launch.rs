@@ -50,11 +50,13 @@ impl Fixture {
             "return {\n  task = \"alpha.nvim/other\",\n}\n",
         )
         .unwrap();
-        std::fs::write(
-            sheets.join("red.sheet.lua"),
-            "return {\n  task = \"alpha.nvim/red\",\n}\n",
-        )
-        .unwrap();
+        for name in ["red", "noisy", "huge", "giant"] {
+            std::fs::write(
+                sheets.join(format!("{name}.sheet.lua")),
+                format!("return {{\n  task = \"alpha.nvim/{name}\",\n}}\n"),
+            )
+            .unwrap();
+        }
         Self { dir }
     }
 
@@ -500,6 +502,51 @@ async fn with_a_vault_the_sheets_of_a_task_write_into_it_and_no_other_run_does()
         "{:?}",
         fx.argv()
     );
+}
+
+#[tokio::test]
+async fn the_document_of_a_run_of_sheets_is_read_whole_from_stdout_or_not_at_all() {
+    let Some(program) = program_or_skip() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let hub = start_hub(&fx, Some(program)).await;
+    // A line on stderr while the document is half out, and a document larger than the output kept for the page: the
+    // document is still read, and none of it is in the output.
+    for task in ["alpha.nvim/noisy", "alpha.nvim/huge"] {
+        let r = hub.post("run/task", &json!({ "task": task })).await;
+        assert_eq!(r.status, 202, "{task}: {r:?}");
+        let state = hub.ended().await;
+        assert_eq!(state["run"]["exit"], 1, "{task}: {state}");
+        assert_eq!(state["run"]["verdict"], "not_written", "{task}: {state}");
+        assert_eq!(
+            state["run"]["block"],
+            json!({ "written": false, "outcome": "failed" }),
+            "{task}"
+        );
+        let output = state["run"]["output"].as_str().unwrap();
+        assert!(!output.contains("DOCPART"), "{task}: {output}");
+        assert!(!output.contains("yyyy"), "{task}: {output}");
+        assert!(!output.contains("\"sheets\""), "{task}: {output}");
+        assert!(output.contains(": pass"), "{task}: {output}");
+        if task.ends_with("noisy") {
+            assert!(
+                output.contains("warning: the engine says something on stderr"),
+                "{output}"
+            );
+        }
+    }
+    // A document larger than any the hub reads: none, the verdict of the exit code, and still none of it shown.
+    let r = hub
+        .post("run/task", &json!({ "task": "alpha.nvim/giant" }))
+        .await;
+    assert_eq!(r.status, 202, "{r:?}");
+    let state = hub.ended().await;
+    assert_eq!(state["run"]["verdict"], "red", "{state}");
+    assert_eq!(state["run"]["block"], Value::Null);
+    let output = state["run"]["output"].as_str().unwrap();
+    assert!(!output.contains("yyyy"), "{output}");
+    assert!(!output.contains("DOCPART"), "{output}");
 }
 
 /// Wait until `file` is there and has something in it.

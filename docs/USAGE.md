@@ -162,7 +162,8 @@ ended.
   project is found beside the vault (`<vault>/../<area>`): the hub does not pass `REPOS_DIR` on (decided
   2026-11-14: the variable changes what the engine and the child editors find in every run of the hub).
 - The hub starts the sheets of a task with `--result` and reads testing.nvim's own document of the run
-  (`testing-sheet-run/1`, its last line; it is not part of the output the page shows). `block` of the state says
+  (`testing-sheet-run/1`, its last line on stdout, read apart from stderr and whole, up to 1 MiB; it is not part
+  of the output the page shows, and a larger or cut-off one is dropped whole and read as none). `block` of the state says
   what became of the task: `written` and testing.nvim's word (`changed`, `unchanged`; `failed` for a conflict or a
   refusal, `missing` when the task is not open, `truncated`; `unreachable` when tasks.nvim did not answer).
   `sheets_red` says whether a sheet is red. `block` is `null` when nothing was to be written (no vault) or the run

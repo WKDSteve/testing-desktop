@@ -63,6 +63,75 @@ pub const RUN_LIMIT: Duration = Duration::from_secs(5 * 60 * 60);
 /// How much of the child's output is kept: the end of it, where the verdict stands.
 const TAIL_BYTES: usize = 16 * 1024;
 
+/// The largest document of a run of sheets the hub reads: one line of the engine's stdout. A larger one is read as
+/// none and dropped whole, never shown.
+pub const MAX_DOCUMENT_BYTES: usize = 1024 * 1024;
+
+/// The engine's stdout in a run of a task's sheets, line by line, kept apart from stderr: a line that begins with `{`
+/// may be the engine's document ([`SHEET_RUN_SCHEMA`]) and is held until it is whole, then read; it never goes into
+/// the output for the page. Every other line goes on as it comes.
+#[derive(Debug, Default)]
+struct Document {
+    /// The line held so far.
+    line: Vec<u8>,
+    /// The line under way is held (it began with `{`).
+    holding: bool,
+    /// The line under way grew past [`MAX_DOCUMENT_BYTES`]: it is dropped.
+    overflow: bool,
+    /// Something of the line under way has come: the first byte decided whether it is held.
+    begun: bool,
+    /// The last document of the run read whole.
+    doc: Option<Value>,
+}
+
+impl Document {
+    /// Take a piece of stdout: whole lines that are not held go to `out`.
+    fn feed(&mut self, bytes: &[u8], out: &mut Vec<u8>) {
+        for piece in bytes.split_inclusive(|b| *b == b'\n') {
+            if !self.begun {
+                self.begun = true;
+                self.holding = piece[0] == b'{';
+            }
+            let whole = piece.ends_with(b"\n");
+            if self.holding {
+                if !self.overflow {
+                    self.line.extend_from_slice(piece);
+                    if self.line.len() > MAX_DOCUMENT_BYTES {
+                        self.overflow = true;
+                        self.line = Vec::new();
+                    }
+                }
+                if whole {
+                    self.finish(out, true);
+                }
+            } else {
+                out.extend_from_slice(piece);
+                if whole {
+                    self.begun = false;
+                }
+            }
+        }
+    }
+
+    /// The line under way is over: `whole` at its newline, else at the end of stdout. A held line is read as the
+    /// document, or goes on as text when it is none (other JSON the engine printed); a held line that stdout cut off
+    /// (the run ended in the middle of it) may be the start of a document and is dropped, and so is one that grew too
+    /// long.
+    fn finish(&mut self, out: &mut Vec<u8>, whole: bool) {
+        if self.holding && !self.overflow {
+            match sheet_result(&String::from_utf8_lossy(&self.line)) {
+                Some(doc) => self.doc = Some(doc),
+                None if whole => out.extend_from_slice(&self.line),
+                None => {}
+            }
+        }
+        *self = Self {
+            doc: self.doc.take(),
+            ..Self::default()
+        };
+    }
+}
+
 /// How long the last lines of a run that ended are read. What it left behind is ended with it, so the pipes close at
 /// once; this is the bound should one not (a process that left the job or the group on purpose).
 const DRAIN: Duration = Duration::from_secs(2);
@@ -313,6 +382,8 @@ struct Run {
     started: u64,
     ended: Option<u64>,
     output: Vec<u8>,
+    /// The engine's stdout of a run of a task's sheets, with its document.
+    document: Document,
     kill: Option<oneshot::Sender<()>>,
 }
 
@@ -370,7 +441,7 @@ impl Launch {
         let run = guard.as_ref().map(|r| {
             // What the engine said of a task's sheets, once they ended.
             let result = match &r.what {
-                What::Task(_) if !r.running => sheet_result(&String::from_utf8_lossy(&r.output)),
+                What::Task(_) if !r.running => r.document.doc.clone(),
                 _ => None,
             };
             let mut v = json!({
@@ -466,13 +537,14 @@ impl Launch {
             started: now(),
             ended: None,
             output: Vec::new(),
+            document: Document::default(),
             kill: Some(kill_tx),
         });
         drop(guard);
         let this = Arc::clone(self);
         tokio::spawn(async move {
-            let mut read_out = tokio::spawn(Arc::clone(&this).read_into(id, stdout));
-            let mut read_err = tokio::spawn(Arc::clone(&this).read_into(id, stderr));
+            let mut read_out = tokio::spawn(Arc::clone(&this).read_into(id, stdout, true));
+            let mut read_err = tokio::spawn(Arc::clone(&this).read_into(id, stderr, false));
             let code = async {
                 tokio::select! {
                     // Ended by itself: what it left running is ended too (`Leftovers::End` of the kit).
@@ -514,22 +586,39 @@ impl Launch {
         Ok(self.state())
     }
 
-    /// Read a stream of the child into the tail of run `id` until it ends.
-    async fn read_into<R: AsyncRead + Unpin>(self: Arc<Self>, id: u64, stream: Option<R>) {
+    /// Read a stream of the child into the tail of run `id` until it ends. The stdout of a run of a task's sheets goes
+    /// through its [`Document`] first: the engine's document comes whole on stdout, whatever stderr does meanwhile.
+    async fn read_into<R: AsyncRead + Unpin>(
+        self: Arc<Self>,
+        id: u64,
+        stream: Option<R>,
+        stdout: bool,
+    ) {
         let Some(mut stream) = stream else {
             return;
         };
         let mut buf = vec![0u8; 8192];
         loop {
-            let n = match stream.read(&mut buf).await {
-                Ok(0) | Err(_) => return,
-                Ok(n) => n,
-            };
+            let read = stream.read(&mut buf).await;
             let mut guard = self.lock();
             let Some(r) = guard.as_mut().filter(|r| r.id == id) else {
                 return;
             };
-            r.output.extend_from_slice(&buf[..n]);
+            let sheets = stdout && matches!(r.what, What::Task(_));
+            let n = match read {
+                Ok(0) | Err(_) => {
+                    if sheets {
+                        r.document.finish(&mut r.output, false);
+                    }
+                    return;
+                }
+                Ok(n) => n,
+            };
+            if sheets {
+                r.document.feed(&buf[..n], &mut r.output);
+            } else {
+                r.output.extend_from_slice(&buf[..n]);
+            }
             if r.output.len() > TAIL_BYTES {
                 let cut = r.output.len() - TAIL_BYTES;
                 r.output.drain(..cut);
@@ -768,6 +857,7 @@ mod tests {
             started: 1,
             ended: None,
             output: Vec::new(),
+            document: Document::default(),
             kill: Some(kill),
         });
         assert!(launch.abort());
@@ -792,6 +882,56 @@ mod tests {
         json!({ "schema": SHEET_RUN_SCHEMA, "exit": 1, "task": "a/b", "sheets": [], "red": red,
                 "tasks": tasks, "written": written })
         .to_string()
+    }
+
+    #[test]
+    fn stdout_holds_the_document_until_it_is_whole_and_never_shows_it() {
+        let line = format!(
+            "{{\"schema\":\"{SHEET_RUN_SCHEMA}\",\"red\":false,\"written\":true,\"tasks\":[]}}\r\n"
+        );
+        let text = format!("sheet a: pass\n{line}{{\"other\":1}}\nlast");
+        // In pieces of every size, split anywhere: the same lines, the same document.
+        for size in [1, 2, 7, 64, text.len()] {
+            let mut doc = Document::default();
+            let mut out = Vec::new();
+            for piece in text.as_bytes().chunks(size) {
+                doc.feed(piece, &mut out);
+            }
+            doc.finish(&mut out, false);
+            assert_eq!(
+                String::from_utf8(out).unwrap(),
+                "sheet a: pass\n{\"other\":1}\nlast",
+                "{size}"
+            );
+            assert_eq!(doc.doc.as_ref().unwrap()["written"], true, "{size}");
+        }
+        // A document that is cut off at the end of stdout is none, and is not shown either.
+        let mut doc = Document::default();
+        let mut out = Vec::new();
+        doc.feed(
+            b"text
+", &mut out,
+        );
+        doc.feed(&line.as_bytes()[..20], &mut out);
+        doc.finish(&mut out, false);
+        assert!(doc.doc.is_none());
+        assert_eq!(
+            out,
+            b"text
+"
+        );
+        // One too large is dropped whole: no document, nothing of it in the output.
+        let big = format!(
+            "{{\"schema\":\"{SHEET_RUN_SCHEMA}\",\"m\":\"{}\"}}\nafter\n",
+            "y".repeat(MAX_DOCUMENT_BYTES)
+        );
+        let mut doc = Document::default();
+        let mut out = Vec::new();
+        for piece in big.as_bytes().chunks(8192) {
+            doc.feed(piece, &mut out);
+        }
+        assert!(doc.doc.is_none());
+        assert_eq!(out, b"after\n");
     }
 
     #[test]
@@ -894,6 +1034,7 @@ mod tests {
                 started: 1,
                 ended: Some(2),
                 output: b"/repos/alpha.nvim/TESTS/x_spec.lua:3: red".to_vec(),
+                document: Document::default(),
                 kill: None,
             });
         };
@@ -924,7 +1065,14 @@ mod tests {
         let doc = json!({ "schema": SHEET_RUN_SCHEMA, "exit": 1, "task": "alpha.nvim/try", "red": false,
             "sheets": [{ "id": "try", "status": "pass" }], "written": false,
             "tasks": [{ "id": "alpha.nvim/try", "outcome": "failed", "message": "conflict: /vault/x.md" }] });
-        launch.lock().as_mut().unwrap().output = format!("{person}{doc}\n").into_bytes();
+        {
+            let mut guard = launch.lock();
+            let run = guard.as_mut().unwrap();
+            let mut out = Vec::new();
+            run.document
+                .feed(format!("{person}{doc}\n").as_bytes(), &mut out);
+            run.output = out;
+        }
         let device = launch.state_for_device();
         assert_eq!(device["run"]["verdict"], "not_written", "{device}");
         assert_eq!(

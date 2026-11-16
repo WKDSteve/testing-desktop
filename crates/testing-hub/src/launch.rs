@@ -430,6 +430,12 @@ impl Launch {
         self.program.is_some()
     }
 
+    /// Is a run under way?
+    #[must_use]
+    pub fn running(&self) -> bool {
+        self.lock().as_ref().is_some_and(|r| r.running)
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, Option<Run>> {
         self.run.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -860,11 +866,13 @@ mod tests {
             document: Document::default(),
             kill: Some(kill),
         });
+        assert!(launch.running());
         assert!(launch.abort());
         assert!(killed.try_recv().is_ok(), "the run was told to end");
         // Asked again before the run has ended: still under way, nothing more to tell.
         assert!(launch.abort());
         launch.lock().as_mut().unwrap().running = false;
+        assert!(!launch.running());
         assert!(!launch.abort(), "a run that ended");
     }
 

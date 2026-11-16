@@ -136,6 +136,60 @@ async fn wait_for_stop() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
+/// Wait until the hub is to end: Ctrl-C (or SIGTERM), `testing-hub stop`, or, for a hub in the background, being
+/// left alone. Such a hub has no window to close: it ends itself once no page has been connected for a while, unless
+/// the person gave it an order to stay (`keep_running`, a paired phone, the start with the login) or a run through
+/// the engine is under way (the sheets of a task a phone started go on without a page). The settings are read then,
+/// not at the start: the order may be new.
+async fn wait_until_over(
+    running: &appkit_hub::RunningServer,
+    work: &crate::Work,
+    dir: &std::path::Path,
+    env: &Env,
+) {
+    let presence = running.presence();
+    let stay = || {
+        stays(
+            work.busy(),
+            || {
+                appkit_hub::config::load_file::<TestingSettings>(dir)
+                    .map(|file| file.keep_running.unwrap_or(false))
+                    .map_err(|e| e.to_string())
+            },
+            |keep_running| {
+                crate::background::has_order(keep_running, running.paired_devices(), env)
+            },
+        )
+    };
+    tokio::select! {
+        () = wait_for_stop() => {}
+        () = crate::background::left_alone(env, &presence, stay) => {
+            println!("no page is connected and nothing asks the hub to stay: it ends");
+        }
+    }
+}
+
+/// Whether a hub that nobody has been to for the time alone stays: a run under way holds it (asked first: it costs
+/// nothing), else the order of the person, with `keep_running` as the settings say it. Settings that cannot be read
+/// are no reason to go: the order may stand in them (a typo while it was written, a file held for a moment). The hub
+/// stays and says why.
+fn stays(
+    busy: bool,
+    keep_running: impl FnOnce() -> Result<bool, String>,
+    has_order: impl FnOnce(bool) -> bool,
+) -> bool {
+    if busy {
+        return true;
+    }
+    match keep_running() {
+        Ok(keep_running) => has_order(keep_running),
+        Err(e) => {
+            println!("the settings cannot be read, so the hub stays: {e}");
+            true
+        }
+    }
+}
+
 /// What `hello` says when there is no engine: not ready, and why, as a short code.
 #[must_use]
 pub fn no_engine_status() -> HubStatus {
@@ -414,7 +468,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
     };
     // The port is part of the origin, so the wanted one is tried first. When it is taken the server
     // still starts, on another port, and says so.
-    let running = match crate::start(make(want)).await {
+    let (running, work) = match crate::start_with_work(make(want)).await {
         Ok(r) => r,
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             if appkit_hub::instance::hello_of(want, &IDENTITY)
@@ -424,7 +478,9 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
                 return Err(format!("a hub is already running on port {want}"));
             }
             eprintln!("note: port {want} is in use, using a free port; the origin changes");
-            crate::start(make(0)).await.map_err(|e| e.to_string())?
+            crate::start_with_work(make(0))
+                .await
+                .map_err(|e| e.to_string())?
         }
         Err(e) => return Err(e.to_string()),
     };
@@ -456,7 +512,9 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
         IDENTITY.binary
     );
 
-    wait_for_stop().await;
+    // On the heap: the future of `serve` is polled on the main thread, whose stack (1 MB on Windows) a debug build
+    // already fills; what waits here must not add to it.
+    Box::pin(wait_until_over(&running, &work, &dir, &env)).await;
     registry::remove_record(&dir);
     registry::remove_secret(&dir);
     running.shutdown().await;
@@ -594,6 +652,20 @@ mod tests {
             let err = launch(bad).unwrap_err();
             assert!(err.contains("not opened"), "{bad}: {err}");
         }
+    }
+
+    #[test]
+    fn a_run_under_way_or_an_order_keeps_a_hub_that_was_left_alone() {
+        let never = || -> Result<bool, String> { panic!("the settings are not read during a run") };
+        assert!(stays(true, never, |_| panic!(
+            "no order is asked during a run"
+        )));
+        // No run: the order decides, with `keep_running` as the settings say it.
+        assert!(stays(false, || Ok(true), |keep| keep));
+        assert!(!stays(false, || Ok(false), |keep| keep));
+        assert!(stays(false, || Ok(false), |_| true));
+        // Settings that cannot be read keep it too.
+        assert!(stays(false, || Err("bad".to_owned()), |_| false));
     }
 
     #[test]

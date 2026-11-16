@@ -83,7 +83,8 @@ The program is `testing-hub`; its verbs are those of `tasks-hub` and `rules-hub`
 
 ```
 testing-hub serve [--port N]      run the hub until Ctrl-C
-testing-hub start [--open]        run it in the background (log in the config folder)
+testing-hub start [--open]        run it in the background (log in the config folder; it ends itself, see
+                                  "A hub in the background ends itself")
 testing-hub stop                  stop that hub
 testing-hub open [--launch]       print (or open) a one-time pairing link
 testing-hub autostart on|off|status
@@ -118,6 +119,27 @@ The engine runs as a child with only a few variables of the environment, so the 
 
 A `config.json` that cannot be read, or a path in it or in one of these variables that is not whole, stops the start.
 `about` says where each came from (`environment`, `setting`, `default`), never the path.
+
+### A hub in the background ends itself
+
+A hub that `start` or a double click put in the background has no window, so nobody would notice one that is left
+over (a browser that never opened, a tab closed days ago). It therefore ends by itself **ten minutes after the last
+page was closed** and says so in `hub.log`; the next double click or `start --open` starts it again. "A page" is a
+connection on which the hub accepted a session (the open tab on the PC, testing mobil on a paired phone); a program
+that only asks who runs on the port does not keep the hub alive.
+
+It stays when you gave it an order to, or while it has work:
+
+- it starts with your login (`testing-hub autostart on`, the switch in the Help menu or the one of its tile in
+  hub-desktop), or hub-desktop started it with itself at the login,
+- a phone is paired (`testing-hub phone list`): the phone reaches the hub when no page is open on the PC,
+- `config.json` says `"keep_running": true` (read when the ten minutes are over, so it acts without a restart),
+- a run through the engine is under way (a suite, a file, the sheets of a task a phone started); once the hub stayed
+  for it, it asks again an hour later.
+
+A hub in a terminal (`testing-hub serve`) is not affected: it runs until Ctrl-C or `testing-hub stop`. When a double
+click or `start --open` started the hub and the page then cannot be opened, the hub is stopped again at once and the
+message says so. `TESTING_DESKTOP_ALONE_SECS` (1 to 86400) sets another time than the ten minutes.
 
 ## Building and checking
 

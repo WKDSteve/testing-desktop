@@ -140,8 +140,51 @@ pub struct Start {
 ///
 /// When the address is not loopback or cannot be bound.
 pub async fn start(s: Start) -> std::io::Result<RunningServer> {
+    start_with_work(s).await.map(|(running, _)| running)
+}
+
+/// What the hub is doing on its own, for the question whether a hub in the background may end itself: a run through
+/// the engine under way (the sheets of a task a phone started, a suite) holds it until it is over.
+#[derive(Clone)]
+pub struct Work {
+    launch: Arc<launch::Launch>,
+}
+
+impl Work {
+    /// Is a run under way?
+    #[must_use]
+    pub fn busy(&self) -> bool {
+        self.launch.running()
+    }
+}
+
+/// Starts the hub, with a view of what it does on its own ([`Work`]).
+///
+/// # Errors
+///
+/// When the address is not loopback or cannot be bound.
+pub async fn start_with_work(s: Start) -> std::io::Result<(RunningServer, Work)> {
     let max_age = s.limits.snapshot_max_age;
-    serve(
+    let runtime = TestingRuntime::reading(
+        s.status,
+        Reading {
+            engine: s.engine,
+            ask: s.ask,
+            origins: s.origins,
+            max_age,
+            watch: s.watch,
+            step: s.step,
+            tasks_vault: s.tasks_vault,
+            warm: s.warm,
+            rerun: s.rerun,
+            push: s.phone.as_ref().and_then(|p| p.push.clone()),
+        },
+    )
+    .with_login(s.login);
+    let work = Work {
+        launch: Arc::clone(&runtime.launch),
+    };
+    let running = serve(
         ServeParts {
             addr: s.addr,
             limits: s.limits,
@@ -154,29 +197,15 @@ pub async fn start(s: Start) -> std::io::Result<RunningServer> {
             build_id: BUILD,
             guard_rules: phone::guard_rules(s.phone.as_ref()),
             ui: Arc::new(s.ui),
-            runtime: TestingRuntime::reading(
-                s.status,
-                Reading {
-                    engine: s.engine,
-                    ask: s.ask,
-                    origins: s.origins,
-                    max_age,
-                    watch: s.watch,
-                    step: s.step,
-                    tasks_vault: s.tasks_vault,
-                    warm: s.warm,
-                    rerun: s.rerun,
-                    push: s.phone.as_ref().and_then(|p| p.push.clone()),
-                },
-            )
-            .with_login(s.login),
+            runtime,
             // There is one repositories root and no list to choose from, so this is never called.
             build: Arc::new(|()| TestingRuntime::new(app::no_engine_status())),
             vaults: None,
         },
         routes::app_routes,
     )
-    .await
+    .await?;
+    Ok((running, work))
 }
 
 #[cfg(test)]

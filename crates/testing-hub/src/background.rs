@@ -35,6 +35,29 @@ pub async fn stop() -> Result<String, String> {
     appkit_hub::background::stop(&APP).await
 }
 
+/// Whether the person gave the hub an order to run without a page (`keep_running`, a paired phone, the start with the
+/// login, `TESTING_DESKTOP_STAY` of the starter); see `appkit_hub::background::has_order`.
+#[must_use]
+pub fn has_order(keep_running: bool, paired_devices: usize, env: &appkit_hub::env::Env) -> bool {
+    appkit_hub::background::has_order(&APP, env, keep_running, paired_devices)
+}
+
+/// Resolves when the hub is to end by itself: `testing-hub stop` asked it, or, for a hub in the background, nobody
+/// has been here for the time alone and `stay` says no (`appkit_hub::background::left_alone`).
+pub async fn left_alone<F: Fn() -> bool>(
+    env: &appkit_hub::env::Env,
+    presence: &appkit_hub::Presence,
+    stay: F,
+) {
+    appkit_hub::background::left_alone(&APP, env, presence, stay).await;
+}
+
+/// Whether what `start` printed says that it started a hub now, as opposed to finding one that ran already.
+#[must_use]
+pub fn started_now(printed: &str) -> bool {
+    appkit_hub::background::started_now(printed)
+}
+
 /// Start the hub with the login of the user.
 ///
 /// # Errors

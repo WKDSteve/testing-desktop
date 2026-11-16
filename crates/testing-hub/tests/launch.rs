@@ -161,6 +161,8 @@ fn program_or_skip() -> Option<StepProgram> {
 struct Hub {
     server: RunningServer,
     token: String,
+    /// What the hub does on its own: whether a run holds a hub in the background.
+    work: testing_hub::Work,
 }
 
 async fn start_hub(fx: &Fixture, program: Option<StepProgram>) -> Hub {
@@ -174,7 +176,7 @@ async fn start_hub_with(
     tasks_vault: Option<PathBuf>,
 ) -> Hub {
     let control = Secret::generate(TOKEN_BYTES).unwrap();
-    let server = testing_hub::start(testing_hub::Start {
+    let (server, work) = testing_hub::start_with_work(testing_hub::Start {
         addr: "127.0.0.1:0".parse().unwrap(),
         limits: Limits::default(),
         clock: Arc::new(ManualClock::new()),
@@ -204,7 +206,11 @@ async fn start_hub_with(
     .await
     .expect("the hub starts");
     let token = session(&server, &control).await;
-    Hub { server, token }
+    Hub {
+        server,
+        token,
+        work,
+    }
 }
 
 fn route(name: &str) -> String {
@@ -337,7 +343,18 @@ async fn a_file_runs_red_and_a_second_run_waits_for_the_first() {
     let r = hub.post("run/task", &json!({ "task": TASK })).await;
     assert_eq!(r.status, 409, "{r:?}");
     assert_eq!(hub.state().await["run"]["running"], true);
-    // The hub stops: the run ends with it.
+    // A run under way holds a hub in the background that no page is connected to; one that ended does not.
+    assert!(hub.work.busy());
+    let r = hub.post("run/abort", &json!({})).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    hub.ended().await;
+    assert!(!hub.work.busy());
+    // The hub stops: a run under way ends with it.
+    let r = hub
+        .post("run/start", &json!({ "key": KEY, "file": "slow" }))
+        .await;
+    assert_eq!(r.status, 202, "{r:?}");
+    assert!(hub.work.busy());
     hub.server.shutdown().await;
 }
 

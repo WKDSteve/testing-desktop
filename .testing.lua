@@ -19,11 +19,12 @@ return {
         },
         ready = { stdout = "^file:", as = "link" },
       },
-      -- The release build of testing-hub (a window program) started the way a link starts it (testing.nvim
-      -- `start = "link"`: no standard handles, no console of a parent), against a config.json it cannot use in a folder
-      -- of the run. The start in the background gives up after 20 s and the program says so in a message box, its only
-      -- window. Nothing outlives the sheet (the hub in the background ends at once on the config), and the person's
-      -- settings and hub stay untouched (own folder, own port, no browser).
+      -- The release build of testing-hub (a window program) started the way a link starts it (testing.nvim `start =
+      -- "link"`: no standard handles, no console of a parent), against a config.json it cannot use in a folder of the
+      -- run. The hub in the background ends at once on the config; the start sees that within about 2 s (appkit
+      -- v0.62.0) and the program says so in a message box that names the cause from hub.log, its only window. Nothing
+      -- outlives the sheet (the hub in the background ends at once on the config), and the person's settings and hub
+      -- stay untouched (own folder, own port, no browser).
       ["link-start-error"] = {
         build = { "cargo", "build", "--release", "-p", "testing-hub", "--locked" },
         prepare = {
@@ -37,7 +38,7 @@ return {
         run = { "target/release/testing-hub.exe" },
         start = "link",
         window = "testing-hub",
-        window_ms = 90000,
+        window_ms = 15000,
         env = {
           TESTING_DESKTOP_CONFIG_DIR = "${temp}/cfg",
           TESTING_DESKTOP_PORT = "47397",

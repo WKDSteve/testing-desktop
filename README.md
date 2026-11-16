@@ -38,6 +38,8 @@ releases a commit. See [docs/MOBILE.md](docs/MOBILE.md).
   A commit is released for the self-hosted runner only by testing.nvim (`testing ci release`), which the page walks
   through on the PC: the commit a person chose and was shown the changes of, by its full id. Never from a phone.
 - **Loopback only, token always.** Host and Origin are checked, there is no data endpoint without a session.
+- **No console window, nothing left behind.** Every program the hub starts is a child bound to it, a program of
+  somebody else started visibly, or a link the system opens; the list is in [docs/PROCESSES.md](docs/PROCESSES.md).
 - **Data classes fail closed.** The hub reads the export form of the engine: no absolute path, and only the
   repositories the data classes of the device release.
 - testing.nvim stays a pure Lua plugin. This repository holds the hub, the UI and later the native shell.

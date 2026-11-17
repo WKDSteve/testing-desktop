@@ -11,7 +11,9 @@ The ways:
 - **child**: `appkit_core::child`. No console window, the streams are pipes of the hub, bound to
   the hub by the system (a job object on Windows, a process group with appkit's watcher in it
   elsewhere): it ends with the hub, also when the hub crashes or is killed, together with
-  everything it started (`tests/launch.rs`, `a_hub_that_is_killed_takes_its_run_with_it`). Its
+  everything it started (`tests/launch.rs`, `a_hub_that_is_killed_takes_its_run_with_it`). The
+  watcher is this program itself: `main` calls `appkit_core::child::watcher_main()` first, and
+  started with `--appkit-child-watcher` it only waits for the hub to go (`tests/cli.rs`). Its
   start is in `hub.log`.
 - **system**: the system opens something (`ShellExecuteW` on Windows); no process of the hub is
   started. On macOS and Linux `/usr/bin/open` or `xdg-open` is started through

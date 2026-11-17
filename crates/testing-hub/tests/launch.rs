@@ -716,3 +716,66 @@ async fn a_process_the_engine_leaves_behind_does_not_hold_the_run() {
     assert_eq!(r.status, 202, "{r:?}");
     hub.ended().await;
 }
+
+/// The variable that makes [`hub_side`] a hub: the folder it says where the heartbeat of its run is.
+const KILLED_HUB: &str = "TESTING_HUB_TEST_KILLED_HUB";
+
+/// The hub's side of [`a_hub_that_is_killed_takes_its_run_with_it`], in a program of its own: it starts a run whose
+/// engine leaves a process running, says where that process writes, and waits to be killed. Without
+/// [`KILLED_HUB`] it does nothing.
+#[tokio::test]
+async fn hub_side() {
+    let Some(dir) = std::env::var_os(KILLED_HUB).map(PathBuf::from) else {
+        return;
+    };
+    let program = program_or_skip().expect("the outer test found Neovim");
+    let fx = Fixture::new();
+    let beat = fx.root().join("beat.txt");
+    let hub = start_hub(&fx, Some(program)).await;
+    let r = hub
+        .post("run/start", &json!({ "key": KEY, "file": "tree" }))
+        .await;
+    assert_eq!(r.status, 202, "{r:?}");
+    appears(&beat).await;
+    let note = dir.join("beat-path");
+    std::fs::write(dir.join("beat-path.tmp"), beat.display().to_string()).unwrap();
+    std::fs::rename(dir.join("beat-path.tmp"), &note).unwrap();
+    tokio::time::sleep(Duration::from_secs(600)).await;
+}
+
+/// A hub that is killed (no code of its own runs: no stop, no drop) still takes the run and every process the run
+/// started with it: the job object on Windows, the watcher of the process group elsewhere (appkit's `child`).
+#[tokio::test]
+async fn a_hub_that_is_killed_takes_its_run_with_it() {
+    if program_or_skip().is_none() {
+        return;
+    }
+    let scratch = Scratch::new("killed-hub");
+    // The hub's own temp folder is in the test's, so whatever it leaves when it is killed goes with the test's.
+    let temp = scratch.join("temp");
+    std::fs::create_dir_all(&temp).unwrap();
+    let mut hub = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "hub_side", "--nocapture", "--test-threads=1"])
+        .env(KILLED_HUB, scratch.path())
+        .env("TEMP", &temp)
+        .env("TMP", &temp)
+        .env("TMPDIR", &temp)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let note = scratch.join("beat-path");
+    let end = Instant::now() + Duration::from_secs(60);
+    while !note.exists() {
+        if let Some(status) = hub.try_wait().unwrap() {
+            panic!("the hub ended before its run was under way: {status}");
+        }
+        assert!(Instant::now() < end, "the hub's run did not start");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let beat = PathBuf::from(std::fs::read_to_string(&note).unwrap());
+    // Killed: TerminateProcess on Windows, SIGKILL elsewhere.
+    hub.kill().unwrap();
+    hub.wait().unwrap();
+    goes_quiet(&beat, "a process of the run outlived the killed hub").await;
+}

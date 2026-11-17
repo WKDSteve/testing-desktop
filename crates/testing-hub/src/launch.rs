@@ -27,7 +27,8 @@
 //! * what the child writes is kept as a short tail, with the root taken out, for the PC only;
 //! * the run ends with the hub, after [`RUN_LIMIT`], and when the page aborts it (`run/abort`); then everything it
 //!   started ends with it (the engine is a child of the hub through `appkit_core::child`: a job object on Windows,
-//!   its own process group elsewhere, ended with `killpg`; its child editors are not left running). `testing run` has
+//!   its own process group elsewhere, ended with `killpg`, and by appkit's watcher in it when the hub is killed; its
+//!   child editors are not left running). `testing run` has
 //!   no gentle end to ask for (its input is closed, it reads no command), so the tree is ended at once; the engine
 //!   takes over the lock of a heavy run whose process is gone;
 //! * a run that ends by itself leaves nothing behind either: what it left running is ended with it, and does not

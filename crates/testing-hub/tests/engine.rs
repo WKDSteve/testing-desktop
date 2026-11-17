@@ -494,15 +494,18 @@ static STEPPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// The hub with the real engine and its `testing sheets step`, started with this environment: the trust of the
 /// root (or none) goes to the child as from a terminal.
 async fn hub_stepping(fx: &Fixture, trust: bool) -> Option<(appkit_hub::RunningServer, String)> {
-    hub_with_children(fx, trust, Vec::new()).await
+    hub_with_children(fx, trust, Vec::new(), Vec::new(), None).await
 }
 
 /// [`hub_stepping`], with more variables for the children the hub starts (a release step reads where the list of
-/// reviewed commits is).
+/// reviewed commits is), variables of the person's environment the hub is started with (`shell`: which of them reach
+/// its children is the hub's own choice) and the vault of the tasks the person named (`tasks_vault`).
 async fn hub_with_children(
     fx: &Fixture,
     trust: bool,
     more: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    shell: Vec<(String, String)>,
+    tasks_vault: Option<std::path::PathBuf>,
 ) -> Option<(appkit_hub::RunningServer, String)> {
     let repo = fx.root().join("alpha.nvim");
     std::fs::create_dir_all(repo.join("TESTS").join("sheets")).unwrap();
@@ -517,8 +520,19 @@ async fn hub_with_children(
     )
     .unwrap();
     let mut pairs: Vec<(String, String)> = std::env::vars()
-        .filter(|(k, _)| k != "TESTING_TRUST_ROOTS" && k != "TESTING_TRUST" && k != "CI")
+        // The checkout of tasks.nvim of this machine is not the test's: a test that wants one names it in `shell`.
+        .filter(|(k, _)| {
+            ![
+                "TESTING_TRUST_ROOTS",
+                "TESTING_TRUST",
+                "CI",
+                "TASKS_NVIM_DIR",
+            ]
+            .contains(&k.as_str())
+                && !shell.iter().any(|(s, _)| s == k)
+        })
         .collect();
+    pairs.extend(shell);
     if trust {
         pairs.push((
             "TESTING_TRUST_ROOTS".to_owned(),
@@ -556,7 +570,7 @@ async fn hub_with_children(
         origins: Origins::default(),
         watch: None,
         step: Some(step),
-        tasks_vault: None,
+        tasks_vault,
         ui: testing_hub::ui::UiFiles::none(),
         warm: false,
         phone: None,
@@ -784,6 +798,8 @@ async fn the_real_engine_lists_the_repositories_of_the_runner_guard_for_the_rele
         &fx,
         true,
         vec![("TESTING_RUNNER_ROOT".into(), runners.clone().into())],
+        Vec::new(),
+        None,
     )
     .await
     else {
@@ -887,6 +903,184 @@ async fn the_real_engine_says_in_its_document_how_the_sheets_of_a_task_ended() {
         assert!(output.contains("sheet alpha."), "{task}: {output}");
         assert!(!output.contains("testing-sheet-run"), "{task}: {output}");
     }
+    server.shutdown().await;
+    drop(fx);
+}
+
+/// The checkout of tasks.nvim for a run that writes into a task: `TASKS_NVIM_DIR`, else `$REPOS_DIR/tasks.nvim`. `None`
+/// after saying why there is none (a failure in CI, which fetches the commit of `engine.lock`).
+fn tasks_nvim_or_skip() -> Option<std::path::PathBuf> {
+    let dir = std::env::var_os("TASKS_NVIM_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("REPOS_DIR").map(|r| std::path::PathBuf::from(r).join("tasks.nvim"))
+        });
+    match dir {
+        Some(dir) if dir.join("lua").join("tasks_nvim").is_dir() => Some(dir),
+        other => {
+            assert!(
+                std::env::var_os("TESTING_HUB_REQUIRE_ENGINE").is_none_or(|v| v != "1"),
+                "TESTING_HUB_REQUIRE_ENGINE=1 and no tasks.nvim (TASKS_NVIM_DIR, REPOS_DIR): {other:?}"
+            );
+            eprintln!("skipped: no tasks.nvim checkout ({other:?})");
+            None
+        }
+    }
+}
+
+/// A vault of the test's own under its temp folder, never the person's: the area `alpha.nvim` with one open task and
+/// one finished one, in the layout tasks.nvim reads.
+fn tasks_vault(fx: &Fixture) -> std::path::PathBuf {
+    let vault = fx.dir.join("tasks-vault");
+    let open = vault.join("alpha.nvim").join("ROADMAP").join("tasks");
+    let done = vault.join("alpha.nvim").join("Backlog").join("TASKS");
+    std::fs::create_dir_all(&open).unwrap();
+    std::fs::create_dir_all(&done).unwrap();
+    std::fs::write(
+        vault.join("tasks-vault.json"),
+        r#"{ "kind": "tasks.vault", "lang": "en", "layout_version": 1, "plugin": "tasks.nvim", "schema": 1 }"#,
+    )
+    .unwrap();
+    std::fs::write(
+        open.join("holds.md"),
+        "---\ntitle: Holds\nstatus: open\nkind: task\ncreated: 2026-11-17\nupdated: 2026-11-17\n---\n\n\
+         ## Context\n\nA task of the test.\n\n## Notes\n\n- none\n",
+    )
+    .unwrap();
+    std::fs::write(
+        done.join("2026-11-17_finished.md"),
+        "---\ntitle: Finished\nstatus: done\nkind: task\ncreated: 2026-11-17\nupdated: 2026-11-17\n\
+         done_in: by hand\n---\n\n## Notes\n",
+    )
+    .unwrap();
+    vault
+}
+
+/// With a vault named, the real engine writes the state of a task's sheets into that task through the real tasks.nvim
+/// (found through `TASKS_NVIM_DIR`, which the hub passes on): the block stands in the file. A finished task is not
+/// written (`missing`), and without tasks.nvim the run cannot be made (exit 3) and writes nothing.
+#[tokio::test]
+async fn with_a_vault_the_real_engine_writes_the_sheets_of_a_task_through_tasks_nvim() {
+    let Some(tasks_nvim) = tasks_nvim_or_skip() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let _one_at_a_time = STEPPING.lock().await;
+    let vault = tasks_vault(&fx);
+    // `stdpath('data')` of the engine's editor in the test's folder: the plugin folder of lazy on this machine, where
+    // the engine looks for tasks.nvim last, is not the test's. Both variables go in as the person's: the hub passes
+    // them on (`PASS_THROUGH`), the test does not hand them to the child itself.
+    let data = (
+        "XDG_DATA_HOME".to_owned(),
+        fx.dir.join("data").display().to_string(),
+    );
+    let Some((server, token)) = hub_with_children(
+        &fx,
+        true,
+        Vec::new(),
+        vec![
+            (
+                "TASKS_NVIM_DIR".to_owned(),
+                tasks_nvim.display().to_string(),
+            ),
+            data.clone(),
+        ],
+        Some(vault.clone()),
+    )
+    .await
+    else {
+        return;
+    };
+    let sheets = fx.root().join("alpha.nvim").join("TESTS").join("sheets");
+    std::fs::write(
+        sheets.join("holds.sheet.lua"),
+        task_sheet("alpha.holds", "alpha.nvim/holds", true),
+    )
+    .unwrap();
+    std::fs::write(
+        sheets.join("finished.sheet.lua"),
+        task_sheet("alpha.finished", "alpha.nvim/finished", true),
+    )
+    .unwrap();
+    let task_file = vault
+        .join("alpha.nvim")
+        .join("ROADMAP")
+        .join("tasks")
+        .join("holds.md");
+    let done_file = vault
+        .join("alpha.nvim")
+        .join("Backlog")
+        .join("TASKS")
+        .join("2026-11-17_finished.md");
+    let done_before = std::fs::read(&done_file).unwrap();
+    let run = |task: &'static str| {
+        let server = &server;
+        let token = &token;
+        async move {
+            let body = serde_json::json!({ "task": task }).to_string();
+            let r = post(server, &route_of("run/task"), Some(token), &body).await;
+            assert_eq!(r.status, 202, "{task}: {r:?}");
+            launch_ended(server, token).await
+        }
+    };
+
+    let state = run("alpha.nvim/holds").await;
+    let r = &state["run"];
+    assert_eq!(r["exit"], 0, "{state}");
+    assert_eq!(r["verdict"], "green", "{state}");
+    assert_eq!(r["sheets_red"], false, "{state}");
+    assert_eq!(
+        r["block"],
+        serde_json::json!({ "written": true, "outcome": "changed" }),
+        "{state}"
+    );
+    let text = std::fs::read_to_string(&task_file).unwrap();
+    assert!(text.contains("## Test sheets"), "{text}");
+    assert!(
+        text.contains("<!-- testing:sheets:states alpha.holds=green -->"),
+        "{text}"
+    );
+    // In front of the notes, which stay.
+    assert!(
+        text.find("## Test sheets") < text.find("## Notes"),
+        "{text}"
+    );
+    // The vault is taken out of what the page sees.
+    assert!(!state.to_string().contains("tasks-vault"), "{state}");
+
+    // A finished task is no open task of the vault: green sheets, nothing written, the engine's own word.
+    let state = run("alpha.nvim/finished").await;
+    let r = &state["run"];
+    assert_eq!(r["exit"], 1, "{state}");
+    assert_eq!(r["verdict"], "not_written", "{state}");
+    assert_eq!(r["sheets_red"], false, "{state}");
+    assert_eq!(
+        r["block"],
+        serde_json::json!({ "written": false, "outcome": "missing" }),
+        "{state}"
+    );
+    assert_eq!(std::fs::read(&done_file).unwrap(), done_before);
+    server.shutdown().await;
+
+    // Without tasks.nvim (no TASKS_NVIM_DIR, none beside the vault or in the plugin folder): exit 3, no document, the
+    // task stays as the first run left it.
+    let written = std::fs::read(&task_file).unwrap();
+    let Some((server, token)) =
+        hub_with_children(&fx, true, Vec::new(), vec![data], Some(vault.clone())).await
+    else {
+        return;
+    };
+    let body = serde_json::json!({ "task": "alpha.nvim/holds" }).to_string();
+    let r = post(&server, &route_of("run/task"), Some(&token), &body).await;
+    assert_eq!(r.status, 202, "{r:?}");
+    let state = launch_ended(&server, &token).await;
+    let r = &state["run"];
+    assert_eq!(r["exit"], 3, "{state}");
+    assert_eq!(r["verdict"], "failed", "{state}");
+    assert_eq!(r["block"], Value::Null, "{state}");
+    let output = r["output"].as_str().unwrap();
+    assert!(output.contains("'tasks.nvim' not found"), "{output}");
+    assert_eq!(std::fs::read(&task_file).unwrap(), written);
     server.shutdown().await;
     drop(fx);
 }

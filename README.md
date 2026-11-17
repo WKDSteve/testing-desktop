@@ -65,7 +65,7 @@ The planning notes live outside this repository, in the maintainer's task vault.
 
 ```
 crates/testing-hub/   the hub: names, settings, the engine seam to testing.nvim, routes, on appkit
-engine.lock           the testing.nvim and lib.nvim commits this is built and tested against
+engine.lock           the testing.nvim, lib.nvim and tasks.nvim commits this is built and tested against
 ui/                   the page (Svelte 5, Vite, TypeScript, appkit-ui), read through a source of its own (`TestingSource`)
 ui/src/web/           the web variant: the export folder as a source, its check against the contract, the way in, a recorded run played back
 ui/web/               the packing into one file and the tests of the web variant

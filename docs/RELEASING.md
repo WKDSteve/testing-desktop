@@ -96,7 +96,10 @@ it is: `.github/rolling-notes.md`.
 ## The engine pin
 
 `engine.lock` names the commits of `testing.nvim` and `lib.nvim` this app is built and tested
-against. CI checks both out at exactly these commits, so a typo in a pin fails the build; with
+against, and of `tasks.nvim`, through which the engine writes the block of a task in `tests/engine.rs` (only the
+tests use it; the hub never starts it itself). CI checks all three out at exactly these commits (`TASKS_NVIM_DIR` in
+the job `rust`), so a typo in a pin fails the build, and `tests/golden_copy.rs` fails when a pin is not a whole commit
+or a job that fetches the engine leaves one out; with
 `TESTING_HUB_REQUIRE_ENGINE=1` a missing engine is a failure, not a skip (rule `TST-16`). The golden documents of
 `crates/testing-hub/tests/fixtures/golden` and `ui/src/lib/contract.d.ts` are copies of the pinned commit's
 (`tests/golden_copy.rs`). Moving a pin is its own commit, with the copies taken over and the tests green against the

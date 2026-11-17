@@ -5,7 +5,7 @@
 # Triggered only by pushes to main and by hand, never by `pull_request` or `pull_request_target`: a pull request from a
 # fork could change the workflow and run its own code on that machine. Windows only; ShellCheck runs on the runner.
 #
-# The sources outside this repository (testing.nvim and lib.nvim at the pinned commits of engine.lock, appkit through
+# The sources outside this repository (testing.nvim, lib.nvim and tasks.nvim at the pinned commits of engine.lock, appkit through
 # Cargo and pnpm) are public and fetched without credentials.
 # Tools (cargo, clippy, rustfmt, cargo-audit, cargo-deny, nvim, pnpm, python, Chrome) are expected on the PATH and not
 # pinned here; the jobs print their versions.
@@ -43,6 +43,9 @@ jobs:
   rust:
     runs-on: [self-hosted, windows]
     timeout-minutes: 40
+    # Only this job: elsewhere the hub would pass it on to the children of its runs.
+    env:
+      TASKS_NVIM_DIR: ${{ github.workspace }}/engine/tasks.nvim
     steps:
       # Actions are pinned by commit; the comment names the tag.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
@@ -50,16 +53,20 @@ jobs:
           persist-credentials: false
       # The pins must exist: a typo in engine.lock fails here, not later. Full clones: the test of the golden documents
       # reads them from the pinned commit (tests/golden_copy.rs).
-      - name: Fetch the pinned engine (testing.nvim) and lib.nvim
+      # tasks.nvim too: with it the engine writes a task's block in tests/engine.rs (TASKS_NVIM_DIR of this job).
+      - name: Fetch the pinned engine (testing.nvim), lib.nvim and tasks.nvim
         run: |
           commit="$(sed -n 's/^commit *= *//p' engine.lock)"
           lib_commit="$(sed -n 's/^lib_commit *= *//p' engine.lock)"
+          tasks_commit="$(sed -n 's/^tasks_commit *= *//p' engine.lock)"
           rm -rf engine
           mkdir engine
           git clone --quiet https://github.com/WKDSteve/testing.nvim engine/testing.nvim
           git -C engine/testing.nvim checkout --quiet "$commit"
           git clone --quiet https://github.com/WKDSteve/lib.nvim engine/lib.nvim
           git -C engine/lib.nvim checkout --quiet "$lib_commit"
+          git clone --quiet https://github.com/WKDSteve/tasks.nvim engine/tasks.nvim
+          git -C engine/tasks.nvim checkout --quiet "$tasks_commit"
       - run: nvim --version | head -n1 && cargo --version && pnpm --version
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -204,16 +211,19 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
         with:
           persist-credentials: false
-      - name: Fetch the pinned engine (testing.nvim) and lib.nvim
+      - name: Fetch the pinned engine (testing.nvim), lib.nvim and tasks.nvim
         run: |
           commit="$(sed -n 's/^commit *= *//p' engine.lock)"
           lib_commit="$(sed -n 's/^lib_commit *= *//p' engine.lock)"
+          tasks_commit="$(sed -n 's/^tasks_commit *= *//p' engine.lock)"
           rm -rf engine
           mkdir engine
           git clone --quiet https://github.com/WKDSteve/testing.nvim engine/testing.nvim
           git -C engine/testing.nvim checkout --quiet "$commit"
           git clone --quiet https://github.com/WKDSteve/lib.nvim engine/lib.nvim
           git -C engine/lib.nvim checkout --quiet "$lib_commit"
+          git clone --quiet https://github.com/WKDSteve/tasks.nvim engine/tasks.nvim
+          git -C engine/tasks.nvim checkout --quiet "$tasks_commit"
       # In this order: the binary embeds the page (ui/e2e/hub.ts refuses a binary with an older one).
       - name: Build the page, then the binary that embeds it
         run: |

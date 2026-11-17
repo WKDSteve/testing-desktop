@@ -123,3 +123,47 @@ fn the_golden_copies_are_the_files_of_the_pinned_engine() {
         assert_eq!(ours, theirs, "{copy} is not {original} at {commit}");
     }
 }
+
+/// Every checkout `engine.lock` pins (testing.nvim, lib.nvim, tasks.nvim) is a whole commit, and the CI fetches each
+/// of them in every job that fetches the engine: a pin added to the file but not to `ci.yml` would leave a test of
+/// that checkout skipped or failing for a reason that is not its own.
+#[test]
+fn every_pin_of_engine_lock_is_a_whole_commit_that_the_ci_fetches() {
+    let text = std::fs::read_to_string(repo_root().join("engine.lock")).unwrap();
+    let pins: Vec<(String, String)> = text
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.trim().to_owned(), v.trim().to_owned()))
+        .collect();
+    let commits: Vec<&(String, String)> =
+        pins.iter().filter(|(k, _)| k.ends_with("commit")).collect();
+    let names: Vec<&str> = commits.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(names, ["commit", "lib_commit", "tasks_commit"], "{text}");
+    let ci = std::fs::read_to_string(repo_root().join(".github/workflows/ci.yml")).unwrap();
+    let fetches = ci.matches("Fetch the pinned engine").count();
+    assert!(fetches >= 2, "{fetches}");
+    for (key, commit) in commits {
+        assert!(
+            commit.len() == 40 && commit.bytes().all(|b| b.is_ascii_hexdigit()),
+            "{key} = {commit}"
+        );
+        let repo_key = key.replace("commit", "repo");
+        let repo = &pins
+            .iter()
+            .find(|(k, _)| *k == repo_key)
+            .unwrap_or_else(|| panic!("engine.lock names {repo_key}"))
+            .1;
+        let read = format!("{key}=\"$(sed -n 's/^{key} *= *//p' engine.lock)\"");
+        let name = repo.rsplit('/').next().unwrap();
+        let clone = format!("git clone --quiet {repo} engine/{name}");
+        let checkout = format!("git -C engine/{name} checkout --quiet \"${key}\"");
+        for (what, needle) in [("read", &read), ("clone", &clone), ("checkout", &checkout)] {
+            assert_eq!(
+                ci.matches(needle.as_str()).count(),
+                fetches,
+                "ci.yml does not {what} {key} in every fetch: {needle}"
+            );
+        }
+    }
+}

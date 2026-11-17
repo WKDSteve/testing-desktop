@@ -31,11 +31,13 @@ Dazu die Testblätter wie der CI-Job `ui` (aus dem Repo-Root, `--strict`):
 `nvim -n -i NONE --headless -u NONE -l <testing.nvim>/scripts/testing.lua sheets run --all --root . --engine browser --strict`
 mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
 
-- Umgebung für Engine- und Browser-Tests: `TESTING_ENGINE_DIR`, `LIB_NVIM_DIR`, `TESTING_HUB_REQUIRE_ENGINE=1`. Ohne
+- Umgebung für Engine- und Browser-Tests: `TESTING_ENGINE_DIR`, `LIB_NVIM_DIR`, `TASKS_NVIM_DIR` (der Blattlauf mit
+  Vault in `tests/engine.rs`), `TESTING_HUB_REQUIRE_ENGINE=1`. Ohne
   die letzte werden Tests mit Engine **still übersprungen** und die Suite ist grün, ohne etwas geprüft zu haben.
 - Gegen den **gepinnten** Stand testen, nicht gegen den Haupt-Checkout der Engine (der hinkt `origin` oft hinterher
   oder trägt lokale Commits anderer Sitzungen): eigener Git-Worktree je Repo auf dem Commit aus `engine.lock`
-  (`git -C E:/repos/testing.nvim worktree add --detach <pfad> <commit>`, ebenso lib.nvim mit `lib_commit`).
+  (`git -C E:/repos/testing.nvim worktree add --detach <pfad> <commit>`, ebenso lib.nvim mit `lib_commit` und
+  tasks.nvim mit `tasks_commit`).
 - Ein frischer Worktree braucht ein eigenes `pnpm install` und einen eigenen `cargo build`; den `target`-Ordner des
   Haupt-Checkouts nie mitbenutzen.
 - Ein Fix ohne Test, der ohne den Fix rot wird, gilt nicht als fertig (Sabotage-Probe: Fix kurz entfernen).
@@ -59,7 +61,7 @@ mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
 
 ## Vertrag mit der Engine
 
-- `engine.lock` pinnt testing.nvim und lib.nvim per Commit, und nur auf einen Commit, der auf `origin/main` liegt
+- `engine.lock` pinnt testing.nvim, lib.nvim und tasks.nvim (nur für die Tests) per Commit, und nur auf einen Commit, der auf `origin/main` liegt
   (nie `rev-parse HEAD` eines lokalen Checkouts: die CI scheitert mit "not our ref").
 - Kopien der Engine liegen hier byte-genau und werden in `crates/testing-hub/tests/golden_copy.rs` gegen den
   gepinnten Commit verglichen: die Goldens unter `crates/testing-hub/tests/fixtures/golden*`, `ui/src/lib/contract.d.ts`,

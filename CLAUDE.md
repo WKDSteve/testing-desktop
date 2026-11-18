@@ -39,7 +39,8 @@ mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
   (`git -C E:/repos/testing.nvim worktree add --detach <pfad> <commit>`, ebenso lib.nvim mit `lib_commit` und
   tasks.nvim mit `tasks_commit`).
 - Ein frischer Worktree braucht ein eigenes `pnpm install` und einen eigenen `cargo build`; den `target`-Ordner des
-  Haupt-Checkouts nie mitbenutzen.
+  Haupt-Checkouts nie mitbenutzen. `pnpm e2e` nimmt das Binary aus `CARGO_TARGET_DIR` (relativ zum Repo), wenn es
+  gesetzt ist, sonst aus `target/debug` (`ui/e2e/exe.ts`): denselben Wert für `cargo build` und `pnpm e2e` setzen.
 - Ein Fix ohne Test, der ohne den Fix rot wird, gilt nicht als fertig (Sabotage-Probe: Fix kurz entfernen).
 - Die Maschine ist der Engpass (mehrere Sitzungen, die Runner laufen auf demselben Rechner): schwere Läufe
   (`cargo test`, `pnpm e2e`) nacheinander und im Hintergrund. Unter Last flackern einzelne Tests: erst einzeln

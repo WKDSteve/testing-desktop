@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { failAfterCleanup, removeTree, stopChild, tempRoot } from './cleanup';
+import { hubExe } from './exe';
 import { e2ePort } from './port';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -16,7 +17,7 @@ const repo = resolve(here, '..', '..');
 export const port = (): number => e2ePort(process.env);
 export const origin = (): string => `http://127.0.0.1:${port()}`;
 
-const exe = join(repo, 'target', 'debug', process.platform === 'win32' ? 'testing-hub.exe' : 'testing-hub');
+const exe = hubExe(repo);
 
 /** The checkout of testing.nvim the tests run: `TESTING_ENGINE_DIR`, else `$REPOS_DIR/testing.nvim`. */
 function engineDir(): string {

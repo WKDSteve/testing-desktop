@@ -161,6 +161,9 @@ jobs:
         shell: pwsh
         run: python ../tools/check-temp-leftovers.py --dir "$env:JOB_TEMP"
       - run: pnpm build
+      # What the build ships has a number (measured 252 kB on 2026-11-21, about a tenth of room): a page that only grows
+      # is parsed at every start. Over it: find what grew before raising it.
+      - run: python ../tools/check-dist-size.py dist --budget 280
       - run: pnpm mobile:build
       # The test sheets (TESTS/sheets, .testing.lua) at a fixed version of testing.nvim; --strict: a sheet that could
       # not run is red here. They run from the repository root (the sheet's build is `pnpm --dir ui web:build`); nvim

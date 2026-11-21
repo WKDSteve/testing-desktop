@@ -32,3 +32,6 @@ ui/playwright-report/
 
 # What a test sheet leaves to look at
 TESTS/sheets/out/
+
+# Kotlin compiler error logs of a local Android build, never committed
+mobile/gen/android/.kotlin/

@@ -73,10 +73,26 @@
 
   // The keys of the panel, outside a field: n next, c continue, u until the chosen step, b breakpoint, a abort,
   // y yes. A question takes y and n only through its dialog, where the note is typed.
+  /**
+   * The question of the run is a popover that stays until it is answered ("manual": no click beside it and no Escape
+   * closes it while the run waits). Focus goes to the answer field and back to where it was. A browser without the
+   * popover API shows the same element in the flow of the page, as before.
+   */
+  function asking(node: HTMLElement): { destroy: () => void } {
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (typeof node.showPopover === 'function') node.showPopover();
+    node.querySelector<HTMLInputElement>('input')?.focus();
+    return {
+      destroy() {
+        if (before?.isConnected) before.focus();
+      },
+    };
+  }
+
   function onKeydown(event: KeyboardEvent): void {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target !== null && target.closest('input, textarea, select, [contenteditable="true"], [role="menu"], dialog') !== null) return;
+    if (target !== null && target.closest('input, textarea, select, [contenteditable="true"], [role="menu"], dialog, [popover]') !== null) return;
     if (!run.running) return;
     const actions: Record<string, () => void> = {
       n: () => void app.stepNext(),
@@ -180,7 +196,7 @@
   {/if}
 
   {#if run.question}
-    <div class="question" role="dialog" aria-modal="false" aria-labelledby="step-question">
+    <div class="question" popover="manual" use:asking role="dialog" aria-modal="false" aria-labelledby="step-question">
       <h2 id="step-question">{t('step.question')}</h2>
       <p class="ask">{shown(run.question.text)}</p>
       <label data-hint={t('hint.form.step.answer')}>
@@ -286,11 +302,23 @@
     font-size: 0.85em;
   }
   .question {
-    margin-top: 1rem;
     border: 1px solid var(--accent);
     border-radius: var(--radius);
     padding: 0.75rem 1rem;
     background: var(--surface);
+    color: var(--text);
+  }
+  /* In the top layer, centred; the browser's own popover rules centre it with margin auto */
+  .question:popover-open {
+    margin: auto;
+    width: min(32rem, calc(100vw - 2rem));
+    box-shadow: var(--shadow);
+  }
+  /* Without the popover API the element stays in the flow of the page, as before */
+  @supports not selector(:popover-open) {
+    .question {
+      margin-top: 1rem;
+    }
   }
   .question label {
     display: flex;

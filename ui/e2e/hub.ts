@@ -47,6 +47,18 @@ export const SMOKE_SHEET = [
   '}',
 ].join('\n');
 
+/** A sheet with a question: the stepped run stops at the question until a person answers (the popover of Step.svelte). */
+export const ASK_SHEET = [
+  'return {',
+  '  id = "alpha.ask",',
+  '  title = "alpha ask",',
+  '  engine = "rpc",',
+  '  steps = {',
+  '    { ask = "Does the value look right?", note = "look at it" },',
+  '  },',
+  '}',
+].join('\n');
+
 /** The spec of beta.nvim, green as the tests start with it. */
 export const BETA_SPEC = ['describe("beta", function()', '  it("holds", function()', '    assert.is_true(true)', '  end)', 'end)'].join('\n');
 
@@ -142,6 +154,7 @@ function fill(root: string): { root: string; config: string } {
   mkdirSync(sheets, { recursive: true });
   writeFileSync(join(repos, 'alpha.nvim', 'TESTS', 'minimal_init.lua'), '-- the child editor of the sheets of alpha.nvim\n');
   writeFileSync(join(sheets, 'smoke.sheet.lua'), `${SMOKE_SHEET}\n`);
+  writeFileSync(join(sheets, 'ask.sheet.lua'), `${ASK_SHEET}\n`);
   const areas: Record<string, { class: string; repo: string }> = {};
   for (const r of REPOS) areas[r.name] = { class: r.class, repo: r.name };
   writeFileSync(join(root, 'areas.json'), JSON.stringify({ schema: 1, areas }));

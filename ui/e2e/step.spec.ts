@@ -204,3 +204,41 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(await violations(page)).toEqual([]);
   });
 }
+
+test('the question of a sheet is a popover that stays until it is answered, and the keys of the run do not reach it', async ({ page }) => {
+  const seen = await watch(page);
+  await openRepository(page);
+  await page.getByRole('button', { name: 'Step through ask' }).click();
+  // The only step of the sheet is the question: the run stops at it as soon as it opens
+  const question = page.getByRole('dialog', { name: 'Question of the sheet' });
+  await expect(question).toBeVisible({ timeout: 30_000 });
+  await expect(question).toContainText('Does the value look right?');
+  // The popover is open in the top layer, and the focus is in its answer field
+  await expect(question).toHaveAttribute('popover', 'manual');
+  expect(await question.evaluate((el) => el.matches(':popover-open'))).toBe(true);
+  await expect(question.getByLabel('Note (optional)')).toBeFocused();
+
+  // No click beside it and no Escape closes it while the run waits for the answer
+  await page.mouse.click(2, 2);
+  await page.keyboard.press('Escape');
+  await expect(question).toBeVisible();
+  expect(await question.evaluate((el) => el.matches(':popover-open'))).toBe(true);
+
+  // The keys of the run (n, c, u, b, a, y) are not taken while the focus is in the question
+  await question.getByRole('button', { name: 'Yes' }).focus();
+  await page.keyboard.press('a');
+  await expect(question).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('asks: Does the value look right?');
+
+  // The focus is visible on its buttons
+  expect(await question.getByRole('button', { name: 'Yes' }).evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe('none');
+  await expectAccessible(page, 'the question of a sheet');
+
+  // The answer closes it and gives the focus back
+  await question.getByRole('button', { name: 'Yes' }).click();
+  await expect(question).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('finished', { timeout: 30_000 });
+
+  expect(seen.errors).toEqual([]);
+  expect(seen.foreign).toEqual([]);
+});

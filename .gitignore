@@ -20,7 +20,9 @@ dist-mobile/
 .DS_Store
 Thumbs.db
 *.swp
-.claude/
+# Local Claude files stay local; the shared .claude/settings.json is committed.
+.claude/*
+!.claude/settings.json
 __pycache__/
 *.pyc
 

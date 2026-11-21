@@ -115,6 +115,9 @@ mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
 - Rules: rules-vault ruleset `web` (plus the app rules `WEB-*` in ruleset `native`).
 - The `browserslist` in `ui/package.json` is read by no build tool today (no autoprefixer/PostCSS); what Vite emits is
   set by `build.target: 'es2022'` in `ui/vite.config.ts`.
+- The scanner is an exact devDependency of `ui` (the policy of `ui/pnpm-workspace.yaml` applies):
+  `cd ui && DISABLE_TELEMETRY=1 pnpm exec modern-web-guidance legacy-scan src --json`; CI runs it as an informative
+  step. `.claude/settings.json` turns the tool's telemetry off and allows only `npx -y modern-web-guidance@latest *`.
 
 ## Nie
 

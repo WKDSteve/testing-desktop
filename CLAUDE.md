@@ -107,7 +107,7 @@ mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
 ## Web platform
 
 - Browser Support: Baseline Widely available (`.mwgrc`, `browserslist`). Newer features only behind feature detection
-  with a fallback; polyfills only via dynamic `import()`.
+  with a fallback; polyfills where browsers still in use need them (rather one too many), run only after the check: dynamic `import()`, or bundled in a `file://` page (rules-vault `BASE-02`).
 - Before writing or changing HTML, CSS or client-side JS, use the `modern-web-guidance` skill (`search` → `retrieve` →
   verify). Not for Rust, backend, CI or build config.
 - For open-ended modernisation: `npx -y modern-web-guidance@latest legacy-scan ui/src --json`, check each finding

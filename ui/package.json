@@ -14,6 +14,9 @@
     "web:e2e": "playwright test -c playwright.web.config.ts",
     "mobile:build": "vite build --mode mobile"
   },
+  "browserslist": [
+    "baseline widely available"
+  ],
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.64.0",

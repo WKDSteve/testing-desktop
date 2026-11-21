@@ -28,8 +28,8 @@
     {#if fleet}
       <span class="muted">{t('fleet.count', { shown: rows.length, total: fleet.repos.length })}</span>
     {/if}
-    <label class="filter"><input type="checkbox" bind:checked={app.onlyRed} /> {t('fleet.only_red')}</label>
-    <input class="search" type="search" placeholder={t('fleet.search')} aria-label={t('fleet.search')} bind:value={app.query} />
+    <label class="filter" data-hint={t('hint.form.fleet.only_red')}><input type="checkbox" bind:checked={app.onlyRed} /> {t('fleet.only_red')}</label>
+    <input class="search" type="search" data-hint={t('hint.form.fleet.search')} placeholder={t('fleet.search')} aria-label={t('fleet.search')} bind:value={app.query} />
   </div>
 
   {#if notes?.classesProblem}

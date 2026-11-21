@@ -447,6 +447,32 @@ const en = {
   'mobile.unpair.ask': 'Remove the pairing, the keys and the kept copy from this phone? Revoke it on the PC too: `testing-hub phone revoke <id>`.',
   'mobile.unpair.yes': 'Unpair',
   'mobile.vault.off': 'Stop reading the folder',
+  'hint.region':
+    'Explanation',
+  'hint.form.fleet.only_red':
+    'Shows only the repositories whose newest run is red.',
+  'hint.form.fleet.search':
+    'Filters the list while you type, by the name of the repository, for example: lib.',
+  'hint.form.history.only_red':
+    'Shows only the runs that were red.',
+  'hint.form.history.search':
+    'Finds runs by commit, result or the name of a red case, for example: abc1234 or timeout.',
+  'hint.form.history.period':
+    'How far back the runs are shown. All shows every run on record.',
+  'hint.form.release.looked':
+    'Confirms that you read the changes of this release. The release waits for this mark.',
+  'hint.form.run.file':
+    'Runs only the spec files whose name holds this text, for example: picker. Empty runs all of them.',
+  'hint.form.step.note':
+    'A note on the step where the run stands. It is kept with the run, for example: the popup flickers here.',
+  'hint.form.step.answer':
+    'An optional note that goes with your answer to the question of the run.',
+  'hint.form.mobile.link':
+    'The pairing link the hub prints when you run testing-hub open. Paste it here if scanning does not work.',
+  'hint.form.mobile.name':
+    'A name for this device so you can tell it apart in the hub, for example: my phone.',
+  'hint.form.mobile.push':
+    'Sends a notice to this device when a main branch turns red.',
 } as const;
 
 export type Key = keyof typeof en;
@@ -895,6 +921,32 @@ const de: Record<Key, string> = {
   'mobile.unpair.ask': 'Kopplung, Schlüssel und gemerkten Stand von diesem Telefon entfernen? Am PC auch widerrufen: `testing-hub phone revoke <id>`.',
   'mobile.unpair.yes': 'Entkoppeln',
   'mobile.vault.off': 'Ordner nicht mehr lesen',
+  'hint.region':
+    'Erklärung',
+  'hint.form.fleet.only_red':
+    'Zeigt nur die Repositories, deren neuester Lauf rot ist.',
+  'hint.form.fleet.search':
+    'Filtert die Liste beim Tippen nach dem Namen des Repositories, zum Beispiel: lib.',
+  'hint.form.history.only_red':
+    'Zeigt nur die Läufe, die rot waren.',
+  'hint.form.history.search':
+    'Findet Läufe nach Commit, Ergebnis oder dem Namen eines roten Falls, zum Beispiel: abc1234 oder timeout.',
+  'hint.form.history.period':
+    'Wie weit zurück die Läufe gezeigt werden. Alle zeigt jeden gespeicherten Lauf.',
+  'hint.form.release.looked':
+    'Bestätigt, dass du die Änderungen dieses Releases gelesen hast. Das Release wartet auf diese Markierung.',
+  'hint.form.run.file':
+    'Führt nur die Spec-Dateien aus, deren Name diesen Text enthält, zum Beispiel: picker. Leer führt alle aus.',
+  'hint.form.step.note':
+    'Eine Notiz zum Schritt, an dem der Lauf steht. Sie bleibt beim Lauf, zum Beispiel: Hier flackert das Popup.',
+  'hint.form.step.answer':
+    'Eine optionale Notiz, die zu deiner Antwort auf die Frage des Laufs gehört.',
+  'hint.form.mobile.link':
+    'Der Kopplungslink, den der Hub beim Aufruf von testing-hub open ausgibt. Hier einfügen, wenn das Scannen nicht geht.',
+  'hint.form.mobile.name':
+    'Ein Name für dieses Gerät, damit du es im Hub unterscheiden kannst, zum Beispiel: mein Handy.',
+  'hint.form.mobile.push':
+    'Schickt diesem Gerät eine Meldung, wenn ein Main-Zweig rot wird.',
 };
 
 export const DICTIONARIES = { en, de } as const;

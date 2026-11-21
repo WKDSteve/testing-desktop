@@ -140,7 +140,7 @@
           </ul>
         {/if}
       {/if}
-      <label class="looked">
+      <label class="looked" data-hint={t('hint.form.release.looked')}>
         <input type="checkbox" checked={w.looked} disabled={w.busy} onchange={(e) => app.releaseLooked(e.currentTarget.checked)} />
         {review.already ? t('release.review.looked_already') : t('release.review.looked')}
       </label>

@@ -143,7 +143,7 @@
             if (fileText.trim() !== '' && fileProblem === null) void hub.runStart(fileText);
           }}
         >
-          <label>
+          <label data-hint={t('hint.form.run.file')}>
             {t('run.file.label')}
             <input
               type="text"

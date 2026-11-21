@@ -129,9 +129,9 @@
 
     <div class="runs-head">
       <h3>{t('history.runs')}</h3>
-      <label><input type="checkbox" bind:checked={onlyRed} /> {t('history.only_red')}</label>
-      <input class="search" type="search" placeholder={t('history.search')} aria-label={t('history.search')} bind:value={query} />
-      <label>
+      <label data-hint={t('hint.form.history.only_red')}><input type="checkbox" bind:checked={onlyRed} /> {t('history.only_red')}</label>
+      <input class="search" type="search" data-hint={t('hint.form.history.search')} placeholder={t('history.search')} aria-label={t('history.search')} bind:value={query} />
+      <label data-hint={t('hint.form.history.period')}>
         {t('history.period')}
         <select bind:value={period}>
           {#each RUN_PERIODS as p (p ?? 'all')}

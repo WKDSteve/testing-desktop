@@ -4,9 +4,11 @@ import 'appkit-ui/tokens.css';
 import './palette.css';
 import 'appkit-ui/base.css';
 import { takePairingCode } from 'appkit-ui/pair';
+import { installTooltips } from 'appkit-ui/tooltip';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { App as AppState } from './lib/app.svelte';
+import { langOf, textsOf } from './lib/i18n';
 import { HubSource } from './lib/source';
 
 const target = document.getElementById('app');
@@ -21,6 +23,7 @@ const state = new AppState({
   session: window.sessionStorage,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });
+installTooltips(document, window, { regionLabel: () => textsOf(langOf(navigator.languages))('hint.region') });
 mount(App, { target, props: { app: state, code, languages: navigator.languages } });
 
 // A link of `testing-hub open` pasted into a tab that is already open changes only the fragment: no reload. The

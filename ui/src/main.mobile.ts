@@ -6,7 +6,9 @@
 import 'appkit-ui/tokens.css';
 import './palette.css';
 import 'appkit-ui/base.css';
+import { installTooltips } from 'appkit-ui/tooltip';
 import { mount } from 'svelte';
+import { langOf, textsOf } from './lib/i18n';
 import MobilePage from './mobile/MobilePage.svelte';
 import { Shell, tauriInvoke } from './mobile/shell';
 
@@ -17,5 +19,6 @@ const invoke = tauriInvoke();
 if (invoke === null) {
   target.textContent = 'testing mobil runs inside its app only.';
 } else {
+  installTooltips(document, window, { regionLabel: () => textsOf(langOf(navigator.languages))('hint.region') });
   mount(MobilePage, { target, props: { shell: new Shell(invoke), languages: navigator.languages } });
 }

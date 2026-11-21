@@ -124,7 +124,7 @@
     </div>
 
     <form class="controls note" onsubmit={onNote}>
-      <label>
+      <label data-hint={t('hint.form.step.note')}>
         {t('step.note_label')}
         <input
           type="text"
@@ -183,7 +183,7 @@
     <div class="question" role="dialog" aria-modal="false" aria-labelledby="step-question">
       <h2 id="step-question">{t('step.question')}</h2>
       <p class="ask">{shown(run.question.text)}</p>
-      <label>
+      <label data-hint={t('hint.form.step.answer')}>
         {t('step.answer_text')}
         <input type="text" maxlength="400" bind:value={answer} />
       </label>

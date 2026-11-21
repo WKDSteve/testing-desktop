@@ -6,7 +6,9 @@ import 'appkit-ui/tokens.css';
 import './palette.css';
 import 'appkit-ui/base.css';
 import { idbKeyValue, RecentFolders, type PickerWindow } from 'appkit-web/folder';
+import { installTooltips } from 'appkit-ui/tooltip';
 import { mount } from 'svelte';
+import { langOf, textsOf } from './lib/i18n';
 import logo from '../../assets/icons/testing-web/testing-web-small.svg?url';
 import { Entry } from './web/entry';
 import { HANDLES_DB } from './web/folder';
@@ -31,4 +33,5 @@ const entry = new Entry({
   now: () => Date.now(),
 });
 
+installTooltips(document, window, { regionLabel: () => textsOf(langOf(navigator.languages))('hint.region') });
 mount(WebPage, { target, props: { entry, languages: navigator.languages, build: __WEB_BUILD__ } });

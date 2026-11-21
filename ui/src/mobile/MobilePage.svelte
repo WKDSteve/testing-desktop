@@ -213,11 +213,11 @@
       <h1 id="pair-h">{t('mobile.pair.heading')}</h1>
       <p>{t('mobile.pair.intro')}</p>
       <button type="button" class="big" onclick={scan}>{t('mobile.pair.scan')}</button>
-      <label>
+      <label data-hint={t('hint.form.mobile.link')}>
         {t('mobile.pair.link')}
         <input type="url" autocomplete="off" spellcheck="false" bind:value={link} />
       </label>
-      <label>
+      <label data-hint={t('hint.form.mobile.name')}>
         {t('mobile.pair.name')}
         <input type="text" maxlength="40" autocomplete="off" bind:value={name} />
       </label>
@@ -247,7 +247,7 @@
           {:else if push && !push.distributor}
             <p>{t('mobile.push.no_distributor')}</p>
           {:else}
-            <label class="switch">
+            <label class="switch" data-hint={t('hint.form.mobile.push')}>
               <input type="checkbox" checked={push?.subscribed ?? false} onchange={(e) => togglePush(e.currentTarget.checked)} />
               {t('mobile.push.label')}
             </label>

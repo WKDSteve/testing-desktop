@@ -107,12 +107,12 @@ mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
 ## Web platform
 
 - Browser Support: Baseline Widely available (`.mwgrc`, `browserslist`). Newer features only behind feature detection
-  with a fallback; polyfills where browsers still in use need them (rather one too many), run only after the check: dynamic `import()`, or bundled in a `file://` page (rules-vault `BASE-02`).
+  with a fallback; polyfills where browsers still in use need them (rather one too many), run only after the check: dynamic `import()`, or bundled in a `file://` page.
 - Before writing or changing HTML, CSS or client-side JS, use the `modern-web-guidance` skill (`search` → `retrieve` →
   verify). Not for Rust, backend, CI or build config.
 - For open-ended modernisation: `npx -y modern-web-guidance@latest legacy-scan ui/src --json`, check each finding
   against `keepWhen`/`dropWhen`.
-- Rules: rules-vault ruleset `web` (plus the app rules `WEB-*` in ruleset `native`).
+- Rules: the maintainer's ruleset for the web platform (private, so not named or cited here by id).
 - The `browserslist` in `ui/package.json` is read by no build tool today (no autoprefixer/PostCSS); what Vite emits is
   set by `build.target: 'es2022'` in `ui/vite.config.ts`.
 - The scanner is an exact devDependency of `ui` (the policy of `ui/pnpm-workspace.yaml` applies):

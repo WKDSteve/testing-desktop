@@ -79,6 +79,12 @@ impl Subject for TestingPhone {
         &testing_hub::IDENTITY
     }
 
+    /// The hub of this subject starts with the tailnet name (`Phone::tailnet`): the matrix asks the page through that
+    /// host too (appkit v0.68.0).
+    fn tailnet_name(&self) -> Option<&'static str> {
+        Some(TAILNET)
+    }
+
     fn start(&self, cfg: StartConfig) -> BoxFuture<'_, std::io::Result<RunningServer>> {
         let engine = self
             .engine

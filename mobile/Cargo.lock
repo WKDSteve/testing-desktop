@@ -50,7 +50,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 [[package]]
 name = "appkit-mobile"
 version = "0.0.0"
-source = "git+https://github.com/WKDSteve/appkit?tag=v0.74.0#041b49c502d2dcea62a7f753cd98f6e2da14c70d"
+source = "git+https://github.com/WKDSteve/appkit?tag=v0.75.0#70df3786e91757f71666cfda1b254847c247c3fe"
 dependencies = [
  "getrandom 0.4.3",
  "p256",
@@ -3651,7 +3651,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-appkit"
 version = "0.0.0"
-source = "git+https://github.com/WKDSteve/appkit?tag=v0.74.0#041b49c502d2dcea62a7f753cd98f6e2da14c70d"
+source = "git+https://github.com/WKDSteve/appkit?tag=v0.75.0#70df3786e91757f71666cfda1b254847c247c3fe"
 dependencies = [
  "serde",
  "serde_json",

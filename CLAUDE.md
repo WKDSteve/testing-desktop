@@ -126,3 +126,4 @@ mit `TESTING_TRUST=1` und `LIB_NVIM_DIR`.
 - Keinen Workflow anstoßen, der etwas veröffentlicht (`web.yml`, `release.yml`, `rolling.yml`).
 - Keine Pull Requests: fertig, committen, pullen, auf `main` pushen (`git push origin HEAD:main`). Vor dem Push
   `git log origin/main..HEAD` ansehen. Keine Co-Autorenschaft von Claude, Commits signiert.
+- Git: In einer Cloud-Sitzung (`CLAUDE_CODE_REMOTE` gesetzt) nie auf `main` pushen, nur auf den eigenen Branch `claude/…`; gelandet wird lokal per Rebase, der Geräteschlüssel signiert dabei (`GIT-09`). Das „auf main pushen“ (`GIT-01`) gilt nur lokal.

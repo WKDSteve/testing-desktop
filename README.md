@@ -98,6 +98,7 @@ testing-desktop link            print a one-time pairing link (for a script or a
 testing-desktop logs [-f]       the end of the log of the hub in the background
 testing-desktop paths           where the program, the settings and the log are
 testing-desktop help [<cmd>]    all commands, or one
+testing-desktop completions <shell>  tab completion script for powershell or bash
 testing-desktop serve [--port N]               run the hub until Ctrl-C
 testing-desktop autostart on|off|status
 testing-desktop install [--autostart] [--shortcut]
@@ -105,6 +106,9 @@ testing-desktop uninstall [--purge-settings]
 testing-desktop phone pair [--tailnet <name> | --tunnel]   pair testing mobil (a QR code)
 testing-desktop phone list | level <id> <level> | revoke <id>
 ```
+
+Tab completion: put `testing-desktop completions powershell | Out-String | Invoke-Expression` in your PowerShell profile (`$PROFILE`),
+or `source <(testing-desktop completions bash)` in `~/.bashrc`.
 
 Exit codes: 0 done, 1 failed, 2 wrong arguments. A hub in the background ends itself, see "A hub in the background
 ends itself". `open` printed the pairing link in earlier versions; that is `link` now, and `open --launch` still

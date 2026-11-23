@@ -188,3 +188,22 @@ fn the_program_is_the_watcher_of_its_childrens_groups() {
     assert!(out.status.success(), "{out:?}");
     assert!(out.stdout.is_empty() && out.stderr.is_empty(), "{out:?}");
 }
+
+#[test]
+fn completions_print_a_script_for_each_shell_and_refuse_another() {
+    let config = Scratch::new("cli-completions");
+    for (shell, needle) in [
+        ("bash", "complete -F"),
+        ("powershell", "Register-ArgumentCompleter"),
+    ] {
+        let out = run(&config, &["completions", shell]);
+        assert!(out.status.success(), "{shell}: {out:?}");
+        let script = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(script.contains(needle), "{shell}: {script}");
+        for word in ["status", "stop", "serve", "install", "testing-desktop"] {
+            assert!(script.contains(word), "{shell} lacks {word}: {script}");
+        }
+    }
+    let out = run(&config, &["completions", "zsh"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+}

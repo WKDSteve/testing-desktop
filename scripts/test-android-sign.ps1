@@ -134,7 +134,10 @@ try {
   Set-Content -LiteralPath (Join-Path $fake 'pnpm.ps1') -Value 'Add-Content -LiteralPath $env:CALLS -Value ("pnpm [" + ($args -join "][") + "]")'
   Set-Content -LiteralPath (Join-Path $fake 'cargo.cmd') -Value ("@echo off`r`necho cargo [%~1][%~2][%~3][%~4][%~5][%~6][%~7]>>`"%CALLS%`"`r`n" +
     "mkdir gen\android\app\build\outputs\apk\universal\release 2>nul`r`n" +
-    "copy /y `"%STANDIN%`" gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk >nul`r`nexit /b 0")
+    "copy /y `"%STANDIN%`" gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk >nul`r`n" +
+    # A process that keeps a file of the build tree open, as a Gradle daemon does: Windows then cannot delete the folder.
+    "start `"`" /b powershell -NoProfile -Command `"`$f = [IO.File]::Open('%CD%\hold.lock', 'OpenOrCreate', 'ReadWrite', 'None'); Start-Sleep 12`"`r`n" +
+    "ping -n 3 127.0.0.1 >nul`r`nexit /b 0")
   $built = $passEnv + @{ PATH = "$fake;$env:PATH"; CALLS = $calls; STANDIN = $apk }
   $saved = $script
   $script = Join-Path $repo 'scripts\android-sign-and-upload.ps1'
@@ -143,13 +146,18 @@ try {
   } finally { $script = $saved }
   $short = $commit.Substring(0, 7)
   Check 'the build path builds, signs and names the APK after the commit' ($r.Code -eq 0 -and (Test-Path "$work\o9\testing-mobile-dev-$short.apk")) $r.Out
+  Check 'a build folder that Windows cannot delete is reported, and the signed APK is kept' ($r.Out -match 'could not remove') $r.Out
   $seen = if (Test-Path $calls) { @(Get-Content $calls) } else { @() }
   Check 'pnpm gets "install" and "--frozen-lockfile" as two arguments' ($seen -contains 'pnpm [install][--frozen-lockfile]') ($seen -join ' | ')
   Check 'pnpm gets "mobile:build" as one argument' ($seen -contains 'pnpm [mobile:build]') ($seen -join ' | ')
   Check 'cargo gets "tauri android build --target aarch64 --apk" as separate arguments' `
     ($seen -contains 'cargo [tauri][android][build][--target][aarch64][--apk][]') ($seen -join ' | ')
 } finally {
-  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+  # The process of the last test lets go of its file after a few seconds.
+  for ($i = 0; $i -lt 20 -and (Test-Path -LiteralPath $work); $i++) {
+    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $work) { Start-Sleep -Seconds 1 }
+  }
 }
 
 if ($failed -gt 0) { Write-Line "$failed check(s) failed"; exit 1 }

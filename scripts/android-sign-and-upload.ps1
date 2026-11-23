@@ -70,6 +70,18 @@ function Fail([string]$Message, [int]$Code = 2) {
   exit $Code
 }
 function Say([string]$Message) { [Console]::Out.WriteLine("android-sign-and-upload: $Message") }
+function Clear-BuildTree([string]$Tree) {
+  # The temporary worktree of a build. Removing it is housekeeping, never a reason to lose a built APK: Gradle leaves
+  # daemons that hold files in it, and Windows then refuses to delete the folder. The daemons are asked to stop first;
+  # a folder that stays is reported with the command that removes it later. (`--stop` ends the daemons of this Gradle
+  # version, also those of another build of the same version.)
+  $gradlew = Join-Path $Tree 'mobile\gen\android\gradlew.bat'
+  if (Test-Path -LiteralPath $gradlew) { & $gradlew --project-dir (Split-Path $gradlew) --stop *> $null }
+  git -C $repoRoot worktree remove --force $Tree *> $null
+  if ($LASTEXITCODE -ne 0 -and (Test-Path -LiteralPath $Tree)) {
+    Say "could not remove '$Tree' (a process still holds files). Later: git -C `"$repoRoot`" worktree remove --force `"$Tree`""
+  }
+}
 function Invoke-Native {
   # A native command whose failure stops the script (the exit code is not an error to PowerShell).
   $name = $args[0]
@@ -131,7 +143,11 @@ if ($Upload) {
 $unsigned = $Apk
 if (-not $unsigned) {
   $src = Join-Path $OutDir "src-$short"
-  if (Test-Path $src) { Invoke-Native git -C $repoRoot worktree remove --force $src }
+  if (Test-Path $src) {
+    Clear-BuildTree $src
+    # A tree that a process still holds from an earlier run does not stop this one: it gets a folder of its own.
+    if (Test-Path $src) { $src = Join-Path $OutDir ("src-$short-" + [DateTime]::Now.ToString('HHmmss')) }
+  }
   Say "building $short in $src"
   Invoke-Native git -C $repoRoot worktree add --quiet --detach $src $Sha
   try {
@@ -150,7 +166,7 @@ if (-not $unsigned) {
     $unsigned = Join-Path $OutDir "unsigned-$short.apk"
     Copy-Item -LiteralPath $built.FullName -Destination $unsigned -Force
   } finally {
-    Invoke-Native git -C $repoRoot worktree remove --force $src
+    Clear-BuildTree $src
   }
 }
 if (-not (Test-Path -LiteralPath $unsigned -PathType Leaf)) { Fail "the APK '$unsigned' does not exist" }

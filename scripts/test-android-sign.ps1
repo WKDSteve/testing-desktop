@@ -110,6 +110,42 @@ try {
   $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o8", '-Upload') $withFake
   Check '-Upload of a commit without a green CI: refused, nothing signed' `
     ($r.Code -eq 1 -and $r.Out -match 'not green' -and -not (Test-Path "$work\o8\testing-mobile-dev-1234567.apk")) $r.Out
+
+  # The build path: a tiny repository, and a fake pnpm and cargo that write down the arguments they got, each one
+  # separately. A command line that reaches a native program as one string ("install --frozen-lockfile") shows here.
+  $repo = Join-Path $work 'fakerepo'
+  $null = New-Item -ItemType Directory -Force (Join-Path $repo 'scripts'), (Join-Path $repo 'ui'), (Join-Path $repo 'mobile')
+  Copy-Item -LiteralPath $script -Destination (Join-Path $repo 'scripts\android-sign-and-upload.ps1')
+  Set-Content -LiteralPath (Join-Path $repo 'ui\package.json') -Value '{}'
+  Set-Content -LiteralPath (Join-Path $repo 'mobile\Cargo.toml') -Value '[package]'
+  $gitEnv = @{ GIT_AUTHOR_NAME = 't'; GIT_AUTHOR_EMAIL = 't@example.invalid'; GIT_COMMITTER_NAME = 't'; GIT_COMMITTER_EMAIL = 't@example.invalid' }
+  foreach ($k in $gitEnv.Keys) { [Environment]::SetEnvironmentVariable($k, $gitEnv[$k]) }
+  & git -C $repo init -q
+  & git -C $repo add -A
+  $tree = (& git -C $repo write-tree).Trim()
+  $commit = (& git -C $repo commit-tree $tree -m 'fake').Trim()
+  & git -C $repo update-ref refs/heads/main $commit
+  & git -C $repo remote add origin $repo
+  $calls = Join-Path $work 'calls.txt'
+  # pnpm is a PowerShell script on this machine (pnpm.ps1 comes first on the PATH), and a script receives an array
+  # argument as one argument: the fake is a script too, so the test sees what the real one sees.
+  Set-Content -LiteralPath (Join-Path $fake 'pnpm.ps1') -Value 'Add-Content -LiteralPath $env:CALLS -Value ("pnpm [" + ($args -join "][") + "]")'
+  Set-Content -LiteralPath (Join-Path $fake 'cargo.cmd') -Value ("@echo off`r`necho cargo [%~1][%~2][%~3][%~4][%~5][%~6][%~7]>>`"%CALLS%`"`r`n" +
+    "mkdir gen\android\app\build\outputs\apk\universal\release 2>nul`r`n" +
+    "copy /y `"%STANDIN%`" gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk >nul`r`nexit /b 0")
+  $built = $passEnv + @{ PATH = "$fake;$env:PATH"; CALLS = $calls; STANDIN = $apk }
+  $saved = $script
+  $script = Join-Path $repo 'scripts\android-sign-and-upload.ps1'
+  try {
+    $r = Run @('-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o9") $built
+  } finally { $script = $saved }
+  $short = $commit.Substring(0, 7)
+  Check 'the build path builds, signs and names the APK after the commit' ($r.Code -eq 0 -and (Test-Path "$work\o9\testing-mobile-dev-$short.apk")) $r.Out
+  $seen = if (Test-Path $calls) { @(Get-Content $calls) } else { @() }
+  Check 'pnpm gets "install" and "--frozen-lockfile" as two arguments' ($seen -contains 'pnpm [install][--frozen-lockfile]') ($seen -join ' | ')
+  Check 'pnpm gets "mobile:build" as one argument' ($seen -contains 'pnpm [mobile:build]') ($seen -join ' | ')
+  Check 'cargo gets "tauri android build --target aarch64 --apk" as separate arguments' `
+    ($seen -contains 'cargo [tauri][android][build][--target][aarch64][--apk][]') ($seen -join ' | ')
 } finally {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

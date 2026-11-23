@@ -73,7 +73,10 @@ function Say([string]$Message) { Write-Host "android-sign-and-upload: $Message" 
 function Run-Native {
   # A native command whose failure stops the script (the exit code is not an error to PowerShell).
   $name = $args[0]
-  & $name @($args | Select-Object -Skip 1)
+  # A variable is splatted into separate arguments; `@(...)` of an expression is one array argument that a native
+  # command receives as one string ("install --frozen-lockfile" as the name of a pnpm command).
+  $rest = @($args | Select-Object -Skip 1)
+  & $name @rest
   if ($LASTEXITCODE -ne 0) { Fail "'$name' failed with exit code $LASTEXITCODE" 1 }
 }
 

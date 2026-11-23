@@ -83,3 +83,24 @@ adb install -r gen/android/app/build/outputs/apk/universal/debug/app-universal-d
 
 Never on the workstation (`MREL-06`). Not published anywhere yet: no store, no signed release (`MREL-01`, `MREL-02` come
 before the first one).
+
+## Signing and the development build
+
+The development APK is built and signed by `scripts/android-sign-and-upload.ps1`, on the private machine only, with a
+development key that is not the key of a later release. No key and no secret exists in GitHub.
+
+- **The key** is a keystore file outside every repository (for example `%USERPROFILE%\.android-keys\testing-dev\`), made
+  once with `keytool -genkeypair -keystore ... -alias testing-dev -keyalg RSA -keysize 4096 -validity 10950`; its password
+  sits in the password manager and the file has a second copy offline. A lost key means: uninstall the app and install
+  it again (a development build keeps nothing the hub cannot send again). The path is in
+  `TESTING_ANDROID_DEV_KEYSTORE`; the script asks for the password when it signs and never writes it anywhere.
+- **The run**: `pwsh scripts/android-sign-and-upload.ps1` builds the tip of `origin/main` in a temporary worktree,
+  aligns and signs the APK, checks the signature (and the certificate, when `TESTING_ANDROID_DEV_CERT_SHA256` names it)
+  and writes `android.json` and `SHA256SUMS-android` beside it. Nothing leaves the machine. With `-Upload` the files go
+  to the pre-release `android-dev` of the repository, only for a commit whose CI is green, and the older APKs there
+  are removed. It refuses on a workstation and without a key.
+- **Why not `latest`**: the publish step of the rolling build removes every file that is not part of the build it
+  publishes, so an APK on `latest` would be gone with the next green commit. The release `android-dev` is the one place
+  for the development APK; install it with `adb install -r testing-mobile-dev-<sha>.apk`.
+- **Test**: `pwsh scripts/test-android-sign.ps1` makes a throwaway key and a stand-in APK and checks the refusals, the
+  signing and the certificate check. It never touches the real key and prints `n/a` where the Android tools are missing.

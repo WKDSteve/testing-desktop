@@ -211,6 +211,8 @@ jobs:
       - run: cargo deny --manifest-path mobile/Cargo.toml check
       - run: python tools/check-lock-age.py --min-days 7 --lock mobile/Cargo.lock
       - run: python tools/check-appkit-pin.py --lock mobile/Cargo.lock
+      # The signing script of the development APK, with a throwaway key; `n/a` where the Android tools are not installed.
+      - run: pwsh -NoProfile -File scripts/test-android-sign.ps1
 
   # The browser tests: the binary, the real engine (a real Neovim and the pinned testing.nvim, which makes the results
   # by real runs), the system's Chrome, axe in both colour schemes, and a repository with hostile output.

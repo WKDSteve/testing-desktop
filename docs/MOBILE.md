@@ -57,7 +57,7 @@ A new phone reads (`create`, the kit's default; this app has nothing to create).
 Keystore: one to log in, and one that signs a rerun only after your fingerprint or screen lock. A phone without a screen
 lock pairs and reads, and cannot start anything.
 
-Lost the phone: `testing-hub phone revoke <id>` on the PC, and remove the phone from the tailnet in the Tailscale admin
+Lost the phone: `testing-desktop phone revoke <id>` on the PC, and remove the phone from the tailnet in the Tailscale admin
 console. The phone held the fleet of the repositories released for it, no key that opens anything without its lock.
 
 ## Notices

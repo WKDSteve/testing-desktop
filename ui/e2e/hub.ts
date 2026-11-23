@@ -241,9 +241,9 @@ async function waitUntilReady(config: string): Promise<void> {
   await assertFreshBinary();
 }
 
-/** A pairing link, as `testing-hub open` prints it. */
+/** A pairing link, as `testing-desktop link` prints it. */
 export function pairingLink(config: string): string {
-  const out = execFileSync(exe, ['open'], { env: env(config), encoding: 'utf8' });
+  const out = execFileSync(exe, ['link'], { env: env(config), encoding: 'utf8' });
   const link = out.trim().split(/\r?\n/)[0] ?? '';
   if (!link.startsWith(`${origin()}/#pair=`)) throw new Error(`unexpected link: ${link}`);
   return link;

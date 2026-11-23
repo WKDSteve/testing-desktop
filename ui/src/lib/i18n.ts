@@ -7,10 +7,10 @@ const en = {
   'app.title': 'Testing',
   'phase.starting': 'Connecting to the hub…',
   'phase.reading': 'The hub is reading the results of the fleet… Right after the hub started this also asks GitHub and can take up to a minute.',
-  'phase.needs_pairing': 'This tab is not paired with the hub. Run `testing-hub open` and open the link it prints.',
-  'phase.pair_refused': 'The pairing link was used already or is too old. Run `testing-hub open` for a new one.',
-  'phase.pair_limited': 'Too many pairing attempts just now. Wait a minute, then run `testing-hub open` for a new link.',
-  'phase.offline': 'The hub does not answer. Is it running? (`testing-hub start`)',
+  'phase.needs_pairing': 'This tab is not paired with the hub. Run `testing-desktop open`: it opens this page with a one-time link.',
+  'phase.pair_refused': 'The pairing link was used already or is too old. Run `testing-desktop open` for a new one.',
+  'phase.pair_limited': 'Too many pairing attempts just now. Wait a minute, then run `testing-desktop open` for a new link.',
+  'phase.offline': 'The hub does not answer. Is it running? (`testing-desktop start`)',
   'phase.unavailable': 'The hub runs, but testing.nvim is not ready ({problem}).',
   'phase.failed': 'The hub could not read the fleet: {message}',
   'fleet.heading': 'Repositories',
@@ -468,7 +468,7 @@ const en = {
   'hint.form.step.answer':
     'An optional note that goes with your answer to the question of the run.',
   'hint.form.mobile.link':
-    'The pairing link the hub prints when you run testing-hub open. Paste it here if scanning does not work.',
+    'The pairing link the hub prints when you run testing-desktop phone pair. Paste it here if scanning does not work.',
   'hint.form.mobile.name':
     'A name for this device so you can tell it apart in the hub, for example: my phone.',
   'hint.form.mobile.push':
@@ -481,10 +481,10 @@ const de: Record<Key, string> = {
   'app.title': 'Testing',
   'phase.starting': 'Verbinde mit dem Hub…',
   'phase.reading': 'Der Hub liest die Ergebnisse der Flotte… Kurz nach seinem Start fragt er dabei auch GitHub, das kann bis zu einer Minute dauern.',
-  'phase.needs_pairing': 'Dieser Tab ist nicht mit dem Hub gekoppelt. `testing-hub open` ausführen und den Link öffnen.',
-  'phase.pair_refused': 'Der Kopplungslink ist verbraucht oder zu alt. `testing-hub open` gibt einen neuen.',
-  'phase.pair_limited': 'Gerade zu viele Kopplungsversuche. Eine Minute warten, dann gibt `testing-hub open` einen neuen Link.',
-  'phase.offline': 'Der Hub antwortet nicht. Läuft er? (`testing-hub start`)',
+  'phase.needs_pairing': 'Dieser Tab ist nicht mit dem Hub gekoppelt. `testing-desktop open` ausführen: es öffnet diese Seite mit einem Einmal-Link.',
+  'phase.pair_refused': 'Der Kopplungslink ist verbraucht oder zu alt. `testing-desktop open` gibt einen neuen.',
+  'phase.pair_limited': 'Gerade zu viele Kopplungsversuche. Eine Minute warten, dann gibt `testing-desktop open` einen neuen Link.',
+  'phase.offline': 'Der Hub antwortet nicht. Läuft er? (`testing-desktop start`)',
   'phase.unavailable': 'Der Hub läuft, aber testing.nvim ist nicht bereit ({problem}).',
   'phase.failed': 'Der Hub konnte die Flotte nicht lesen: {message}',
   'fleet.heading': 'Repositories',
@@ -942,7 +942,7 @@ const de: Record<Key, string> = {
   'hint.form.step.answer':
     'Eine optionale Notiz, die zu deiner Antwort auf die Frage des Laufs gehört.',
   'hint.form.mobile.link':
-    'Der Kopplungslink, den der Hub beim Aufruf von testing-hub open ausgibt. Hier einfügen, wenn das Scannen nicht geht.',
+    'Der Kopplungslink, den der Hub beim Aufruf von testing-desktop phone pair ausgibt. Hier einfügen, wenn das Scannen nicht geht.',
   'hint.form.mobile.name':
     'Ein Name für dieses Gerät, damit du es im Hub unterscheiden kannst, zum Beispiel: mein Handy.',
   'hint.form.mobile.push':

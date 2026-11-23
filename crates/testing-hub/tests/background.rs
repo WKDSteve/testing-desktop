@@ -177,7 +177,7 @@ fn a_hub_in_the_background_stays_while_a_page_is_connected_and_ends_after_it_clo
     start_in_background(&config, port, alone);
 
     // The page: a pairing link, its session, and a connection that stays open (the event stream).
-    let out = command(&config).arg("open").output().unwrap();
+    let out = command(&config).arg("link").output().unwrap();
     assert!(out.status.success(), "{out:?}");
     let url = String::from_utf8(out.stdout).unwrap();
     let code = url
@@ -283,5 +283,68 @@ impl Drop for Terminal {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
+    }
+}
+
+/// The commands every hub app shares, on a hub that runs in the background: `status` names it (text and JSON, exit
+/// code 0), `restart` leaves another process in its place, `quit` ends it and `status` then says it is gone (exit 1).
+#[test]
+fn status_restart_and_quit_work_on_a_hub_in_the_background() {
+    let config = config("common", "");
+    let port = free_port();
+    let _guard = Background(&config);
+    start_in_background(&config, port, 120);
+
+    let on = command(&config).arg("status").output().unwrap();
+    assert_eq!(on.status.code(), Some(0), "{on:?}");
+    let said = String::from_utf8_lossy(&on.stdout).into_owned();
+    assert!(
+        said.starts_with("testing-desktop: running (process ")
+            && said.contains(&format!("port {port},")),
+        "{said}"
+    );
+    let json = command(&config)
+        .args(["status", "--json"])
+        .output()
+        .unwrap();
+    let doc: Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(doc["running"], true);
+    assert_eq!(doc["port"], port);
+
+    let before = doc["pid"].clone();
+    let restarted = command(&config)
+        .env("TESTING_DESKTOP_PORT", port.to_string())
+        .env("TESTING_DESKTOP_ALONE_SECS", "120")
+        .arg("restart")
+        .output()
+        .unwrap();
+    assert!(restarted.status.success(), "{restarted:?}");
+    let after: Value = serde_json::from_slice(
+        &command(&config)
+            .args(["status", "--json"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    assert_eq!(after["running"], true, "{restarted:?}");
+    assert_ne!(
+        after["pid"], before,
+        "the hub after restart is a new process"
+    );
+
+    let quit = command(&config).arg("quit").output().unwrap();
+    assert!(quit.status.success(), "{quit:?}");
+    let end = Instant::now() + Duration::from_secs(20);
+    while command(&config)
+        .arg("status")
+        .output()
+        .unwrap()
+        .status
+        .code()
+        != Some(1)
+    {
+        assert!(Instant::now() < end, "the hub did not end on quit");
+        std::thread::sleep(Duration::from_millis(100));
     }
 }

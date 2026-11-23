@@ -522,7 +522,7 @@ pub async fn serve(opts: ServeOptions) -> Result<(), String> {
 }
 
 /// What `open` says when there is no hub to ask: how to start one and open the page in one go.
-pub const START_HINT: &str = "start it and open the page with `testing-hub start --open`";
+pub const START_HINT: &str = "start it and open the page with `testing-desktop open`";
 
 /// Ask the running hub for a pairing code and return the link for it.
 ///

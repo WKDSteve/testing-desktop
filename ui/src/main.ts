@@ -26,7 +26,7 @@ const state = new AppState({
 installTooltips(document, window, { regionLabel: () => textsOf(langOf(navigator.languages))('hint.region') });
 mount(App, { target, props: { app: state, code, languages: navigator.languages } });
 
-// A link of `testing-hub open` pasted into a tab that is already open changes only the fragment: no reload. The
+// A link of `testing-desktop link` pasted into a tab that is already open changes only the fragment: no reload. The
 // page starts again with the new code; what ran before is stopped first.
 window.addEventListener('hashchange', () => {
   const later = takePairingCode(window.location, window.history);

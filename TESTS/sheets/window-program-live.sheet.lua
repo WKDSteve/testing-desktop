@@ -18,7 +18,7 @@ return {
     { ask = "A second click on the link only opens the page again (still one testing-hub in the Task Manager)?" },
     {
       ask = "testing-hub autostart on, signed out and in again: no console window at the login, and the hub runs"
-        .. " (testing-hub open finds it)?",
+        .. " (testing-desktop status says it runs)?",
     },
     {
       ask = "testing-hub stop ends the hub: afterwards no testing-hub.exe and no nvim.exe of the hub is left in the Task"

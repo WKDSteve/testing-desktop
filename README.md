@@ -81,24 +81,41 @@ docs/                 usage, security of the server, releasing
 
 ## Running the hub
 
-The program is `testing-hub`; its verbs are those of `tasks-hub` and `rules-hub`:
+`install` (every way: the install line, `scripts\build-install.ps1`) makes the program a command named after the
+app, `testing-desktop`, in every new terminal (PowerShell, cmd, Git Bash): a starter in
+`%LOCALAPPDATA%\appkit-family\bin`, which goes on the PATH of your user once; `uninstall` takes it away. It is the
+same program as `testing-hub` below, so every command works under both names, and the verbs are those of the other
+hub apps:
 
 ```
-testing-hub serve [--port N]      run the hub until Ctrl-C
-testing-hub start [--open]        run it in the background (log in the config folder; it ends itself, see
-                                  "A hub in the background ends itself")
-testing-hub stop                  stop that hub
-testing-hub open [--launch]       print (or open) a one-time pairing link
-testing-hub autostart on|off|status
-testing-hub install [--autostart] [--shortcut]
-testing-hub uninstall [--purge-settings]
+testing-desktop                 start the hub when it does not run, and open the page
+testing-desktop open            the same: open the page, starting the hub first when needed
+testing-desktop start [--open]  run the hub in the background (log in the config folder)
+testing-desktop stop | quit     end it
+testing-desktop restart         stop, then start
+testing-desktop status [--json] does it run (process, port, version)? exit code 0 yes, 1 no
+testing-desktop link            print a one-time pairing link (for a script or a tunnel)
+testing-desktop logs [-f]       the end of the log of the hub in the background
+testing-desktop paths           where the program, the settings and the log are
+testing-desktop help [<cmd>]    all commands, or one
+testing-desktop serve [--port N]               run the hub until Ctrl-C
+testing-desktop autostart on|off|status
+testing-desktop install [--autostart] [--shortcut]
+testing-desktop uninstall [--purge-settings]
+testing-desktop phone pair [--tailnet <name> | --tunnel]   pair testing mobil (a QR code)
+testing-desktop phone list | level <id> <level> | revoke <id>
 ```
+
+Exit codes: 0 done, 1 failed, 2 wrong arguments. A hub in the background ends itself, see "A hub in the background
+ends itself". `open` printed the pairing link in earlier versions; that is `link` now, and `open --launch` still
+works and does what `open` does.
 
 Without an argument (a double click, the link in the Start menu) it starts the hub in the background and opens
 the browser. The program of a rolling build or a release is a window program: a double click, the link and the
 login entry open no console window, and an error shows in a message box (a debug build is a console program).
-From a terminal it writes its output there, but the prompt comes back at once (the shell does not wait for a
-window program); a script that needs the output or the exit code pipes it, `(& testing-hub --version | Out-String).Trim()`.
+Called as `testing-hub.exe` from a terminal it writes its output there, but the prompt comes back at once (the shell
+does not wait for a window program), so a script needs `(& testing-hub --version | Out-String).Trim()`. The command
+`testing-desktop` has no such trap: its starter waits for the program and hands its output and exit code back.
 
 The config folder is `%APPDATA%\testing-desktop` (`~/.config/testing-desktop`; `TESTING_DESKTOP_CONFIG_DIR` moves it).
 The default port is 17618 (`TESTING_DESKTOP_PORT`, or `port` in `config.json`).
@@ -134,7 +151,7 @@ It stays when you gave it an order to, or while it has work:
 
 - it starts with your login (`testing-hub autostart on`, the switch in the Help menu or the one of its tile in
   hub-desktop), or hub-desktop started it with itself at the login,
-- a phone is paired (`testing-hub phone list`): the phone reaches the hub when no page is open on the PC,
+- a phone is paired (`testing-desktop phone list`): the phone reaches the hub when no page is open on the PC,
 - `config.json` says `"keep_running": true` (read when the ten minutes are over, so it acts without a restart),
 - a run through the engine is under way (a suite, a file, the sheets of a task a phone started); once the hub stayed
   for it, it asks again an hour later.

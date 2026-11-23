@@ -75,18 +75,27 @@ What is missing, the page says. `about` says where each setting came from, never
 ## The commands
 
 ```
-testing-hub                       (a double click) start the hub in the background, open the browser
-testing-hub serve [--port N]      run the hub until Ctrl-C
-testing-hub start [--open]        run it in the background (log in the config folder)
-testing-hub stop                  stop that hub
-testing-hub open [--launch]       print (or open) a one-time pairing link
-testing-hub autostart on|off|status
-testing-hub install [--autostart] [--shortcut]
-testing-hub uninstall [--purge-settings]
-testing-hub phone pair [--tailnet <name> | --tunnel]   pair testing mobil (a QR code)
-testing-hub phone list | level <id> <level> | revoke <id>
-testing-hub --version
+testing-desktop                 start the hub when it does not run, and open the page
+testing-desktop open            the same: open the page, starting the hub first when needed
+testing-desktop start [--open]  run the hub in the background (log in the config folder)
+testing-desktop stop | quit     end it
+testing-desktop restart         stop, then start
+testing-desktop status [--json] does it run (process, port, version)? exit code 0 yes, 1 no
+testing-desktop link            print a one-time pairing link (for a script or a tunnel)
+testing-desktop logs [-f]       the end of the log of the hub in the background
+testing-desktop paths           where the program, the settings and the log are
+testing-desktop help [<cmd>]    all commands, or one
+testing-desktop serve [--port N]               run the hub until Ctrl-C
+testing-desktop autostart on|off|status
+testing-desktop install [--autostart] [--shortcut]
+testing-desktop uninstall [--purge-settings]
+testing-desktop phone pair [--tailnet <name> | --tunnel]   pair testing mobil (a QR code)
+testing-desktop phone list | level <id> <level> | revoke <id>
+testing-desktop version
 ```
+
+`testing-desktop` is the command `install` makes for the program `testing-hub` (both names work; `testing-desktop help`
+lists every command). `testing-hub` prints the same.
 
 The phone app, its ways to the hub and what it may do: [MOBILE.md](MOBILE.md).
 
@@ -94,7 +103,7 @@ The config folder is `%APPDATA%\testing-desktop` (`TESTING_DESKTOP_CONFIG_DIR` m
 (`TESTING_DESKTOP_PORT`, or `port` in `config.json`). In [hub-desktop](https://github.com/WKDSteve/hub-desktop) the app is
 the tile **Testing**: one click starts it and opens it.
 
-`testing-hub open` without a running hub says so and names `testing-hub start --open`, which starts it and opens the
+`testing-desktop link` without a running hub says so and names `testing-desktop open`, which starts it and opens the
 page in one go.
 
 Whether the hub starts with your login is one state, switched in three places that always show the same: the Help

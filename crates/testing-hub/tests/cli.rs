@@ -44,14 +44,24 @@ fn help_names_every_verb() {
         "serve",
         "start",
         "stop",
+        "restart",
+        "status",
+        "open",
+        "link",
+        "logs",
+        "paths",
         "autostart",
         "install",
         "uninstall",
-        "open",
-        "--version",
+        "phone pair",
+        "phone list",
+        "phone level",
+        "phone revoke",
+        "version",
     ] {
-        assert!(text.contains(&format!("testing-hub {verb}")), "{verb}");
+        assert!(text.contains(&format!("testing-desktop {verb}")), "{verb}");
     }
+    assert!(text.contains("Exit codes"), "{text}");
 }
 
 #[test]
@@ -64,22 +74,76 @@ fn an_unknown_verb_or_a_bad_port_is_refused_with_the_usage() {
         &["stop", "now"],
         &["autostart", "maybe"],
         &["install", "--everything"],
+        &["close"],
+        &["logs", "-n", "0"],
+        &["phone"],
+        &["phone", "frobnicate"],
+        &["help", "frobnicate"],
     ] {
         let out = run(&config, args);
-        assert_eq!(out.status.code(), Some(1), "{args:?}: {out:?}");
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {out:?}");
         let err = String::from_utf8(out.stderr).unwrap();
         assert!(err.starts_with("testing-hub: "), "{args:?}: {err}");
     }
 }
 
 #[test]
-fn open_without_a_running_hub_says_so() {
-    let config = Scratch::new("cli-open");
-    let out = run(&config, &["open"]);
+fn link_without_a_running_hub_says_so() {
+    let config = Scratch::new("cli-link");
+    let out = run(&config, &["link"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let err = String::from_utf8(out.stderr).unwrap();
     assert!(err.contains("no hub is running"), "{err}");
-    assert!(err.contains("testing-hub start --open"), "{err}");
+    assert!(err.contains("testing-desktop open"), "{err}");
+}
+
+/// `status` of a hub that does not run: its words, JSON, and exit code 1; `quit` and `stop` with nothing running
+/// succeed; `paths` names the settings folder of the run.
+#[test]
+fn status_without_a_hub_is_exit_code_1_and_the_other_common_commands_answer() {
+    let config = Scratch::new("cli-status");
+    let off = run(&config, &["status"]);
+    assert_eq!(off.status.code(), Some(1), "{off:?}");
+    assert!(String::from_utf8_lossy(&off.stdout).starts_with("testing-desktop: not running\n"));
+    let json = run(&config, &["status", "--json"]);
+    assert_eq!(json.status.code(), Some(1), "{json:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(doc["running"], false);
+    assert_eq!(doc["app"], "testing-desktop");
+    for word in ["stop", "quit"] {
+        let out = run(&config, &[word]);
+        assert!(out.status.success(), "{word}: {out:?}");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("no hub is running"));
+    }
+    let paths = run(&config, &["paths"]);
+    assert!(paths.status.success(), "{paths:?}");
+    assert!(
+        String::from_utf8_lossy(&paths.stdout)
+            .contains(&format!("settings:  {}", config.display())),
+        "{paths:?}"
+    );
+    let logs = run(&config, &["logs"]);
+    assert_eq!(logs.status.code(), Some(1), "{logs:?}");
+    assert!(String::from_utf8_lossy(&logs.stderr).contains("no log at"));
+}
+
+/// `help <command>` and `<command> --help`: a common command, an own one (`phone`) and `open`.
+#[test]
+fn help_of_one_command_is_its_own_text() {
+    let config = Scratch::new("cli-help-one");
+    let said = |args: &[&str]| {
+        let out = run(&config, args);
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        String::from_utf8(out.stdout).unwrap()
+    };
+    assert!(said(&["help", "status"]).starts_with("testing-desktop status [--json]"));
+    assert!(said(&["link", "--help"]).starts_with("testing-desktop link"));
+    let phone = said(&["phone", "--help"]);
+    assert!(
+        phone.contains("testing-desktop phone pair") && phone.contains("phone revoke <id>"),
+        "{phone}"
+    );
+    assert!(said(&["help", "install"]).contains("make the"));
 }
 
 #[test]

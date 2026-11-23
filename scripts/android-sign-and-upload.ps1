@@ -33,7 +33,7 @@ The key alias in the keystore.
 .PARAMETER Apk
 An unsigned APK to sign instead of building one (reruns, the test).
 
-.PARAMETER PasswordEnv
+.PARAMETER KeyEnvVar
 The name of an environment variable that holds the keystore password, for the test with a throwaway key only.
 Without it the password is asked for.
 
@@ -57,7 +57,7 @@ param(
   [string]$Apk,
   [string]$OutDir = (Join-Path ([IO.Path]::GetTempPath()) 'testing-android-dev'),
   [string]$Tag = 'android-dev',
-  [string]$PasswordEnv,
+  [string]$KeyEnvVar,
   [string]$CertSha256 = $env:TESTING_ANDROID_DEV_CERT_SHA256,
   [switch]$Upload
 )
@@ -69,8 +69,8 @@ function Fail([string]$Message, [int]$Code = 2) {
   [Console]::Error.WriteLine("android-sign-and-upload: $Message")
   exit $Code
 }
-function Say([string]$Message) { Write-Host "android-sign-and-upload: $Message" }
-function Run-Native {
+function Say([string]$Message) { [Console]::Out.WriteLine("android-sign-and-upload: $Message") }
+function Invoke-Native {
   # A native command whose failure stops the script (the exit code is not an error to PowerShell).
   $name = $args[0]
   # A variable is splatted into separate arguments; `@(...)` of an expression is one array argument that a native
@@ -113,7 +113,7 @@ $minSdk = '24'
 
 # 2. The commit, and its CI.
 if (-not $Apk) {
-  Run-Native git -C $repoRoot fetch --quiet origin main
+  Invoke-Native git -C $repoRoot fetch --quiet origin main
   if (-not $Sha) { $Sha = (git -C $repoRoot rev-parse origin/main).Trim() }
   else { $Sha = (git -C $repoRoot rev-parse --verify "$Sha^{commit}").Trim() }
 } elseif (-not $Sha) {
@@ -131,9 +131,9 @@ if ($Upload) {
 $unsigned = $Apk
 if (-not $unsigned) {
   $src = Join-Path $OutDir "src-$short"
-  if (Test-Path $src) { Run-Native git -C $repoRoot worktree remove --force $src }
+  if (Test-Path $src) { Invoke-Native git -C $repoRoot worktree remove --force $src }
   Say "building $short in $src"
-  Run-Native git -C $repoRoot worktree add --quiet --detach $src $Sha
+  Invoke-Native git -C $repoRoot worktree add --quiet --detach $src $Sha
   try {
     $ndkRoot = Join-Path $sdk 'ndk'
     $ndk = Get-ChildItem -LiteralPath $ndkRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
@@ -141,16 +141,16 @@ if (-not $unsigned) {
     $env:ANDROID_HOME = $sdk
     $env:NDK_HOME = $ndk.FullName
     Push-Location (Join-Path $src 'ui')
-    try { Run-Native pnpm install --frozen-lockfile; Run-Native pnpm mobile:build } finally { Pop-Location }
+    try { Invoke-Native pnpm install --frozen-lockfile; Invoke-Native pnpm mobile:build } finally { Pop-Location }
     Push-Location (Join-Path $src 'mobile')
-    try { Run-Native cargo tauri android build --target aarch64 --apk } finally { Pop-Location }
+    try { Invoke-Native cargo tauri android build --target aarch64 --apk } finally { Pop-Location }
     $built = Get-ChildItem -Recurse -Filter '*.apk' -LiteralPath (Join-Path $src 'mobile\gen\android\app\build\outputs\apk') |
       Where-Object { $_.Name -match 'release' } | Select-Object -First 1
     if (-not $built) { Fail 'the build made no release APK' 1 }
     $unsigned = Join-Path $OutDir "unsigned-$short.apk"
     Copy-Item -LiteralPath $built.FullName -Destination $unsigned -Force
   } finally {
-    Run-Native git -C $repoRoot worktree remove --force $src
+    Invoke-Native git -C $repoRoot worktree remove --force $src
   }
 }
 if (-not (Test-Path -LiteralPath $unsigned -PathType Leaf)) { Fail "the APK '$unsigned' does not exist" }
@@ -160,10 +160,10 @@ $name = "testing-mobile-dev-$short.apk"
 $aligned = Join-Path $OutDir "aligned-$short.apk"
 $signed = Join-Path $OutDir $name
 Remove-Item -LiteralPath $aligned, $signed -Force -ErrorAction SilentlyContinue
-Run-Native $zipalign -f -p 4 $unsigned $aligned
-if ($PasswordEnv) {
-  $plain = [Environment]::GetEnvironmentVariable($PasswordEnv)
-  if (-not $plain) { Fail "the environment variable '$PasswordEnv' is empty" }
+Invoke-Native $zipalign -f -p 4 $unsigned $aligned
+if ($KeyEnvVar) {
+  $plain = [Environment]::GetEnvironmentVariable($KeyEnvVar)
+  if (-not $plain) { Fail "the environment variable '$KeyEnvVar' is empty" }
 } else {
   $secret = Read-Host "Password of the keystore $(Split-Path -Leaf $keystoreFull)" -AsSecureString
   $plain = [Net.NetworkCredential]::new('', $secret).Password
@@ -212,13 +212,13 @@ if (-not $Upload) {
 }
 gh release view $Tag --repo $Repo *> $null
 if ($LASTEXITCODE -ne 0) {
-  Run-Native gh release create $Tag --repo $Repo --prerelease --latest=false --title 'Android development build' --notes $notes
+  Invoke-Native gh release create $Tag --repo $Repo --prerelease --latest=false --title 'Android development build' --notes $notes
 } else {
-  Run-Native gh release edit $Tag --repo $Repo --prerelease --latest=false --notes $notes
+  Invoke-Native gh release edit $Tag --repo $Repo --prerelease --latest=false --notes $notes
 }
-Run-Native gh release upload $Tag $signed $infoPath $sumsPath --repo $Repo --clobber
+Invoke-Native gh release upload $Tag $signed $infoPath $sumsPath --repo $Repo --clobber
 $assets = gh release view $Tag --repo $Repo --json assets --jq '.assets[].name'
 foreach ($old in ($assets | Where-Object { $_ -like 'testing-mobile-dev-*.apk' -and $_ -ne $name })) {
-  Run-Native gh release delete-asset $Tag $old --repo $Repo --yes
+  Invoke-Native gh release delete-asset $Tag $old --repo $Repo --yes
 }
 Say "published $name on the pre-release $Tag of $Repo"

@@ -11,6 +11,8 @@ against them. It never touches the development key of the maintainer and never p
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Write-Line([string]$Message) { [Console]::Out.WriteLine($Message) }
+
 $script = Join-Path $PSScriptRoot 'android-sign-and-upload.ps1'
 $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
 $tools = Get-ChildItem -LiteralPath (Join-Path $sdk 'build-tools') -Directory -ErrorAction SilentlyContinue |
@@ -19,7 +21,7 @@ $aapt2 = $tools | Sort-Object Name -Descending | ForEach-Object { Join-Path $_.F
 $androidJar = Get-ChildItem -Path (Join-Path $sdk 'platforms\android-*\android.jar') -ErrorAction SilentlyContinue |
   Sort-Object FullName -Descending | Select-Object -First 1
 if (-not (Get-Command keytool -ErrorAction SilentlyContinue) -or -not $tools -or -not $aapt2 -or -not $androidJar) {
-  Write-Host 'n/a  keytool, the Android build-tools (with aapt2) or an Android platform are missing on this machine'
+  Write-Line 'n/a  keytool, the Android build-tools (with aapt2) or an Android platform are missing on this machine'
   return
 }
 
@@ -27,7 +29,7 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ("android-sign-test-" + [guid]::New
 $null = New-Item -ItemType Directory -Force $work
 $failed = 0
 function Check([string]$Name, [bool]$Ok, [string]$Detail = '') {
-  if ($Ok) { Write-Host "ok   $Name" } else { Write-Host "FAIL $Name $Detail"; $script:failed++ }
+  if ($Ok) { Write-Line "ok   $Name" } else { Write-Line "FAIL $Name $Detail"; $script:failed++ }
 }
 function Run([string[]]$Arguments, [hashtable]$Env = @{}) {
   # The script in a child process: its exit code is the answer, and its environment is exactly what the test sets.
@@ -79,7 +81,7 @@ try {
   } finally { Remove-Item -LiteralPath $inside -Force -ErrorAction SilentlyContinue }
 
   # Signing with the throwaway key.
-  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o4") $passEnv
+  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-KeyEnvVar', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o4") $passEnv
   $signed = "$work\o4\testing-mobile-dev-1234567.apk"
   Check 'signs the stand-in and names it after the commit' ($r.Code -eq 0 -and (Test-Path $signed)) $r.Out
   Check 'the password is not printed' (-not ($r.Out -like "*$pass*"))
@@ -95,11 +97,11 @@ try {
 
   # The certificate check: the right one passes, a wrong keystore fails and keeps nothing.
   $cert = $info.certificate_sha256
-  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o5", '-CertSha256', $cert.ToUpperInvariant()) $passEnv
+  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-KeyEnvVar', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o5", '-CertSha256', $cert.ToUpperInvariant()) $passEnv
   Check 'the expected certificate (any case) passes' ($r.Code -eq 0) $r.Out
-  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $other, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o6", '-CertSha256', $cert) $passEnv
+  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $other, '-KeyEnvVar', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o6", '-CertSha256', $cert) $passEnv
   Check 'a wrong keystore: exit 1, the APK is not kept' ($r.Code -eq 1 -and -not (Test-Path "$work\o6\testing-mobile-dev-1234567.apk")) $r.Out
-  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-Alias', 'nope', '-OutDir', "$work\o7") $passEnv
+  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-KeyEnvVar', 'TESTING_TEST_KEYPASS', '-Alias', 'nope', '-OutDir', "$work\o7") $passEnv
   Check 'a wrong alias: exit 1' ($r.Code -eq 1) $r.Out
 
   # -Upload with a fake gh that knows no green run: refused before anything is built or published.
@@ -107,7 +109,7 @@ try {
   $null = New-Item -ItemType Directory -Force $fake
   Set-Content -LiteralPath (Join-Path $fake 'gh.cmd') -Value "@echo off`r`necho []`r`nexit /b 0"
   $withFake = $passEnv + @{ PATH = "$fake;$env:PATH" }
-  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o8", '-Upload') $withFake
+  $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-KeyEnvVar', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o8", '-Upload') $withFake
   Check '-Upload of a commit without a green CI: refused, nothing signed' `
     ($r.Code -eq 1 -and $r.Out -match 'not green' -and -not (Test-Path "$work\o8\testing-mobile-dev-1234567.apk")) $r.Out
 
@@ -137,7 +139,7 @@ try {
   $saved = $script
   $script = Join-Path $repo 'scripts\android-sign-and-upload.ps1'
   try {
-    $r = Run @('-Keystore', $ks, '-PasswordEnv', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o9") $built
+    $r = Run @('-Keystore', $ks, '-KeyEnvVar', 'TESTING_TEST_KEYPASS', '-OutDir', "$work\o9") $built
   } finally { $script = $saved }
   $short = $commit.Substring(0, 7)
   Check 'the build path builds, signs and names the APK after the commit' ($r.Code -eq 0 -and (Test-Path "$work\o9\testing-mobile-dev-$short.apk")) $r.Out
@@ -150,5 +152,5 @@ try {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-if ($failed -gt 0) { Write-Host "$failed check(s) failed"; exit 1 }
-Write-Host 'all checks passed'
+if ($failed -gt 0) { Write-Line "$failed check(s) failed"; exit 1 }
+Write-Line 'all checks passed'

@@ -468,7 +468,7 @@ const en = {
   'hint.form.release.looked':
     'Confirms that you read the changes of this release. The release waits for this mark.',
   'hint.form.run.file':
-    'Runs only the spec files whose name holds this text, for example: picker. Empty runs all of them.',
+    'Runs only the spec files whose name holds this text, for example: picker. The whole suite has its own button.',
   'hint.form.step.note':
     'A note on the step where the run stands. It is kept with the run, for example: the popup flickers here.',
   'hint.form.step.answer':
@@ -948,7 +948,7 @@ const de: Record<Key, string> = {
   'hint.form.release.looked':
     'Bestätigt, dass du die Änderungen dieses Releases gelesen hast. Das Release wartet auf diese Markierung.',
   'hint.form.run.file':
-    'Führt nur die Spec-Dateien aus, deren Name diesen Text enthält, zum Beispiel: picker. Leer führt alle aus.',
+    'Führt nur die Spec-Dateien aus, deren Name diesen Text enthält, zum Beispiel: picker. Die ganze Suite hat einen eigenen Knopf.',
   'hint.form.step.note':
     'Eine Notiz zum Schritt, an dem der Lauf steht. Sie bleibt beim Lauf, zum Beispiel: Hier flackert das Popup.',
   'hint.form.step.answer':

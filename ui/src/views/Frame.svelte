@@ -13,12 +13,15 @@
     t,
     logo,
     help,
+    signOut,
     children,
   }: {
     app: Reader;
     t: (key: Key, params?: Record<string, string | number>) => string;
     logo: string;
     help: MenuItem[];
+    /** Only a page with a session of a hub has one: the button that ends it. */
+    signOut?: () => void;
     children: Snippet;
   } = $props();
 
@@ -65,6 +68,9 @@
   {#if app.phase === 'ready'}
     <MenuBar {menus} label={t('menu.label')} />
   {/if}
+  {#if signOut}
+    <button type="button" class="sign-out" onclick={signOut}>{t('session.sign_out')}</button>
+  {/if}
 </header>
 
 {#if app.phase === 'ready'}
@@ -89,6 +95,20 @@
     align-items: center;
     gap: 0.4rem;
     font-weight: 700;
+  }
+  .sign-out {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.15rem 0.6rem;
+    min-height: 1.5rem;
+    cursor: pointer;
+  }
+  @media (pointer: coarse) {
+    .sign-out {
+      min-height: 2.75rem;
+    }
   }
   main {
     padding: 1rem;

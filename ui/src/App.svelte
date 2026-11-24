@@ -82,7 +82,13 @@
 
 <svelte:window onfocus={onFocus} />
 
-<Frame {app} {t} {logo} help={[...login, ...about]}>
+<Frame
+  {app}
+  {t}
+  {logo}
+  help={[...login, ...about]}
+  signOut={app.phase !== 'starting' && app.phase !== 'needs_pairing' ? () => void app.signOut() : undefined}
+>
   {#if app.phase === 'ready'}
     {#if app.releaseView}
       <Release {app} {t} />

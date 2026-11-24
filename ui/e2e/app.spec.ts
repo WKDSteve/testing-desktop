@@ -225,6 +225,19 @@ test('a tab without a session asks for the pairing, and a pairing link brings th
   expect(await violations(page)).toEqual([]);
 });
 
+test('the sign-out button ends the session of the tab: the page is unpaired and the token is dead', async ({ page, request }) => {
+  await page.goto(pairingLink(state().config));
+  await expect(page.getByRole('heading', { name: 'Repositories' })).toBeVisible();
+  const token = await page.evaluate(() => sessionStorage.getItem('testing-desktop.session'));
+  expect(token).toMatch(/^[0-9a-f]+$/);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('status')).toContainText('not paired');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('testing-desktop.session'))).toBeNull();
+  const dead = await request.get(`${origin()}/api/testing/fleet`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(dead.status()).toBe(401);
+});
+
 test('a used pairing link is refused and says so', async ({ page }) => {
   const link = pairingLink(state().config);
   const code = link.split('#pair=')[1] ?? '';

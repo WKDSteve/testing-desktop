@@ -411,6 +411,30 @@ describe('the session', () => {
     expect(session.getItem(TOKEN_KEY)).toBeNull();
     expect(app.fleet).toBeNull();
   });
+
+  it('signs out: the hub is asked, then the token and what was read are forgotten', async () => {
+    const { hub, seen } = fakeHub(standard);
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    const app = new App({ hub, session, sleep: now });
+    await app.start(null);
+    await app.signOut();
+    expect(seen.some((s) => s.path === '/api/session/logout')).toBe(true);
+    expect(app.phase).toBe('needs_pairing');
+    expect(session.getItem(TOKEN_KEY)).toBeNull();
+    expect(app.fleet).toBeNull();
+  });
+
+  it('signs out in the page even when the hub does not answer', async () => {
+    const { hub } = fakeHub((p) => (p === '/api/session/logout' ? json('{"error":{"code":"down","message":"x"}}', 500) : standard(p)));
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    const app = new App({ hub, session, sleep: now });
+    await app.start(null);
+    await app.signOut();
+    expect(app.phase).toBe('needs_pairing');
+    expect(session.getItem(TOKEN_KEY)).toBeNull();
+  });
 });
 
 describe('the reads', () => {

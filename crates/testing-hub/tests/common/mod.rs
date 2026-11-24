@@ -50,6 +50,23 @@ impl Stream {
         self.seen.clone()
     }
 
+    /// Read until the hub closes the connection, for as long as `patience`; the whole text read.
+    pub async fn rest_within(&mut self, patience: Duration) -> String {
+        let end = Instant::now() + patience;
+        loop {
+            let left = end.saturating_duration_since(Instant::now());
+            let mut buf = [0u8; 4096];
+            let n = tokio::time::timeout(left, self.socket.read(&mut buf))
+                .await
+                .unwrap_or_else(|_| panic!("the stream did not end: {:?}", self.seen))
+                .unwrap_or(0);
+            if n == 0 {
+                return self.seen.clone();
+            }
+            self.seen.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+    }
+
     pub async fn until(&mut self, needle: &str) -> String {
         self.until_within(needle, Duration::from_secs(15)).await
     }

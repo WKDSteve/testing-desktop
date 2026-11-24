@@ -2,12 +2,14 @@
 
 use std::sync::Arc;
 
+use appkit_hub::guard::SessionEnd;
 use appkit_hub::streams::{sse_response, too_many_streams};
 use appkit_hub::{bearer, no_query};
 use axum::body::Bytes;
 use axum::extract::{RawQuery, State};
 use axum::http::header::HeaderMap;
 use axum::response::Response;
+use axum::Extension;
 use serde_json::json;
 use tokio::sync::{broadcast, mpsc};
 
@@ -25,6 +27,7 @@ use crate::store::SHAPE;
 /// takes only the lines after it; after a `resync` it reads the state again.
 pub(crate) async fn events(
     State(st): State<Arc<Shared>>,
+    Extension(end): Extension<SessionEnd>,
     RawQuery(query): RawQuery,
     headers: HeaderMap,
 ) -> Response {
@@ -88,6 +91,9 @@ pub(crate) async fn events(
                 },
                 _ = ticker.tick() => ": ping\n\n".to_owned(),
                 () = tx.closed() => return,
+                // The session was signed out, revoked or pushed out: the stream ends now, not at the next
+                // heartbeat. The sender is dropped when the task returns.
+                () = end.ended() => return,
             };
             // A session that was closed since the stream was opened takes its streams with it.
             if !shared.sessions.check(&token) {

@@ -164,3 +164,27 @@ async fn without_a_login_entry_the_page_gets_no_switch_and_a_body_must_be_one() 
         assert_eq!(reply.status, 400, "{body}: {reply:?}");
     }
 }
+
+/// A login entry whose switch panics: the route cannot say why, so it answers a 500 with a code and a fixed text.
+struct PanickingLogin;
+
+impl LoginEntry for PanickingLogin {
+    fn is_on(&self) -> Option<bool> {
+        Some(false)
+    }
+    fn set(&self, _on: bool) -> Result<(), String> {
+        panic!("C:/Users/someone/secret/login-entry");
+    }
+}
+
+#[tokio::test]
+async fn a_500_of_the_hub_has_a_code_and_a_fixed_text_and_no_path() {
+    let (server, token) = start(Some(Arc::new(PanickingLogin))).await;
+    let r = post(&server, &route(), Some(&token), r#"{"on":true}"#).await;
+    assert_eq!(r.status, 500, "{r:?}");
+    assert_eq!(r.json()["error"]["code"], "autostart_failed");
+    let raw = r.raw.to_lowercase();
+    assert!(!raw.contains("someone"), "{raw}");
+    assert!(!raw.contains("c:/"), "{raw}");
+    assert!(!raw.contains("set-cookie"), "{raw}");
+}

@@ -20,7 +20,7 @@ use testing_hub::{Origins, Watch};
 
 mod common;
 
-use common::{get, get_with, session, Stream};
+use common::{get, get_with, post, session, Stream};
 
 const HELLO: &str = include_str!("fixtures/golden/hello.json");
 const FLEET: &str = include_str!("fixtures/golden/fleet.json");
@@ -664,6 +664,58 @@ async fn a_scan_that_finds_the_same_fleet_tells_nothing() {
     assert!(engine.asked("fleet").len() > before, "the scan ran");
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(!stream.seen.contains("event: fleet"), "{}", stream.seen);
+}
+
+/// An open stream ends when its session signs out, not at the next heartbeat or change.
+#[tokio::test]
+async fn an_open_stream_ends_when_its_session_signs_out() {
+    let engine = FakeEngine::new();
+    let hub = start(Some(engine)).await;
+    let mut stream = Stream::open(&hub.server, &route("events"), &hub.token).await;
+    stream.until("event: hello").await;
+    let r = post(&hub.server, "/api/session/logout", Some(&hub.token), "{}").await;
+    assert_eq!(r.status, 200, "{r:?}");
+    tokio::time::timeout(
+        Duration::from_secs(3),
+        stream.rest_within(Duration::from_secs(3)),
+    )
+    .await
+    .expect("the stream did not end within 3 s of the sign-out");
+}
+
+/// The raw answer of the event stream: `text/event-stream` with a charset, the policy without a
+/// document, and no cookie.
+#[tokio::test]
+async fn the_raw_stream_answer_has_its_type_its_policy_and_no_cookie() {
+    let engine = FakeEngine::new();
+    let hub = start(Some(engine)).await;
+    let mut stream = Stream::open(&hub.server, &route("events"), &hub.token).await;
+    let text = stream
+        .until(
+            "
+
+",
+        )
+        .await;
+    let head = text
+        .split(
+            "
+
+",
+        )
+        .next()
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(head.starts_with("http/1.1 200"), "{head}");
+    assert!(
+        head.contains("content-type: text/event-stream; charset=utf-8"),
+        "{head}"
+    );
+    assert!(
+        head.contains("content-security-policy:") && head.contains("default-src 'none'"),
+        "{head}"
+    );
+    assert!(!head.contains("set-cookie"), "{head}");
 }
 
 #[tokio::test]

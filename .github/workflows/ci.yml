@@ -165,6 +165,9 @@ jobs:
       # is parsed at every start. Over it: find what grew before raising it.
       - run: python ../tools/check-dist-size.py dist --budget 280
       - run: pnpm mobile:build
+      # The page the phone shell bundles (it also holds the reader of an export folder): measured 413 kB on 2026-11-24,
+      # a tenth of room. Over it: find what grew before raising it.
+      - run: python ../tools/check-dist-size.py dist-mobile --budget 455
       # The test sheets (TESTS/sheets, .testing.lua) at a fixed version of testing.nvim; --strict: a sheet that could
       # not run is red here. They run from the repository root (the sheet's build is `pnpm --dir ui web:build`); nvim
       # comes from the runner's PATH.
@@ -257,6 +260,9 @@ jobs:
         working-directory: ui
         run: |
           pnpm web:build
+          # The single file people open from disk (what dist-web holds besides it is the build's own parts): measured
+          # 458 kB on 2026-11-24, a tenth of room. Over it: find what grew before raising it.
+          python ../tools/check-dist-size.py dist-web/testing.html --budget 505
           pnpm web:e2e
       # The hub's folder and the state file of the run are gone (ui/e2e/cleanup.ts). Not strict: Chrome and
       # Playwright keep caches of their own in the temp dir.

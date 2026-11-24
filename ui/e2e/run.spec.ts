@@ -56,8 +56,19 @@ test('the spec files of a repository run through the engine from the page, to th
   const field = page.getByLabel('Spec files whose name holds');
   await field.fill('--trust');
   await expect(page.getByText('Letters, digits and _ - . / only')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Run these files' })).toBeDisabled();
   await expect(field).toHaveAttribute('aria-invalid', 'true');
+  // The button is not locked for it: it is pressed, nothing is sent, and the cursor goes back to the field.
+  await page.getByLabel('Spec files whose name holds').blur();
+  await page.getByRole('button', { name: 'Run these files' }).click();
+  await expect(page.getByRole('button', { name: 'Run these files' })).toBeEnabled();
+  await expect(field).toBeFocused();
+  // Nothing typed is a problem only once the person tried: the words stand at the field, not before.
+  await field.fill('');
+  await expect(page.locator('#run-file-problem')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Run these files' }).click();
+  await expect(page.locator('#run-file-problem')).toContainText('Type part of a spec file name first');
+  await expect(field).toHaveAttribute('aria-describedby', 'run-file-problem');
+  await expect(field).toBeFocused();
 
   // The spec of alpha.nvim is red: the run says so, with the case in the end of what the engine wrote.
   await field.fill('alpha');

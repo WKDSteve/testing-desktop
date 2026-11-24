@@ -159,6 +159,43 @@ describe('a run through the engine on the page', () => {
     expect(app.run?.running).toBe(false);
   });
 
+  it('asks nothing about a run while the page is in the background, and looks again when it is back', async () => {
+    const h = hub();
+    h.setRun({ id: 3, key: KEY, what: 'suite', running: true });
+    const session = new Memory();
+    session.setItem(TOKEN_KEY, 't');
+    let asks = 0;
+    const counting = ((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/testing/run' && init?.method !== 'POST') asks += 1;
+      return h.fetchFn(input, init);
+    }) as typeof fetch;
+    let hidden = true;
+    let show: () => void = () => {};
+    const app = new App({
+      hub: new HubSource(counting),
+      session,
+      sleep: () => Promise.resolve(),
+      whenVisible: () => (hidden ? new Promise<void>((r) => (show = r)) : Promise.resolve()),
+    });
+    const settle = async () => {
+      for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0));
+    };
+    await app.start(null);
+    await app.open(KEY);
+    await settle();
+    const known = asks;
+    // The sleep is over, the page is in the background: the follower waits, however long that takes.
+    await settle();
+    expect(asks).toBe(known);
+    expect(app.run?.running).toBe(true);
+    // The page comes back: it looks at once, and follows the run to its end.
+    hidden = false;
+    show();
+    await settle();
+    expect(asks).toBeGreaterThan(known);
+    expect(app.run?.running).toBe(false);
+  });
+
   it('learns of a run under way when a repository is opened', async () => {
     const h = hub();
     h.setRun({ id: 3, key: KEY, what: 'task', task: 'alpha.nvim/try-it', running: true });

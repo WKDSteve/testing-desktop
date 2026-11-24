@@ -5,12 +5,15 @@
   // itself: every key is a command to the hub.
   import type { App } from '../lib/app.svelte';
   import type { Key } from '../lib/i18n';
+  import { getFormats } from '../lib/format';
   import { shown } from '../lib/model';
   import { EXPLAIN_KINDS, NOTE_MAX_BYTES, noteProblem, oneLine, sheetTitle, statusLine } from '../lib/step';
   import CopyText from './CopyText.svelte';
   import StepView from './StepView.svelte';
 
   let { app, t }: { app: App; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+
+  const formats = getFormats();
 
   const run = $derived(app.step);
   const doc = $derived(run.doc);
@@ -24,12 +27,22 @@
   let noteField: HTMLInputElement | undefined = $state();
 
   let sendingNote = $state(false);
-  const noteTrouble = $derived(noteProblem(note));
+  // An empty note is a problem only after the person tried to send it; the button stays usable while a run is on.
+  let noteTried = $state(false);
+  const noteTrouble = $derived.by(() => {
+    const problem = noteProblem(note);
+    return problem === 'empty' && !noteTried ? null : problem;
+  });
 
   // One note at a time; what is typed while it is on its way stays in the field.
   async function onNote(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    if (sendingNote || noteTrouble !== null) return;
+    if (sendingNote) return;
+    if (noteProblem(note) !== null) {
+      noteTried = true;
+      noteField?.focus();
+      return;
+    }
     const sent = note;
     sendingNote = true;
     try {
@@ -43,7 +56,7 @@
     const line = statusLine(run);
     switch (line.kind) {
       case 'finished':
-        return t('step.status.finished', { status: line.status, ms: line.ms }) + (line.skipped ? ` (${oneLine(line.skipped, 100)})` : '');
+        return t('step.status.finished', { status: line.status, ms: formats().number(line.ms, 0) }) + (line.skipped ? ` (${oneLine(line.skipped, 100)})` : '');
       case 'exit':
         return t('step.status.exit', { code: line.code ?? '?' });
       case 'asks':
@@ -126,7 +139,7 @@
     <p class="warn" role="status">{t('step.error', { message: shown(run.error) ?? '' })}</p>
   {/if}
   {#if run.exit?.detail}
-    <pre>{shown(run.exit.detail)}</pre>
+    <pre translate="no">{shown(run.exit.detail)}</pre>
   {/if}
 
   {#if doc}
@@ -146,14 +159,17 @@
           type="text"
           bind:value={note}
           bind:this={noteField}
+          oninput={() => (noteTried = false)}
           disabled={!run.running}
-          aria-invalid={noteTrouble === 'too_long'}
-          aria-describedby={noteTrouble === 'too_long' ? 'step-note-hint' : undefined}
+          aria-invalid={noteTrouble !== null}
+          aria-describedby={noteTrouble !== null ? 'step-note-hint' : undefined}
         />
       </label>
-      <button type="submit" disabled={!run.running || noteTrouble !== null || sendingNote}>{t('step.note_add')}</button>
-      {#if noteTrouble === 'too_long'}
-        <span id="step-note-hint" class="warn" role="status">{t('step.note_too_long', { max: NOTE_MAX_BYTES })}</span>
+      <button type="submit" disabled={!run.running || sendingNote} aria-busy={sendingNote}>{t('step.note_add')}</button>
+      {#if noteTrouble !== null}
+        <span id="step-note-hint" class="warn" role="status">{noteTrouble === 'too_long' ? t('step.note_too_long', { max: NOTE_MAX_BYTES }) : t('step.note_empty')}</span>
+      {:else if sendingNote}
+        <span class="muted" role="status">{t('step.note_sending')}</span>
       {/if}
     </form>
 

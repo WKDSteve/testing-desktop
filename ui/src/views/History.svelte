@@ -5,6 +5,7 @@
   // page already holds, nothing is written anywhere else (docs/SECURITY.md).
   import type { History, HistoryRun } from '../lib/contract';
   import type { Key } from '../lib/i18n';
+  import { getFormats } from '../lib/format';
   import { filterRuns, greenPercent, RUN_PERIODS, runsCsv, runsJson, runTone, shown, type RunPeriod, type Tone } from '../lib/model';
   import ToneView from './Tone.svelte';
 
@@ -13,6 +14,8 @@
     repo,
     t,
   }: { history: History; repo: string; t: (key: Key, params?: Record<string, string | number>) => string } = $props();
+
+  const formats = getFormats();
 
   let onlyRed = $state(false);
   let query = $state('');
@@ -41,13 +44,10 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  function when(iso: string): string {
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-  }
+  const when = (iso: string): string => formats().moment(iso);
 
   function seconds(ms: number | null): string {
-    return ms === null ? '–' : t('history.seconds', { n: (ms / 1000).toFixed(1) });
+    return ms === null ? '–' : t('history.seconds', { n: formats().number(ms / 1000) });
   }
 
   function toneWord(tone: Tone): string {
@@ -67,12 +67,12 @@
     <dl class="tiles">
       <div>
         <dt>{t('history.rate', { days: stats.period_days })}</dt>
-        <dd>{rate === null ? '–' : `${rate} %`}</dd>
+        <dd>{rate === null ? '–' : formats().percent(rate)}</dd>
         <dd class="small">{t('history.whole_runs', { n: stats.n })}</dd>
       </div>
       <div>
         <dt>{t('history.before', { days: stats.period_days })}</dt>
-        <dd>{before === null ? '–' : `${before} %`}</dd>
+        <dd>{before === null ? '–' : formats().percent(before)}</dd>
         <dd class="small">{t('history.whole_runs', { n: stats.previous.n })}</dd>
       </div>
       <div>
@@ -114,7 +114,7 @@
       <h3>{t('history.flaky')}</h3>
       <ul class="ids">
         {#each stats.flaky as id, i (i)}
-          <li class="mono">{shown(id)}</li>
+          <li class="mono" translate="no">{shown(id)}</li>
         {/each}
       </ul>
     {/if}
@@ -122,7 +122,7 @@
       <h3>{t('history.red_top')}</h3>
       <ul class="ids">
         {#each stats.red_top as item, i (i)}
-          <li><span class="count">{item.n} ×</span> <span class="mono">{shown(item.id)}</span></li>
+          <li><span class="count">{item.n} ×</span> <span class="mono" translate="no">{shown(item.id)}</span></li>
         {/each}
       </ul>
     {/if}
@@ -130,7 +130,7 @@
     <div class="runs-head">
       <h3>{t('history.runs')}</h3>
       <label data-hint={t('hint.form.history.only_red')}><input type="checkbox" bind:checked={onlyRed} /> {t('history.only_red')}</label>
-      <input class="search" type="search" data-hint={t('hint.form.history.search')} placeholder={t('history.search')} aria-label={t('history.search')} bind:value={query} />
+      <input class="search" type="search" spellcheck="false" data-hint={t('hint.form.history.search')} placeholder={t('history.search')} aria-label={t('history.search')} bind:value={query} />
       <label data-hint={t('hint.form.history.period')}>
         {t('history.period')}
         <select bind:value={period}>
@@ -169,7 +169,7 @@
                 {#if redOf(run) > 0}<span class="muted">{t('local.failed', { n: redOf(run) })}</span>{/if}
               </td>
               <td class="number">{seconds(run.ms)}</td>
-              <td class="mono">{run.sha ? run.sha.slice(0, 7) : '–'}{#if run.dirty} {t('history.dirty')}{/if}</td>
+              <td class="mono" translate="no">{run.sha ? run.sha.slice(0, 7) : '–'}{#if run.dirty} {t('history.dirty')}{/if}</td>
             </tr>
           {:else}
             <tr><td colspan="5" class="muted">{onlyRed && query === '' && period === null ? t('history.none_red') : t('history.none_match')}</td></tr>

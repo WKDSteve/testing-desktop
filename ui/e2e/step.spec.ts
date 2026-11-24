@@ -100,7 +100,18 @@ test('a sheet of a repository runs step by step from the page, and its steps sho
   await expect(field).toHaveValue('');
   await field.fill('€'.repeat(334));
   await expect(page.getByText('A note is at most 1000 bytes.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add note', exact: true })).toBeDisabled();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  // The button is not locked for it: pressing it sends nothing, and the cursor goes back to the field.
+  await page.getByRole('heading', { name: /alpha smoke/ }).click();
+  await page.getByRole('button', { name: 'Add note', exact: true }).click();
+  await expect(field).toBeFocused();
+  await expect(page.getByText('A note is at most 1000 bytes.')).toBeVisible();
+  // An empty note is a problem only once the person tried to send it.
+  await field.fill('');
+  await expect(page.getByText('Type a note first.')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add note', exact: true }).click();
+  await expect(page.getByText('Type a note first.')).toBeVisible();
+  await expect(field).toBeFocused();
   await expect(field).toHaveAttribute('aria-invalid', 'true');
   await field.fill('  the value looks right ');
   await page.getByRole('button', { name: 'Add note', exact: true }).click();

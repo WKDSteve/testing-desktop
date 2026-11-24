@@ -153,7 +153,7 @@ test('the history of a repository: the numbers of the engine, a filter, and a re
   await page.getByRole('button', { name: 'beta.nvim' }).click();
   const section = page.getByRole('region', { name: 'History' });
   await expect(section).toContainText('Green, last 30 days');
-  await expect(section).toContainText('50 %');
+  await expect(section).toContainText('50%');
   await expect(section).toContainText('Most often red');
   await expect(section).toContainText(hostile);
   expect(await page.evaluate(() => (window as unknown as { __xss?: number }).__xss)).toBeUndefined();

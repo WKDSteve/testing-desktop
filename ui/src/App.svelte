@@ -5,6 +5,7 @@
   // The mark of the app, from assets/icons of this repository (rule APP-11).
   import logo from '../../assets/icons/testing-desktop/testing-desktop-small.svg?url';
   import type { App } from './lib/app.svelte';
+  import { setFormats } from './lib/format';
   import { DICTIONARIES, langOf, textsOf, type Key } from './lib/i18n';
   import { shown } from './lib/model';
   import Detail from './views/Detail.svelte';
@@ -16,6 +17,7 @@
   let { app, code, languages }: { app: App; code: string | null; languages: readonly string[] } = $props();
 
   const t = $derived(textsOf(langOf(languages)));
+  setFormats(() => langOf(languages));
 
   $effect(() => {
     // untrack: start reads the state it writes; tracked, the effect would start the page again and again.

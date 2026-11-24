@@ -69,7 +69,10 @@ jobs:
       # The built file itself, from disk, in Chrome: what is published is what was tested.
       - name: Open the file from disk in Chrome
         working-directory: ui
-        run: pnpm web:e2e
+        # The tests also open the page of testing mobil in a phone's window (served from dist-mobile, not published).
+        run: |
+          pnpm mobile:build
+          pnpm web:e2e
       - name: The tests left nothing in the temp dir
         run: python tools/check-temp-leftovers.py --dir "$JOB_TEMP"
       - name: Traces of failed browser tests

@@ -5,6 +5,7 @@
   // plays a recording back (web/Replay.svelte). It starts nothing: what a click does comes in.
   import type { Snippet } from 'svelte';
   import type { Key } from '../lib/i18n';
+  import { getFormats } from '../lib/format';
   import { shown } from '../lib/model';
   import { marksOf, notesOf, oneLine, screenRows, statusOf, tileStep, type Mark, type SheetStepDoc, type StepState, type StepStatus } from '../lib/step';
   import Picture, { type LoadPicture } from './Picture.svelte';
@@ -29,6 +30,9 @@
     /** More of the tile of a step, under what it did. */
     tileExtra?: Snippet<[SheetStepDoc, Mark | undefined]>;
   } = $props();
+
+  const formats = getFormats();
+  const ms = (n: number): string => formats().number(n, 0);
 
   const doc = $derived(run.doc);
   const marks = $derived(marksOf(run));
@@ -72,9 +76,9 @@
             <span class="icon" aria-hidden="true">{ICON[status]}</span>
             <span class="sr">{stateWord(status)}</span>
             <span class="n">{step.n}</span>
-            <span class="action mono">{shown(step.action)}</span>
+            <span class="action mono" translate="no">{shown(step.action)}</span>
             <span class="text">{oneLine(step.note ?? step.value, 70)}</span>
-            {#if mark?.ms !== null && mark?.ms !== undefined}<span class="muted">{t('step.ms', { ms: mark.ms })}</span>{/if}
+            {#if mark?.ms !== null && mark?.ms !== undefined}<span class="muted">{t('step.ms', { ms: ms(mark.ms) })}</span>{/if}
           </button>
         </li>
       {/each}
@@ -83,7 +87,7 @@
     <aside class="tile" aria-live="polite">
       {#if tileStepDoc}
         <h2>{t('step.tile', { n: tileStepDoc.n, action: shown(tileStepDoc.action) ?? '' })}</h2>
-        <p class="mono value">{oneLine(tileStepDoc.value, 300)}</p>
+        <p class="mono value" translate="no">{oneLine(tileStepDoc.value, 300)}</p>
         {#if tileStepDoc.note}<p class="muted">{oneLine(tileStepDoc.note, 300)}</p>{/if}
         {#each notesOf(run, tileStepDoc.n) as note, i (i)}
           <p>{t('step.note', { text: oneLine(note, 400) })}</p>
@@ -91,19 +95,19 @@
         {#if tileMark}
           <p>
             <span class={tileMark.status}>{stateWord(tileMark.status)}</span>
-            {#if tileMark.ms !== null}<span class="muted"> · {t('step.ms', { ms: tileMark.ms })}</span>{/if}
+            {#if tileMark.ms !== null}<span class="muted"> · {t('step.ms', { ms: ms(tileMark.ms) })}</span>{/if}
           </p>
           {#if tileMark.reason}
             <p class="label">{t('step.reason')}</p>
-            <pre>{shown(tileMark.reason)}</pre>
+            <pre translate="no">{shown(tileMark.reason)}</pre>
           {/if}
           {#if tileMark.failure}
             <p class="label">{t('step.failure')}</p>
-            <pre>{shown(tileMark.failure)}</pre>
+            <pre translate="no">{shown(tileMark.failure)}</pre>
           {/if}
           {#if tileMark.screen}
             <p class="label">{t('step.screen')}</p>
-            <pre class="screen">{screenRows(tileMark.screen).join('\n')}</pre>
+            <pre translate="no" class="screen">{screenRows(tileMark.screen).join('\n')}</pre>
           {/if}
           {#if tileMark.image && run.size}
             <Picture load={loadPicture} {t} size={run.size} n={tileStepDoc.n} kind="image" label={t('step.picture')} />
@@ -127,7 +131,7 @@
       <h2>{t('step.failures')}</h2>
       <ul class="failures">
         {#each run.finished.failures as f, i (i)}
-          <li class="mono">{oneLine(f, 400)}</li>
+          <li class="mono" translate="no">{oneLine(f, 400)}</li>
         {/each}
       </ul>
     {/if}

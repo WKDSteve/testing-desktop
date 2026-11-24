@@ -29,7 +29,7 @@
       <span class="muted">{t('fleet.count', { shown: rows.length, total: fleet.repos.length })}</span>
     {/if}
     <label class="filter" data-hint={t('hint.form.fleet.only_red')}><input type="checkbox" bind:checked={app.onlyRed} /> {t('fleet.only_red')}</label>
-    <input class="search" type="search" data-hint={t('hint.form.fleet.search')} placeholder={t('fleet.search')} aria-label={t('fleet.search')} bind:value={app.query} />
+    <input class="search" type="search" spellcheck="false" data-hint={t('hint.form.fleet.search')} placeholder={t('fleet.search')} aria-label={t('fleet.search')} bind:value={app.query} />
   </div>
 
   {#if notes?.classesProblem}
@@ -51,46 +51,48 @@
   {#if rows.length === 0}
     <p class="empty">{app.onlyRed ? t('fleet.empty_red') : t('fleet.empty')}</p>
   {:else}
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">{t('col.repo')}</th>
-          <th scope="col">{t('col.local')}</th>
-          {#each SYSTEMS as system (system)}
-            <th scope="col">{t('col.ci')} {system}</th>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each rows as row (row.key)}
-          <tr class:red={row.red}>
-            <th scope="row">
-              <button type="button" class="link" onclick={() => app.open(row.key)}>{shown(row.name)}</button>
-            </th>
-            <td>
-              <Tip text={tipText(localTip(row))}>
-                {#if row.local}
-                  <ToneView tone={row.local.tone} label={row.local.failed > 0 ? t('local.failed', { n: row.local.failed }) : toneWord(row.local.tone)} />
-                {:else}
-                  <span class="muted">{t('local.none')}</span>
-                {/if}
-              </Tip>
-            </td>
-            {#each SYSTEMS as system, at (system)}
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{t('col.repo')}</th>
+            <th scope="col">{t('col.local')}</th>
+            {#each SYSTEMS as system (system)}
+              <th scope="col">{t('col.ci')} {system}</th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody>
+          {#each rows as row (row.key)}
+            <tr class:red={row.red}>
+              <th scope="row">
+                <button type="button" class="link" translate="no" onclick={() => app.open(row.key)}>{shown(row.name)}</button>
+              </th>
               <td>
-                <Tip text={tipText(ciTip(row, system))} end={at > 0}>
-                  {#if row.run === null}
-                    <span class="muted">{t('ci.not_asked')}</span>
+                <Tip text={tipText(localTip(row))}>
+                  {#if row.local}
+                    <ToneView tone={row.local.tone} label={row.local.failed > 0 ? t('local.failed', { n: row.local.failed }) : toneWord(row.local.tone)} />
                   {:else}
-                    <ToneView tone={row.ci[system].tone} label={toneWord(row.ci[system].tone)} link={row.ci[system].link} />
+                    <span class="muted">{t('local.none')}</span>
                   {/if}
                 </Tip>
               </td>
-            {/each}
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+              {#each SYSTEMS as system, at (system)}
+                <td>
+                  <Tip text={tipText(ciTip(row, system))} end={at > 0}>
+                    {#if row.run === null}
+                      <span class="muted">{t('ci.not_asked')}</span>
+                    {:else}
+                      <ToneView tone={row.ci[system].tone} label={toneWord(row.ci[system].tone)} link={row.ci[system].link} />
+                    {/if}
+                  </Tip>
+                </td>
+              {/each}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
   {/if}
 
   <!-- the cost of the heavy runs of all repositories together (`metrics` of the fleet's document, capability
@@ -128,6 +130,10 @@
   .warn {
     color: var(--warn);
   }
+  /* A table that is wider than the page scrolls by itself; the page does not widen. */
+  .scroll {
+    overflow-x: auto;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -152,6 +158,8 @@
     color: var(--accent);
     cursor: pointer;
     font: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
     text-decoration: underline;
   }
   .empty {

@@ -100,6 +100,8 @@ export async function fakePicker(page: Page, files: Record<string, string>, name
         queryPermission: () => Promise.resolve('granted'),
         requestPermission: () => Promise.resolve('granted'),
         async *values() {
+          // how often the page looked into the folder (`window.__listings`), for the tests of a page in the background
+          (win['__listings'] as { n: number }).n += 1;
           const seen = new Set<string>();
           for (const [path, file] of disk) {
             if (!path.startsWith(prefix)) continue;
@@ -126,6 +128,7 @@ export async function fakePicker(page: Page, files: Record<string, string>, name
       });
       const win = window as unknown as Record<string, unknown>;
       win['__pickerOptions'] = [] as unknown[];
+      win['__listings'] = { n: 0 };
       win['showDirectoryPicker'] = (options: unknown) => {
         (win['__pickerOptions'] as unknown[]).push(options);
         return Promise.resolve(dir('', rootName));

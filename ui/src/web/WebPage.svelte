@@ -7,6 +7,7 @@
   import { untrack } from 'svelte';
   // The mark of the page, from assets/icons of this repository (rule APP-11); a data: URL in the single file.
   import logo from '../../../assets/icons/testing-web/testing-web-small.svg?url';
+  import { formatsOf, setFormats } from '../lib/format';
   import { langOf, textsOf, type Key } from '../lib/i18n';
   import { ageOf, shown } from '../lib/model';
   import Detail from '../views/Detail.svelte';
@@ -22,6 +23,7 @@
   let { entry, languages, build }: { entry: Entry; languages: readonly string[]; build: string | null } = $props();
 
   const t = $derived(textsOf(langOf(languages)));
+  setFormats(() => langOf(languages));
 
   let reader = $state<WebReader | null>(null);
   let folderName = $state('');
@@ -48,14 +50,17 @@
       onError: () => {
         // The folder is gone or the permission was taken back: the page stays on what it read.
       },
-      setTimer: (fn, ms) => setInterval(fn, ms),
+      // A hidden tab does not look at the folder every 30 seconds (the kit's watcher does not know that); it looks
+      // once when it is in front again (below).
+      setTimer: (fn, ms) => setInterval(() => void (document.hidden || fn()), ms),
       clearTimer: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
       onFocus: (listener) => {
+        const whenShown = (): void => void (document.hidden || listener());
         window.addEventListener('focus', listener);
-        document.addEventListener('visibilitychange', listener);
+        document.addEventListener('visibilitychange', whenShown);
         return () => {
           window.removeEventListener('focus', listener);
-          document.removeEventListener('visibilitychange', listener);
+          document.removeEventListener('visibilitychange', whenShown);
         };
       },
     });
@@ -87,11 +92,15 @@
         replay = state.recording;
       }
     });
-    // The age of the export on the page goes on while nothing changes.
-    const clock = setInterval(() => (now = Date.now()), 60_000);
+    // The age of the export on the page goes on while nothing changes, once a minute and when the page comes back to
+    // the front; a page in the background keeps no clock.
+    const refreshAge = (): void => void (document.hidden || (now = Date.now()));
+    const clock = setInterval(refreshAge, 60_000);
+    document.addEventListener('visibilitychange', refreshAge);
     return () => {
       off();
       clearInterval(clock);
+      document.removeEventListener('visibilitychange', refreshAge);
       leave();
     };
   });
@@ -109,8 +118,7 @@
   }
 
   function timeWord(iso: string | null): string {
-    const then = iso ? new Date(iso) : null;
-    return then && !Number.isNaN(then.getTime()) ? then.toLocaleString(langOf(languages)) : (iso ?? '');
+    return iso ? formatsOf(langOf(languages)).moment(iso) : '';
   }
 </script>
 
@@ -134,10 +142,10 @@
     {/if}
   </Frame>
 {:else if replay}
-  <header class="plain"><span class="brand"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span></header>
+  <header class="plain"><span class="brand" translate="no"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span></header>
   <main class="replay"><Replay recording={replay} name={folderName} {t} onOther={otherFolder} /></main>
 {:else}
-  <header class="plain"><span class="brand"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span></header>
+  <header class="plain"><span class="brand" translate="no"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span></header>
   <main><WebEntry {entry} {t} /></main>
 {/if}
 

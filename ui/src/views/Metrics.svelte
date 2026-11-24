@@ -5,6 +5,7 @@
   // page only adds them up for the tiles.
   import type { Metrics } from '../lib/contract';
   import type { Key } from '../lib/i18n';
+  import { getFormats } from '../lib/format';
   import { metricsSummary } from '../lib/model';
 
   let {
@@ -22,14 +23,9 @@
   const sum = $derived(metricsSummary(metrics));
   const most = $derived(Math.max(1, ...metrics.days.map((d) => d.minutes)));
 
-  function day(iso: string): string {
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString();
-  }
-
-  function number(n: number): string {
-    return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
-  }
+  const formats = getFormats();
+  const day = (iso: string): string => formats().day(iso);
+  const number = (n: number): string => formats().number(n);
 
   function verdicts(list: Metrics['kinds'][number]['verdicts']): string {
     return list.map((v) => `${v.verdict} ${v.n}`).join(', ');
@@ -42,7 +38,7 @@
   <dl class="tiles">
     <div>
       <dt>{t('metrics.runs')}</dt>
-      <dd>{sum.runs}</dd>
+      <dd>{number(sum.runs)}</dd>
       {#if metrics.backfilled > 0}<dd class="small">{t('metrics.backfilled', { n: metrics.backfilled })}</dd>{/if}
     </div>
     <div>
@@ -56,7 +52,7 @@
     </div>
     <div>
       <dt>{t('metrics.cache')}</dt>
-      <dd>{sum.hitRate === null ? '–' : `${number(sum.hitRate)} %`}</dd>
+      <dd>{sum.hitRate === null ? '–' : formats().percent(sum.hitRate)}</dd>
       <dd class="small">{t('metrics.cache_files', { cached: metrics.cache.cached, selected: metrics.cache.selected })}</dd>
     </div>
     <div>
@@ -67,7 +63,7 @@
     {#if sum.quickShare !== null}
       <div>
         <dt>{t('metrics.quick')}</dt>
-        <dd>{sum.quickShare} %</dd>
+        <dd>{formats().percent(sum.quickShare)}</dd>
       </div>
     {/if}
   </dl>
@@ -101,11 +97,11 @@
         {#each metrics.kinds as k (k.kind)}
           <tr>
             <td>{t(`metrics.kind.${k.kind}` as Key)}</td>
-            <td class="number">{k.runs}</td>
+            <td class="number">{number(k.runs)}</td>
             <td class="number">{number(k.minutes)}</td>
             <td class="number">{t('history.seconds', { n: number(k.median_s) })}</td>
             <td class="number">{number(k.wait_minutes)}</td>
-            <td class="mono">{verdicts(k.verdicts)}</td>
+            <td class="mono" translate="no">{verdicts(k.verdicts)}</td>
           </tr>
         {/each}
       </tbody>

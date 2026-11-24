@@ -4,6 +4,7 @@
   // shows what the engine says (the repositories, the commits, what changed and which files deserve a close look), and
   // the way to the release leads through that review aid and a question. Every text of a commit is foreign text.
   import type { App } from '../lib/app.svelte';
+  import { getFormats } from '../lib/format';
   import type { Key } from '../lib/i18n';
   import { shown } from '../lib/model';
   import { filesFirstFlagged, releaseCommand, shortSha, warningsOf, type Stage } from '../lib/release';
@@ -27,9 +28,8 @@
     lastStage = stage;
   });
 
-  function day(iso: string): string {
-    return iso.slice(0, 10);
-  }
+  const formats = getFormats();
+  const day = (iso: string): string => formats().day(iso);
 </script>
 
 <section aria-labelledby="release-heading">
@@ -80,7 +80,7 @@
         {#each w.commits as c, i (i)}
           <li>
             <button type="button" class="choice" disabled={w.busy} onclick={() => void app.releaseChooseCommit(c.sha)}>
-              <span class="mono">{shortSha(c.sha)}</span>
+              <span class="mono" translate="no">{shortSha(c.sha)}</span>
               <span class="name">{shown(c.title)}</span>
               {#if c.released}<span class="tag ok">{t('release.commit.released')}</span>{/if}
               <span class="muted">{shown(c.author)}, {shown(day(c.date))}</span>
@@ -98,7 +98,7 @@
     <h2 bind:this={heading} tabindex="-1">{t('release.review.heading')}</h2>
     <p>
       {t('release.review.commit', { repo: shown(w.repo) ?? '' })}
-      <span class="mono">{w.sha}</span>{#if commit}: {shown(commit.title)}{/if}
+      <span class="mono" translate="no">{w.sha}</span>{#if commit}: {shown(commit.title)}{/if}
     </p>
     {#if w.review}
       {@const review = w.review}
@@ -122,7 +122,7 @@
           <h3>{t('release.review.commits')}</h3>
           <ul class="plain">
             {#each review.commits as c, i (i)}
-              <li><span class="mono">{shortSha(c.sha)}</span> {shown(c.title)} <span class="muted">({shown(c.author)})</span></li>
+              <li><span class="mono" translate="no">{shortSha(c.sha)}</span> {shown(c.title)} <span class="muted">({shown(c.author)})</span></li>
             {/each}
           </ul>
         {/if}
@@ -132,7 +132,7 @@
             {#each files as f, i (i)}
               <li class:flagged={f.flag !== null}>
                 <span class="muted status">{shown(f.status)}</span>
-                <span class="mono">{shown(f.path)}</span>
+                <span class="mono" translate="no">{shown(f.path)}</span>
                 {#if f.previous}<span class="muted">({t('release.review.was', { path: shown(f.previous) ?? '' })})</span>{/if}
                 {#if f.flag}<span class="tag red">{t('release.review.look', { why: shown(f.flag) ?? '' })}</span>{/if}
               </li>
@@ -152,7 +152,7 @@
   {:else if w.stage === 'confirm'}
     <h2 bind:this={heading} tabindex="-1">{t('release.confirm.heading')}</h2>
     <p>{t('release.confirm.ask', { repo: shown(w.repo) ?? '' })}</p>
-    <p class="mono sha">{w.sha}</p>
+    <p class="mono sha" translate="no">{w.sha}</p>
     {#if commit}<p>{shown(commit.title)} <span class="muted">({shown(commit.author)}, {shown(day(commit.date))})</span></p>{/if}
     <p class="muted">{t('release.confirm.note')}</p>
     <div class="controls">
@@ -162,7 +162,7 @@
   {:else}
     <h2 bind:this={heading} tabindex="-1">{t('release.done.heading')}</h2>
     <p>
-      <span class="mono">{shown(w.repo)} {w.sha ? shortSha(w.sha) : ''}</span>:
+      <span class="mono" translate="no">{shown(w.repo)} {w.sha ? shortSha(w.sha) : ''}</span>:
       {#if w.done?.recorded}
         <span class="ok">{w.done.already ? t('release.done.already') : t('release.done.recorded')}</span>
       {:else if w.doneUnknown}
@@ -184,7 +184,7 @@
         <ul class="plain">
           {#each w.done.reruns as r, i (i)}
             <li>
-              <span class="mono">{r.id}</span>
+              <span class="mono" translate="no">{r.id}</span>
               {shown(r.name)}
               <span class="muted">({t('release.done.was', { was: shown(r.was) ?? '' })})</span>
               {#if r.ok}<span class="ok">{t('release.done.rerun_ok')}</span>{:else}<span class="bad">{t('release.done.rerun_failed', { message: shown(r.problem) ?? '' })}</span>{/if}

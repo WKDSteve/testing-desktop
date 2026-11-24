@@ -37,7 +37,7 @@
 <div class="copy" class:block>
   <!-- A long text scrolls in its box, so the keyboard must reach it. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <pre class="text" tabindex="0" aria-label={label}>{text}</pre>
+  <pre translate="no" class="text" tabindex="0" aria-label={label}>{text}</pre>
   <span class="act">
     <button type="button" onclick={() => void copy()}>{t('copy.copy')}</button>
     <span class="outcome" class:bad={outcome === 'failed'} role="status">

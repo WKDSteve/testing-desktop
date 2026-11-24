@@ -5,6 +5,7 @@
 import 'appkit-ui/tokens.css';
 import './palette.css';
 import 'appkit-ui/base.css';
+import './page.css';
 import { idbKeyValue, RecentFolders, type PickerWindow } from 'appkit-web/folder';
 import { installTooltips } from 'appkit-ui/tooltip';
 import { mount } from 'svelte';

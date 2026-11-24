@@ -40,6 +40,11 @@ export interface Env {
   hub: HubSource;
   session: StorageLike;
   sleep: (ms: number) => Promise<void>;
+  /**
+   * Resolves at once while the page is in front, and when it comes back while it is in the background (a hidden tab
+   * asks nobody for anything). Without it the page counts as always in front.
+   */
+  whenVisible?: () => Promise<void>;
 }
 
 /** A storage that throws (a browser that forbids it) is a storage that holds nothing. */
@@ -123,7 +128,7 @@ export class App extends Reader {
           // Too many attempts: the hub did not look at the code, which is still good but no longer in the address.
           const limited = error instanceof ApiError && error.status === 429;
           if (limited && attempt < EXCHANGE_RETRIES) {
-            await this.env.sleep(RETRY_MS);
+            await this.tick(RETRY_MS);
             if (this.stopped) return;
             continue;
           }
@@ -154,7 +159,7 @@ export class App extends Reader {
       } catch {
         this.phase = 'offline';
       }
-      await this.env.sleep(RETRY_MS);
+      await this.tick(RETRY_MS);
       if (this.stopped) return;
     }
     this.problem = null;
@@ -214,13 +219,23 @@ export class App extends Reader {
     this.repoAbort?.abort();
   }
 
+  /**
+   * The beat of every loop of this page (a hub that does not answer, a run, a release, a lost stream): wait, and then
+   * wait until the page is in front. A tab in the background does not ask the hub every second about what nobody looks
+   * at; the loop goes on with its look the moment the page comes back, so what it shows is fresh when it is seen.
+   */
+  private async tick(ms: number): Promise<void> {
+    await this.env.sleep(ms);
+    await this.env.whenVisible?.();
+  }
+
   private followStream(): Promise<void> {
     return this.stream.follow({
       fetchFn: this.env.hub.fetcher,
       url: () => this.env.hub.eventsUrl,
       bearer: () => this.env.hub.bearer,
       hasToken: () => this.env.hub.hasToken,
-      sleep: (ms) => this.env.sleep(ms),
+      sleep: (ms) => this.tick(ms),
       // What happened while the stream was down shows in the `hello` that follows: nothing to read yet.
       onOpen: () => {},
       onMessage: (m) => void this.onMessage(m),
@@ -380,7 +395,7 @@ export class App extends Reader {
     this.following = true;
     try {
       while (this.live && this.run?.running) {
-        await this.env.sleep(RUN_POLL_MS);
+        await this.tick(RUN_POLL_MS);
         if (!this.live) return;
         await this.readRun();
       }
@@ -592,7 +607,7 @@ export class App extends Reader {
             misses = 0;
             if (read.state !== 'pending') return read;
           }
-          await this.env.sleep(RELEASE_POLL_MS);
+          await this.tick(RELEASE_POLL_MS);
           if (!this.live) return read ?? { lost: 'the page was left' };
         }
       },

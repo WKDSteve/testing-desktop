@@ -263,6 +263,8 @@ jobs:
           # The single file people open from disk (what dist-web holds besides it is the build's own parts): measured
           # 458 kB on 2026-11-24, a tenth of room. Over it: find what grew before raising it.
           python ../tools/check-dist-size.py dist-web/testing.html --budget 505
+          # The page of testing mobil is tested in a phone's window, served from this folder.
+          pnpm mobile:build
           pnpm web:e2e
       # The hub's folder and the state file of the run are gone (ui/e2e/cleanup.ts). Not strict: Chrome and
       # Playwright keep caches of their own in the temp dir.

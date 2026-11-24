@@ -61,7 +61,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <header>
-  <span class="brand"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span>
+  <span class="brand" translate="no"><img src={logo} alt="" width="20" height="20" />{t('app.title')}</span>
   {#if app.phase === 'ready'}
     <MenuBar {menus} label={t('menu.label')} />
   {/if}

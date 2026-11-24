@@ -29,7 +29,31 @@
   const remote = $derived(doc?.repo.ci_remote ?? null);
   const release = $derived(remote && mayNeedRelease(remote.state) ? releaseCommand(remote.repo, remote.sha) : null);
   let fileText = $state('');
-  const fileProblem = $derived(fileText.trim() === '' ? null : fileTextProblem(fileText));
+  let fileField: HTMLInputElement | undefined = $state();
+  // The button stays usable until the run is on its way; a form that cannot be sent says why next to the field and
+  // puts the cursor there. An empty field is a problem only after the person tried to send it.
+  let fileTried = $state(false);
+  let starting = $state(false);
+  const fileProblem = $derived.by(() => {
+    const problem = fileTextProblem(fileText);
+    return problem === 'empty' && !fileTried ? null : problem;
+  });
+
+  async function onRunFile(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (!hub || starting || hub.run?.running === true) return;
+    if (fileTextProblem(fileText) !== null) {
+      fileTried = true;
+      fileField?.focus();
+      return;
+    }
+    starting = true;
+    try {
+      await hub.runStart(fileText);
+    } finally {
+      starting = false;
+    }
+  }
 
   function runWhat(run: RunView): string {
     if (run.what === 'file') return t('run.what.file', { file: shown(run.file) ?? '' });
@@ -40,7 +64,7 @@
 
 <section aria-labelledby="detail-heading">
   <button type="button" class="back" onclick={() => app.close()}>← {t('detail.back')}</button>
-  <h1 id="detail-heading">{shown(name)}</h1>
+  <h1 id="detail-heading" translate="no">{shown(name)}</h1>
 
   {#if app.repoFailure}
     <p class="bad" role="status">{t('detail.failed', { message: shown(app.repoFailure) ?? '' })}</p>
@@ -77,30 +101,30 @@
           <li>
             <div class="case-head">
               <ToneView tone="red" label={c.status} />
-              <strong>{caseTitle(c)}</strong>
+              <strong translate="no">{caseTitle(c)}</strong>
               {#if c.flaky}<span class="tag">{t('detail.flaky')}</span>{/if}
-              <span class="muted mono">{shown(c.file)}{#if c.line !== null}, {t('detail.line', { n: c.line })}{/if}</span>
+              <span class="muted mono" translate="no">{shown(c.file)}{#if c.line !== null}, {t('detail.line', { n: c.line })}{/if}</span>
             </div>
             {#if c.message}
               <p class="label">{t('detail.message')}</p>
-              <pre>{shown(c.message)}</pre>
+              <pre translate="no">{shown(c.message)}</pre>
             {/if}
             {#if c.expected !== null || c.actual !== null}
               <div class="pair">
                 <div>
                   <p class="label">{t('detail.expected')}</p>
-                  <pre>{shown(c.expected) ?? ''}</pre>
+                  <pre translate="no">{shown(c.expected) ?? ''}</pre>
                 </div>
                 <div>
                   <p class="label">{t('detail.actual')}</p>
-                  <pre>{shown(c.actual) ?? ''}</pre>
+                  <pre translate="no">{shown(c.actual) ?? ''}</pre>
                 </div>
               </div>
             {/if}
             {#if c.fails.length > 0}
               <ul class="fails">
                 {#each c.fails as f, i (i)}
-                  <li class="mono">{#if f.line !== null}{t('detail.line', { n: f.line })}: {/if}{shown(f.msg) ?? ''}</li>
+                  <li class="mono" translate="no">{#if f.line !== null}{t('detail.line', { n: f.line })}: {/if}{shown(f.msg) ?? ''}</li>
                 {/each}
               </ul>
             {/if}
@@ -136,18 +160,14 @@
       <p class="muted">{t('run.note')}</p>
       <div class="run">
         <button type="button" disabled={busy} onclick={() => void hub.runStart()}>{t('run.suite')}</button>
-        <form
-          class="run-file"
-          onsubmit={(e) => {
-            e.preventDefault();
-            if (fileText.trim() !== '' && fileProblem === null) void hub.runStart(fileText);
-          }}
-        >
+        <form class="run-file" onsubmit={onRunFile}>
           <label data-hint={t('hint.form.run.file')}>
             {t('run.file.label')}
             <input
               type="text"
               bind:value={fileText}
+              bind:this={fileField}
+              oninput={() => (fileTried = false)}
               maxlength="100"
               spellcheck="false"
               autocomplete="off"
@@ -155,11 +175,14 @@
               aria-describedby={fileProblem ? 'run-file-problem' : undefined}
             />
           </label>
-          <button type="submit" disabled={busy || fileText.trim() === '' || fileProblem !== null}>{t('run.file.button')}</button>
+          <button type="submit" disabled={busy || starting} aria-busy={starting}>{t('run.file.button')}</button>
         </form>
       </div>
       {#if fileProblem}
-        <p class="bad" id="run-file-problem">{t(fileProblem === 'too_long' ? 'run.file.too_long' : 'run.file.not_plain')}</p>
+        <p class="bad" id="run-file-problem">{t(`run.file.${fileProblem}` as Key)}</p>
+      {/if}
+      {#if starting}
+        <p class="muted" role="status">{t('run.starting')}</p>
       {/if}
       {#if hub.runFailure}
         <p class="bad" role="status">{t('run.failed', { message: shown(hub.runFailure) ?? '' })}</p>
@@ -182,7 +205,7 @@
           {/if}
           {#if run.output}
             <p class="label">{t('run.output')}</p>
-            <pre>{shown(run.output)}</pre>
+            <pre translate="no">{shown(run.output)}</pre>
           {/if}
         {/if}
       {/if}
@@ -200,7 +223,7 @@
         <ul class="sheets">
           {#each app.sheets as name (name)}
             <li>
-              <span class="mono">{shown(name)}</span>
+              <span class="mono" translate="no">{shown(name)}</span>
               <button type="button" onclick={() => void app.stepSheet(name)}>{t('step.run', { name: shown(name) ?? '' })}</button>
             </li>
           {/each}
@@ -225,18 +248,18 @@
               <span class="tag">{shown(f.kind) ?? ''}</span>
               <strong>{shown(f.title) ?? ''}</strong>
               {#if f.where}
-                <span class="muted mono">{shown(f.where.file)}{#if f.where.line !== null}, {t('detail.line', { n: f.where.line })}{/if}</span>
+                <span class="muted mono" translate="no">{shown(f.where.file)}{#if f.where.line !== null}, {t('detail.line', { n: f.where.line })}{/if}</span>
               {/if}
             </div>
             {#if f.excerpt}
-              <pre>{shown(f.excerpt)}</pre>
+              <pre translate="no">{shown(f.excerpt)}</pre>
             {/if}
             {#if f.repro}
               <p class="label">{t('findings.repro')}</p>
-              <pre>{shown(f.repro)}</pre>
+              <pre translate="no">{shown(f.repro)}</pre>
             {/if}
             {#if f.rule}
-              <p class="label">{t('findings.rule')}: <span class="mono">{shown(f.rule)}</span></p>
+              <p class="label">{t('findings.rule')}: <span class="mono" translate="no">{shown(f.rule)}</span></p>
             {/if}
             {#if f.run}
               <p class="label">
@@ -287,6 +310,13 @@
   pre {
     font-family: var(--mono);
   }
+  /* Foreign text (a path, a test title, a sheet name) has no place to break: it breaks anywhere instead of widening the page. */
+  .mono,
+  h1,
+  .case-head strong {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
   pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -304,6 +334,7 @@
     padding-bottom: 0.75rem;
   }
   .case-head {
+    min-width: 0;
     display: flex;
     gap: 0.75rem;
     flex-wrap: wrap;

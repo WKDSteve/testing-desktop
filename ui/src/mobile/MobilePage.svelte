@@ -5,6 +5,7 @@
   // MOB-03). Notices of a red main are switched on in the settings (UnifiedPush; MOB-09 when there is none).
   import { nextStep, WAY_ABILITIES } from 'appkit-ui/mobile';
   import { untrack } from 'svelte';
+  import { formatsOf, setFormats } from '../lib/format';
   import { DICTIONARIES, langOf, textsOf, type Key } from '../lib/i18n';
   import Detail from '../views/Detail.svelte';
   import Overview from '../views/Overview.svelte';
@@ -17,6 +18,7 @@
   let { shell, languages }: { shell: Shell; languages: readonly string[] } = $props();
 
   const t = $derived(textsOf(langOf(languages)));
+  setFormats(() => langOf(languages));
 
   let phone = $state<PhoneState | null>(null);
   let reader = $state<MobileReader | WebReader | null>(null);
@@ -24,6 +26,9 @@
   let name = $state('');
   let busy = $state(false);
   let notice = $state<string | null>(null);
+  // What is wrong with the pairing link, said next to the field (the notice at the foot of the page is for the rest).
+  let linkProblem = $state<string | null>(null);
+  let linkField: HTMLInputElement | undefined = $state();
   let settings = $state(false);
   let askRerun = $state(false);
   let askUnpair = $state(false);
@@ -91,17 +96,26 @@
     }
   }
 
-  async function pair(): Promise<void> {
+  /** Show what is wrong with the link next to its field, and put the cursor there. */
+  function refuseLink(problem: string): void {
+    linkProblem = problem;
+    linkField?.focus();
+  }
+
+  async function pair(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
     if (busy) return;
-    busy = true;
     notice = null;
+    linkProblem = null;
+    if (link.trim() === '') return refuseLink(t('mobile.pair.link_empty'));
+    busy = true;
     try {
       const state = await shell.pair(link.trim(), name.trim() || 'Phone');
       link = '';
       notice = t('mobile.pair.done');
       await open(state);
     } catch (error) {
-      notice = said('mobile.err', error);
+      refuseLink(said('mobile.err', error));
     } finally {
       busy = false;
     }
@@ -190,7 +204,7 @@
   }
 
   function timeText(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleString(langOf(languages));
+    return formatsOf(langOf(languages)).momentOfSeconds(seconds);
   }
 
   const status = $derived.by(() => {
@@ -213,15 +227,33 @@
       <h1 id="pair-h">{t('mobile.pair.heading')}</h1>
       <p>{t('mobile.pair.intro')}</p>
       <button type="button" class="big" onclick={scan}>{t('mobile.pair.scan')}</button>
-      <label data-hint={t('hint.form.mobile.link')}>
-        {t('mobile.pair.link')}
-        <input type="url" autocomplete="off" spellcheck="false" bind:value={link} />
-      </label>
-      <label data-hint={t('hint.form.mobile.name')}>
-        {t('mobile.pair.name')}
-        <input type="text" maxlength="40" autocomplete="off" bind:value={name} />
-      </label>
-      <button type="button" class="big primary" disabled={busy || link.trim() === ''} onclick={pair}>{t('mobile.pair.go')}</button>
+      <form onsubmit={pair} novalidate>
+        <label data-hint={t('hint.form.mobile.link')}>
+          {t('mobile.pair.link')}
+          <input
+            type="url"
+            autocomplete="off"
+            spellcheck="false"
+            bind:value={link}
+            bind:this={linkField}
+            oninput={() => (linkProblem = null)}
+            aria-invalid={linkProblem !== null}
+            aria-describedby={linkProblem !== null ? 'pair-link-problem' : undefined}
+          />
+        </label>
+        {#if linkProblem !== null}
+          <p id="pair-link-problem" class="problem" role="alert">{linkProblem}</p>
+        {/if}
+        <label data-hint={t('hint.form.mobile.name')}>
+          {t('mobile.pair.name')}
+          <input type="text" maxlength="40" autocomplete="off" bind:value={name} />
+        </label>
+        <!-- The button is there until the pairing is on its way; then it keeps its words, says so and waits. -->
+        <button type="submit" class="big primary" disabled={busy} aria-busy={busy}>{t('mobile.pair.go')}</button>
+        {#if busy}
+          <p class="state" role="status">{t('mobile.pair.busy')}</p>
+        {/if}
+      </form>
       <h2>{t('mobile.pair.vault')}</h2>
       <button type="button" class="big" onclick={pickVault}>{t('mobile.pair.vault_go')}</button>
     </section>
@@ -304,18 +336,26 @@
 </main>
 
 <style>
+  /* The page runs under the status bar, the notch and the gesture bar (viewport-fit=cover, an edge-to-edge window of the
+     shell): what is read or tapped keeps inside the safe area. */
   .phone {
     max-inline-size: 48rem;
     margin-inline: auto;
-    padding: 0 0.75rem 2rem;
+    padding-block-start: env(safe-area-inset-top, 0px);
+    padding-block-end: calc(2rem + env(safe-area-inset-bottom, 0px));
+    padding-inline: max(0.75rem, env(safe-area-inset-left, 0px)) max(0.75rem, env(safe-area-inset-right, 0px));
+    -webkit-tap-highlight-color: transparent;
   }
+  /* The bar sticks to the top edge of the screen and carries the notch's room itself, so that nothing scrolls under it. */
   .bar {
     position: sticky;
     inset-block-start: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin-block-start: calc(-1 * env(safe-area-inset-top, 0px));
     padding-block: 0.5rem;
+    padding-block-start: calc(0.5rem + env(safe-area-inset-top, 0px));
     background: var(--bg);
     border-block-end: 1px solid var(--line);
     z-index: 1;
@@ -331,7 +371,7 @@
     overflow-wrap: anywhere;
   }
   .age {
-    color: var(--text-muted);
+    color: var(--muted);
     font-size: 0.9em;
   }
   .icon,
@@ -346,10 +386,10 @@
   }
   .primary {
     background: var(--accent);
-    color: var(--on-accent);
+    color: var(--accent-text);
   }
   .danger {
-    color: var(--danger);
+    color: var(--bad);
   }
   .pair label,
   .switch {
@@ -378,11 +418,15 @@
   }
   .partial,
   .state {
-    color: var(--text-muted);
+    color: var(--muted);
+  }
+  .problem {
+    color: var(--bad);
+    margin-block: 0.25rem 0;
   }
   .notice {
     position: sticky;
-    inset-block-end: 0.5rem;
+    inset-block-end: calc(0.5rem + env(safe-area-inset-bottom, 0px));
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius);

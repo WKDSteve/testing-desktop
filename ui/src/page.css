@@ -1,0 +1,50 @@
+/* What all pages of this app share on top of the kit's base rules (`appkit-ui/base.css`): the size of what is tapped
+   or clicked, and the numbers that are compared. */
+
+/* A control is at least 24 px on a side, so that it is hit and not its neighbour; the thin text buttons of the views
+   (back, a repository's name, a breakpoint dot) are about 19 px high without it. A link inside a sentence is left alone. */
+button,
+select,
+summary,
+a.tone,
+input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='file']) {
+  min-block-size: 1.5rem;
+}
+button {
+  min-inline-size: 1.5rem;
+}
+/* The box and its words are one area: a click on the words ticks the box. */
+label:has(> input[type='checkbox']) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-block-size: 1.5rem;
+}
+/* A finger needs more than a pointer: 44 px, and no double-tap zoom waiting for a second tap. */
+@media (pointer: coarse) {
+  button,
+  select,
+  summary,
+  a.tone,
+  input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='file']),
+  label:has(> input[type='checkbox']) {
+    min-block-size: 2.75rem;
+  }
+  button {
+    min-inline-size: 2.75rem;
+  }
+  button,
+  select,
+  summary,
+  a,
+  input,
+  label {
+    touch-action: manipulation;
+  }
+}
+
+/* The figures of a tile and of a list of steps keep one width while they change (a table has it from the kit). */
+dd,
+.num {
+  font-variant-numeric: tabular-nums;
+}

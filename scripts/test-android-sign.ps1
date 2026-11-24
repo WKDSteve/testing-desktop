@@ -61,10 +61,10 @@ try {
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path $apk)) { throw 'aapt2 could not make the stand-in APK' }
 
   $sha = '1234567890abcdef1234567890abcdef12345678'
-  $passEnv = @{ TESTING_TEST_KEYPASS = $pass; TESTING_ANDROID_DEV_KEYSTORE = $null; NVIM_MACHINE_ROLE = 'default' }
+  $passEnv = @{ TESTING_TEST_KEYPASS = $pass; TESTING_ANDROID_DEV_KEYSTORE = $null; TESTING_ANDROID_DEV_CERT_SHA256 = $null; NVIM_MACHINE_ROLE = 'default' }
 
   # The refusals come before anything slow.
-  $r = Run @('-Apk', $apk, '-Sha', $sha, '-OutDir', "$work\o1") @{ TESTING_ANDROID_DEV_KEYSTORE = $null; NVIM_MACHINE_ROLE = 'default' }
+  $r = Run @('-Apk', $apk, '-Sha', $sha, '-OutDir', "$work\o1") @{ TESTING_ANDROID_DEV_KEYSTORE = $null; TESTING_ANDROID_DEV_CERT_SHA256 = $null; NVIM_MACHINE_ROLE = 'default' }
   Check 'no keystore: refused with exit 2 and a message that names the variable' ($r.Code -eq 2 -and $r.Out -match 'TESTING_ANDROID_DEV_KEYSTORE') $r.Out
 
   $r = Run @('-Apk', $apk, '-Sha', $sha, '-Keystore', $ks, '-OutDir', "$work\o2") @{ NVIM_MACHINE_ROLE = 'workstation' }

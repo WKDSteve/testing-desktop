@@ -3,7 +3,7 @@
 // apps, a terminal, another session) never take the same port; a given `TESTING_E2E_PORT` is kept. 17698 is only what a
 // process reads that was not started by the setup.
 
-import { createServer } from 'node:net';
+import { freePort } from 'appkit-web/e2e-node';
 
 export const DEFAULT_E2E_PORT = 17698;
 
@@ -16,19 +16,6 @@ export function e2ePort(env: Record<string, string | undefined>): number {
     throw new Error(`TESTING_E2E_PORT must be a port from 1024 to 65535, got ${JSON.stringify(raw)}`);
   }
   return port;
-}
-
-/** A port nobody listens on now: the system's pick for port 0 on the loopback. */
-export function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      const port = typeof address === 'object' && address !== null ? address.port : 0;
-      server.close(() => (port >= 1024 ? resolve(port) : reject(new Error(`no free port (got ${port})`))));
-    });
-  });
 }
 
 /**

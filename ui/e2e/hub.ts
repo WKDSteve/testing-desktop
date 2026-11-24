@@ -7,7 +7,14 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { failAfterCleanup, removeTree, stopChild, tempRoot } from './cleanup';
+import {
+  pairingLink as pairing,
+  removeTree,
+  sessionToken as token,
+  stopChild,
+  type HubTarget,
+} from 'appkit-web/e2e-node';
+import { failAfterCleanup, tempRoot } from './cleanup';
 import { hubExe } from './exe';
 import { e2ePort } from './port';
 
@@ -241,22 +248,11 @@ async function waitUntilReady(config: string): Promise<void> {
   await assertFreshBinary();
 }
 
+/** What `appkit-web/e2e-node` needs of this app's hub for the pairing. */
+const target = (): HubTarget => ({ exe, env, origin: origin() });
+
 /** A pairing link, as `testing-desktop link` prints it. */
-export function pairingLink(config: string): string {
-  const out = execFileSync(exe, ['link'], { env: env(config), encoding: 'utf8' });
-  const link = out.trim().split(/\r?\n/)[0] ?? '';
-  if (!link.startsWith(`${origin()}/#pair=`)) throw new Error(`unexpected link: ${link}`);
-  return link;
-}
+export const pairingLink = (config: string): string => pairing(config, target());
 
 /** A session token, got the way the page gets one. The hub allows few exchanges a minute: the tests share one. */
-export async function sessionToken(config: string): Promise<string> {
-  const code = pairingLink(config).split('#pair=')[1] ?? '';
-  const response = await fetch(`${origin()}/auth/exchange`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: origin() },
-    body: JSON.stringify({ code }),
-  });
-  if (!response.ok) throw new Error(`exchange refused: ${response.status}`);
-  return ((await response.json()) as { token: string }).token;
-}
+export const sessionToken = (config: string): Promise<string> => token(config, target());

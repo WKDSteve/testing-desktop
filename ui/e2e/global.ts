@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs';
-import { failAfterCleanup, removeTree, tempFile } from './cleanup';
+import { removeTree } from 'appkit-web/e2e-node';
+import { failAfterCleanup, tempFile } from './cleanup';
 import { sessionToken, startHub, type Running } from './hub';
 import { ensureE2ePort } from './port';
 

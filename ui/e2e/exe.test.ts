@@ -3,7 +3,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { removeTree, tempRoot } from './cleanup';
+import { removeTree } from 'appkit-web/e2e-node';
+import { tempRoot } from './cleanup';
 import { cargoTargetDir, hubExe, targetDirOf } from './exe';
 
 const repo = resolve('/work/testing-desktop');

@@ -3,6 +3,7 @@
 // of the shell's WebView allows `connect-src ipc:` only.
 //
 // The tokens and base rules of appkit-ui first, the palette of this app between them, as on the hub.
+
 import 'appkit-ui/tokens.css';
 import './palette.css';
 import 'appkit-ui/base.css';

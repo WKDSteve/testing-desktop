@@ -2,6 +2,7 @@
 // pairing; nothing here or below reaches the network, and the policy of the page forbids it.
 //
 // The tokens and base rules of appkit-ui first, the palette of this app between them, as on the hub.
+
 import 'appkit-ui/tokens.css';
 import './palette.css';
 import 'appkit-ui/base.css';

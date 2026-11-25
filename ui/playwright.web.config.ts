@@ -1,3 +1,6 @@
+// Playwright setup of the tests of the web variant: the `e2e-web` specs open the single-file page from disk in the
+// system's Chrome.
+
 import { defineConfig } from '@playwright/test';
 
 // The single-file page of the web variant, opened from disk. No hub, no server: `pnpm web:build` makes the file first.

@@ -1,3 +1,6 @@
+// The Vite and Vitest setup of the page: one config per build mode (hub page, web variant, mobile page) and the unit
+// tests they share.
+
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 

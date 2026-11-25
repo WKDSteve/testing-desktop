@@ -69,4 +69,9 @@ return {
     title = "testing mobil: the fleet and red cases on the phone, a notice when a main turns red, rerun failed jobs",
     docs = "docs/MOBILE.md",
   },
+  {
+    id = "testing-desktop.sign-out",
+    title = "The bar has a Sign out button: it ends the session of the tab at the hub and the page says it is not paired",
+    docs = "docs/USAGE.md",
+  },
 }

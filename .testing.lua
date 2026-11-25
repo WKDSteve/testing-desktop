@@ -19,6 +19,18 @@ return {
         },
         ready = { stdout = "^file:", as = "link" },
       },
+      -- The hub of the run on an empty machine (tools/sheet-hub.mjs): the debug binary and the real engine, as
+      -- ui/e2e/hub.ts starts them, in a folder of the run. The page is built first (the binary embeds ui/dist). The
+      -- starter prints the pairing link once the engine answers and ends the hub when the sheet is done.
+      ["hub"] = {
+        build = {
+          { "pnpm", "--dir", "ui", "build" },
+          { "cargo", "build", "-p", "testing-hub", "--locked" },
+        },
+        run = { "node", "tools/sheet-hub.mjs", "${temp}", "47399" },
+        ready = { stdout = "^http://127%.0%.0%.1:%d+/#pair=%x+$", as = "link" },
+        env = { NVIM_MACHINE_ROLE = "workstation" },
+      },
       -- The release build of testing-hub (a window program) started the way a link starts it (testing.nvim `start =
       -- "link"`: no standard handles, no console of a parent), against a config.json it cannot use in a folder of the
       -- run. The hub in the background ends at once on the config; the start sees that within about 2 s (appkit

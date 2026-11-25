@@ -3,6 +3,7 @@
 // What is new comes by the event stream of the hub: nothing asks on a timer.
 
 import { StreamSession } from 'appkit-ui/session';
+import { signOut } from 'appkit-ui/signout';
 import type { SseMessage } from 'appkit-ui/sse';
 import { messageOf, Reader } from './reader.svelte';
 import { ApiError, type HubSource, type StepCommand } from './source';
@@ -633,12 +634,10 @@ export class App extends Reader {
    * pairing state whatever the hub answers, also when it does not answer at all.
    */
   async signOut(): Promise<void> {
-    try {
-      await this.env.hub.post('/api/session/logout', {});
-    } catch {
-      // The hub is down or has forgotten the session already: the page forgets it either way.
-    }
-    this.lostSession();
+    await signOut(
+      () => this.env.hub.post('/api/session/logout', {}),
+      () => this.lostSession(),
+    );
   }
 
   private lostSession(): void {

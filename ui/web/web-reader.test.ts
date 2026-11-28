@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { DirHandleLike, DirHandle, FileHandleLike, PickerWindow, RecentFolders } from 'appkit-web/folder';
-import { describe, expect, it } from 'vitest';
+import type { DirHandleLike, DirHandle, FileHandleLike, PermissionState, PickerWindow, RecentFolders } from 'appkit-web/folder';
+import { describe, expect, it, vi } from 'vitest';
 import { Entry, noticeOf, type EntryState } from '../src/web/entry';
 import { ExportError, readExport, type Snapshot } from '../src/web/folder-source';
 import { WebReader } from '../src/web/web-reader.svelte';
@@ -171,6 +171,43 @@ describe('the way in', () => {
     await entry.start();
     await entry.pick();
     expect(entry.state).toMatchObject({ step: 'choose', notice: { code: 'too_new', detail: 'testing-export/2' } });
+  });
+
+  it('asks for the permission of all folders used before at once, and keeps their order', async () => {
+    // A browser that does not answer queryPermission would hold the way in for the time limit of each folder in turn.
+    const answers: ((state: PermissionState) => void)[] = [];
+    const asked: string[] = [];
+    const remembered = (name: string) => ({
+      id: name,
+      name,
+      lastUsed: 0,
+      handle: {
+        kind: 'directory',
+        name,
+        queryPermission: () => {
+          asked.push(name);
+          return new Promise<PermissionState>((resolve) => answers.push(resolve));
+        },
+      } as unknown as DirHandle,
+    });
+    const recent = {
+      list: () => Promise.resolve([remembered('one'), remembered('two')]),
+      remember: () => Promise.reject(new Error('unused')),
+      forget: () => Promise.resolve(),
+    } as unknown as RecentFolders;
+    const entry = new Entry({ win: picker(handle), recent, read: good, now: () => 0 });
+    const starting = entry.start();
+    await vi.waitFor(() => expect(asked).toEqual(['one', 'two']), { timeout: 1000, interval: 5 });
+    (answers[1] as (state: PermissionState) => void)('denied');
+    (answers[0] as (state: PermissionState) => void)('granted');
+    await starting;
+    expect(entry.state).toMatchObject({
+      step: 'choose',
+      recent: [
+        { id: 'one', access: 'granted' },
+        { id: 'two', access: 'denied' },
+      ],
+    });
   });
 
   it('says so when the browser has no way to a folder', async () => {

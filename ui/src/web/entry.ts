@@ -82,10 +82,10 @@ export class Entry {
       this.set({ step: 'unsupported', reason: support });
       return;
     }
-    const recent: RecentView[] = [];
-    for (const entry of await this.deps.recent.list()) {
-      recent.push({ id: entry.id, name: entry.name, access: await permissionOf(entry.handle) });
-    }
+    // All at once: a browser that does not answer holds each look for the time limit of permissionOf, not in turn.
+    const recent: RecentView[] = await Promise.all(
+      (await this.deps.recent.list()).map(async (entry) => ({ id: entry.id, name: entry.name, access: await permissionOf(entry.handle) })),
+    );
     this.set({ step: 'choose', recent, notice, readOnce: false });
   }
 
